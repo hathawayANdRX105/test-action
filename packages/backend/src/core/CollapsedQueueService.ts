@@ -401,10 +401,8 @@ export class CollapsedQueueService implements OnApplicationShutdown {
 			},
 		);
 
-		// TODO check for more of these
 		this.internalEventService.on('userChangeDeletedState', this.onUserDeleted);
 		this.internalEventService.on('antennaDeleted', this.onAntennaDeleted);
-		this.internalEventService.on('antennaUpdated', this.onAntennaDeleted);
 	}
 
 	@bindThis
@@ -423,7 +421,6 @@ export class CollapsedQueueService implements OnApplicationShutdown {
 	public dispose(): void {
 		this.internalEventService.off('userChangeDeletedState', this.onUserDeleted);
 		this.internalEventService.off('antennaDeleted', this.onAntennaDeleted);
-		this.internalEventService.off('antennaUpdated', this.onAntennaDeleted);
 	}
 
 	@bindThis
