@@ -383,7 +383,7 @@ export class ActivityPubServerService {
 			this.cacheService.userFollowersCache.fetch(userId),
 		]);
 
-		if (user == null || profile == null || !isLocalUser(user) || user.isDeleted || user.isSuspended) {
+		if (user == null || profile == null || !isLocalUser(user) || !this.utilityService.isActiveUser(user)) {
 			reply.code(404);
 			return;
 		}
@@ -474,7 +474,7 @@ export class ActivityPubServerService {
 			this.cacheService.userFollowingsCache.fetch(userId),
 		]);
 
-		if (user == null || profile == null || !isLocalUser(user) || user.isDeleted || user.isSuspended) {
+		if (user == null || profile == null || !isLocalUser(user) || !this.utilityService.isActiveUser(user)) {
 			reply.code(404);
 			return;
 		}
@@ -559,7 +559,7 @@ export class ActivityPubServerService {
 			}) as Promise<(MiUserNotePining & { note: MiNote })[]>,
 		]);
 
-		if (user == null || !isLocalUser(user) || user.isDeleted || user.isSuspended) {
+		if (user == null || !isLocalUser(user) || !this.utilityService.isActiveUser(user)) {
 			reply.code(404);
 			return;
 		}
@@ -621,7 +621,7 @@ export class ActivityPubServerService {
 
 		const user = await this.cacheService.findOptionalUserById(userId);
 
-		if (user == null || !isLocalUser(user) || user.isDeleted || user.isSuspended) {
+		if (user == null || !isLocalUser(user) || !this.utilityService.isActiveUser(user)) {
 			reply.code(404);
 			return;
 		}
@@ -704,7 +704,7 @@ export class ActivityPubServerService {
 
 	@bindThis
 	private async userInfo(request: FastifyRequest, reply: FastifyReply, user: MiUser | null | undefined, redact = false) {
-		if (user == null || user.isDeleted || user.isSuspended) {
+		if (user == null || !this.utilityService.isActiveUser(user)) {
 			reply.code(404);
 			return;
 		}
@@ -821,7 +821,7 @@ export class ActivityPubServerService {
 
 			const user = await this.cacheService.findOptionalUserById(note.userId);
 
-			if (user == null || user.isDeleted || user.isSuspended) {
+			if (user == null || !this.utilityService.isActiveUser(user)) {
 				reply.code(404);
 				return;
 			}
@@ -872,7 +872,7 @@ export class ActivityPubServerService {
 
 			const user = await this.cacheService.findOptionalUserById(note.userId);
 
-			if (user == null || user.isDeleted || user.isSuspended) {
+			if (user == null || !this.utilityService.isActiveUser(user)) {
 				reply.code(404);
 				return;
 			}
@@ -965,7 +965,7 @@ export class ActivityPubServerService {
 				this.userKeypairService.getUserKeypairMaybe(userId),
 			]);
 
-			if (user == null || keypair == null || !isLocalUser(user) || user.isDeleted || user.isSuspended) {
+			if (user == null || keypair == null || !isLocalUser(user) || !this.utilityService.isActiveUser(user)) {
 				reply.code(404);
 				return;
 			}
