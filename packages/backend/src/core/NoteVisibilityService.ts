@@ -274,7 +274,7 @@ export class NoteVisibilityService {
 	}
 
 	@bindThis
-	private async populateData(me: PopulatedMe, user: { id: string }[], hint?: Partial<NoteVisibilityData>, filters?: NoteVisibilityFilters): Promise<NoteVisibilityData> {
+	private async populateData(me: PopulatedMe, users: { id: string }[], hint?: Partial<NoteVisibilityData>, filters?: NoteVisibilityFilters): Promise<NoteVisibilityData> {
 		// noinspection ES6MissingAwait
 		const [
 			userMutedThreads,
@@ -286,7 +286,7 @@ export class NoteVisibilityService {
 			me ? (hint?.userMutedThreads ?? this.cacheService.threadMutingsCache.fetch(me.id)) : new Set<string>(),
 			me ? (hint?.userMutedNotes ?? this.cacheService.noteMutingsCache.fetch(me.id)) : new Set<string>(),
 			me ? (hint?.userMutedInstances ?? this.cacheService.userProfileCache.fetch(me.id).then(p => new Set(p.mutedInstances))) : new Set<string>(),
-			me ? (hint?.userRelations ?? this.cacheService.getUserRelations(me, user)) : new Map<string, UserRelation>(),
+			me ? (this.populateUserRelations(me, users, hint)) : new Map<string, UserRelation>(),
 			filters?.listContext ? (hint?.userListMemberships ?? this.cacheService.listUserMembershipsCache.fetch(filters.listContext)) : new Map(),
 		]);
 
@@ -297,6 +297,32 @@ export class NoteVisibilityService {
 			userRelations,
 			userListMemberships,
 		};
+	}
+
+	private async populateUserRelations(me: NonNullable<PopulatedMe>, users: { id: string }[], hint?: Partial<NoteVisibilityData>): Promise<Map<string, UserRelation>> {
+		const relations = new Map<string, UserRelation>();
+		const relationsToFetch = new Set<string>();
+
+		for (const { id } of users) {
+			if (relations.has(id)) continue;
+
+			const hinted = hint?.userRelations?.get(id);
+			if (hinted) {
+				relations.set(id, hinted);
+				relationsToFetch.delete(id);
+			} else {
+				relationsToFetch.add(id);
+			}
+		}
+
+		if (relationsToFetch.size > 0) {
+			const fetched = await this.cacheService.getUserRelations(me, relationsToFetch.values().toArray());
+			for (const [userId, userRelation] of fetched) {
+				relations.set(userId, userRelation);
+			}
+		}
+
+		return relations;
 	}
 
 	@bindThis
