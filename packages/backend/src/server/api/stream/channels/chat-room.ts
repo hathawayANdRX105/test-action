@@ -21,14 +21,13 @@ class ChatRoomChannel extends Channel {
 	private roomId: string;
 
 	constructor(
-		private chatRoomsRepository: ChatRoomsRepository,
-		private chatService: ChatService,
-
-		noteEntityService: NoteEntityService,
 		id: string,
 		connection: Channel['connection'],
+
+		private chatRoomsRepository: ChatRoomsRepository,
+		private chatService: ChatService,
 	) {
-		super(id, connection, noteEntityService);
+		super(id, connection);
 	}
 
 	@bindThis
@@ -81,18 +80,16 @@ export class ChatRoomChannelService implements MiChannelService<true> {
 		private readonly chatRoomsRepository: ChatRoomsRepository,
 
 		private readonly chatService: ChatService,
-		private readonly noteEntityService: NoteEntityService,
 	) {
 	}
 
 	@bindThis
 	public create(id: string, connection: Channel['connection']): ChatRoomChannel {
 		return new ChatRoomChannel(
-			this.chatRoomsRepository,
-			this.chatService,
-			this.noteEntityService,
 			id,
 			connection,
+			this.chatRoomsRepository,
+			this.chatService,
 		);
 	}
 }

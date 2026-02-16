@@ -11,7 +11,7 @@ import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import type { JsonObject } from '@/misc/json-value.js';
 import { ChatService } from '@/core/ChatService.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
-import Channel, { type MiChannelService } from '../channel.js';
+import { Channel, type MiChannelService } from '../channel.js';
 
 class ChatUserChannel extends Channel {
 	public readonly chName = 'chatUser';
@@ -21,32 +21,32 @@ class ChatUserChannel extends Channel {
 	private otherId: string;
 
 	constructor(
-		private chatMessagesRepository: ChatMessagesRepository,
-		private chatService: ChatService,
-
-		noteEntityService: NoteEntityService,
 		id: string,
 		connection: Channel['connection'],
+
+		private chatMessagesRepository: ChatMessagesRepository,
+		private chatService: ChatService,
 	) {
-		super(id, connection, noteEntityService);
+		super(id, connection);
 	}
 
 	@bindThis
 	public async init(params: JsonObject): Promise<boolean> {
+		if (!this.user) return false;
 		if (typeof params.otherId !== 'string') return false;
 		this.otherId = params.otherId;
 
 		const exists = (await this.chatMessagesRepository.findOne({
 			select: { id: true },
 			where: {
-				fromUserId: this.user!.id,
+				fromUserId: this.user.id,
 				toUserId: this.otherId,
 			},
 		})) != null;
 
 		if (!exists) return false;
 
-		this.subscriber.on(`chatUserStream:${this.user!.id}-${this.otherId}`, this.onEvent);
+		this.subscriber.on(`chatUserStream:${this.user.id}-${this.otherId}`, this.onEvent);
 
 		return true;
 	}
@@ -84,18 +84,16 @@ export class ChatUserChannelService implements MiChannelService<true> {
 		private readonly chatMessagesRepository: ChatMessagesRepository,
 
 		private chatService: ChatService,
-		private readonly noteEntityService: NoteEntityService,
 	) {
 	}
 
 	@bindThis
 	public create(id: string, connection: Channel['connection']): ChatUserChannel {
 		return new ChatUserChannel(
-			this.chatMessagesRepository,
-			this.chatService,
-			this.noteEntityService,
 			id,
 			connection,
+			this.chatMessagesRepository,
+			this.chatService,
 		);
 	}
 }

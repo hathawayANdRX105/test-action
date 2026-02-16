@@ -9,9 +9,9 @@ import type { Packed } from '@/misc/json-schema.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { bindThis } from '@/decorators.js';
 import type { JsonObject } from '@/misc/json-value.js';
-import Channel, { type MiChannelService } from '../channel.js';
+import { type Channel, NoteChannel, type MiChannelService } from '../channel.js';
 
-class HashtagChannel extends Channel {
+class HashtagChannel extends NoteChannel {
 	public readonly chName = 'hashtag';
 	public static shouldShare = false;
 	public static requireCredential = false as const;
@@ -35,7 +35,6 @@ class HashtagChannel extends Channel {
 		))) return false;
 		this.q = params.q;
 
-		// Subscribe stream
 		this.subscriber.on('notesStream', this.onNote);
 
 		return true;
@@ -47,18 +46,14 @@ class HashtagChannel extends Channel {
 		const matched = this.q.some(tags => tags.every(tag => noteTags.includes(normalizeForSearch(tag))));
 		if (!matched) return;
 
-		if (!this.isNoteVisibleForMe(note)) return;
-		if (this.isNoteMutedOrBlocked(note)) return;
-
-		const clonedNote = await this.assignMyReaction(note);
-		await this.hideNote(clonedNote);
-
-		this.send('note', clonedNote);
+		const preparedNote = await this.prepareNote(note);
+		if (preparedNote) {
+			this.send('note', preparedNote);
+		}
 	}
 
 	@bindThis
 	public dispose() {
-		// Unsubscribe events
 		this.subscriber.off('notesStream', this.onNote);
 	}
 }

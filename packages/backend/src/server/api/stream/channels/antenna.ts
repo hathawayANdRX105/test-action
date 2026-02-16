@@ -10,9 +10,9 @@ import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import type { JsonObject } from '@/misc/json-value.js';
-import Channel, { type MiChannelService } from '../channel.js';
+import { type Channel, NoteChannel, type MiChannelService } from '../channel.js';
 
-class AntennaChannel extends Channel {
+class AntennaChannel extends NoteChannel {
 	public readonly chName = 'antenna';
 	public static shouldShare = false;
 	public static requireCredential = true as const;
@@ -20,29 +20,28 @@ class AntennaChannel extends Channel {
 	private antennaId: string;
 
 	constructor(
-		private antennassReposiotry: AntennasRepository,
-
-		noteEntityService: NoteEntityService,
 		id: string,
 		connection: Channel['connection'],
+		noteEntityService: NoteEntityService,
+
+		private antennasReposiotry: AntennasRepository,
 	) {
 		super(id, connection, noteEntityService);
 	}
 
 	@bindThis
 	public async init(params: JsonObject): Promise<boolean> {
+		if (!this.user) return false;
 		if (typeof params.antennaId !== 'string') return false;
 		this.antennaId = params.antennaId;
 
-		const antenna = await this.antennassReposiotry.findOne({
+		const antenna = await this.antennasReposiotry.findOne({
 			select: { id: true, userId: true },
 			where: { id: this.antennaId },
 		});
-
 		if (!antenna) return false;
-		if (antenna.userId !== this.user?.id) return false;
+		if (antenna.userId !== this.user.id) return false;
 
-		// Subscribe stream
 		this.subscriber.on(`antennaStream:${this.antennaId}`, this.onEvent);
 
 		return true;
@@ -81,10 +80,10 @@ export class AntennaChannelService implements MiChannelService<true> {
 	@bindThis
 	public create(id: string, connection: Channel['connection']): AntennaChannel {
 		return new AntennaChannel(
-			this.antennasRepository,
-			this.noteEntityService,
 			id,
 			connection,
+			this.noteEntityService,
+			this.antennasRepository,
 		);
 	}
 }

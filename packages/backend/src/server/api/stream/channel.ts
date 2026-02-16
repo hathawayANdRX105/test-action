@@ -15,9 +15,7 @@ import type Connection from './Connection.js';
 /**
  * Stream channel
  */
-// eslint-disable-next-line import/no-default-export
-export default abstract class Channel {
-	protected readonly noteEntityService: NoteEntityService;
+export abstract class Channel {
 	protected connection: Connection;
 	public id: string;
 	public abstract readonly chName: string;
@@ -59,6 +57,45 @@ export default abstract class Channel {
 
 	protected get subscriber() {
 		return this.connection.subscriber;
+	}
+
+	constructor(id: string, connection: Connection) {
+		this.id = id;
+		this.connection = connection;
+	}
+
+	public send(payload: { type: string, body: JsonValue }): void;
+	public send(type: string, payload: JsonValue): void;
+	@bindThis
+	public send(typeOrPayload: { type: string, body: JsonValue } | string, payload?: JsonValue) {
+		const type = payload === undefined ? (typeOrPayload as { type: string, body: JsonValue }).type : (typeOrPayload as string);
+		const body = payload === undefined ? (typeOrPayload as { type: string, body: JsonValue }).body : payload;
+
+		this.connection.sendMessageToWs('channel', {
+			id: this.id,
+			type: type,
+			body: body,
+		});
+	}
+
+	public abstract init(params: JsonObject): void | Promise<void> | Promise<boolean>;
+
+	public dispose?(): void;
+
+	public onMessage?(type: string, body: JsonValue): void;
+}
+
+// For compatability with old code
+// eslint-disable-next-line import/no-default-export
+export default Channel;
+
+export abstract class NoteChannel extends Channel {
+	constructor(
+		id: string,
+		connection: Connection,
+		protected noteEntityService: NoteEntityService,
+	) {
+		super(id, connection);
 	}
 
 	/**
@@ -145,32 +182,6 @@ export default abstract class Channel {
 		await this.noteEntityService.hideNote(note, meId);
 	}
 
-	constructor(id: string, connection: Connection, noteEntityService: NoteEntityService) {
-		this.id = id;
-		this.connection = connection;
-		this.noteEntityService = noteEntityService;
-	}
-
-	public send(payload: { type: string, body: JsonValue }): void;
-	public send(type: string, payload: JsonValue): void;
-	@bindThis
-	public send(typeOrPayload: { type: string, body: JsonValue } | string, payload?: JsonValue) {
-		const type = payload === undefined ? (typeOrPayload as { type: string, body: JsonValue }).type : (typeOrPayload as string);
-		const body = payload === undefined ? (typeOrPayload as { type: string, body: JsonValue }).body : payload;
-
-		this.connection.sendMessageToWs('channel', {
-			id: this.id,
-			type: type,
-			body: body,
-		});
-	}
-
-	public abstract init(params: JsonObject): void | Promise<void> | Promise<boolean>;
-
-	public dispose?(): void;
-
-	public onMessage?(type: string, body: JsonValue): void;
-
 	public async assignMyReaction(note: Packed<'Note'>): Promise<Packed<'Note'>> {
 		// StreamingApiServerService creates a single EventEmitter per server process,
 		// so a new note arriving from redis gets de-serialised once per server process,
@@ -202,6 +213,44 @@ export default abstract class Channel {
 				clonedNote.reply.myReaction = myReaction;
 			}
 		}
+		return clonedNote;
+	}
+
+	/**
+	 * Prepares a note before it gets sent to the client.
+	 *
+	 * @returns A packed note, or `null` if the note shouldn't be seen by the user
+	 * who owns this connection, for whatever reason.
+	 */
+	protected async prepareNote(note: Packed<'Note'>): Promise<Packed<'Note'> | null> {
+		const isMe = this.user?.id === note.userId;
+
+		if (!this.isNoteVisibleForMe(note)) return null;
+		if (this.isNoteMutedOrBlocked(note)) return null;
+
+		if (note.reply) {
+			const reply = note.reply;
+			// 自分のフォローしていないユーザーの visibility: followers な投稿への返信は弾く
+			if (!this.isNoteVisibleForMe(reply)) return null;
+			if (this.isNoteMutedOrBlocked(reply)) return null;
+			if (this.user && !this.following.get(note.userId)?.withReplies) {
+				// 「チャンネル接続主への返信」でもなければ、「チャンネル接続主が行った返信」でもなければ、「投稿者の投稿者自身への返信」でもない場合
+				if (reply.userId !== this.user.id && !isMe && reply.userId !== note.userId) return null;
+			}
+		}
+
+		// 純粋なリノート（引用リノートでないリノート）の場合
+		if (isRenotePacked(note) && !isQuotePacked(note) && note.renote) {
+			if (note.renote.reply) {
+				const reply = note.renote.reply;
+				// 自分のフォローしていないユーザーの visibility: followers な投稿への返信のリノートは弾く
+				if (!this.isNoteVisibleForMe(reply)) return null;
+				if (this.isNoteMutedOrBlocked(reply)) return null;
+			}
+		}
+
+		const clonedNote = await this.assignMyReaction(note);
+		await this.hideNote(clonedNote);
 		return clonedNote;
 	}
 }

@@ -4,23 +4,22 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { isInstanceMuted, isUserFromMutedInstance } from '@/misc/is-instance-muted.js';
+import { isUserFromMutedInstance } from '@/misc/is-instance-muted.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { bindThis } from '@/decorators.js';
 import type { JsonObject } from '@/misc/json-value.js';
-import Channel, { type MiChannelService } from '../channel.js';
+import { type Channel, NoteChannel, type MiChannelService } from '../channel.js';
 
-class MainChannel extends Channel {
+class MainChannel extends NoteChannel {
 	public readonly chName = 'main';
 	public static shouldShare = true;
 	public static requireCredential = true as const;
 	public static kind = 'read:account';
 
 	constructor(
-		noteEntityService: NoteEntityService,
-
 		id: string,
 		connection: Channel['connection'],
+		noteEntityService: NoteEntityService,
 	) {
 		super(id, connection, noteEntityService);
 	}
@@ -79,9 +78,9 @@ export class MainChannelService implements MiChannelService<true> {
 	@bindThis
 	public create(id: string, connection: Channel['connection']): MainChannel {
 		return new MainChannel(
-			this.noteEntityService,
 			id,
 			connection,
+			this.noteEntityService,
 		);
 	}
 }
