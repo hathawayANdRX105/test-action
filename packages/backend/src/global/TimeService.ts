@@ -89,7 +89,9 @@ export abstract class TimeService<TTimer extends Timer = Timer> implements OnApp
 	 * Safe to call with invalid or expired IDs.
 	 */
 	@bindThis
-	public stopTimer(handle: TimerHandle | PromiseTimerHandle): boolean {
+	public stopTimer(handle: TimerHandle | PromiseTimerHandle | null | undefined): boolean {
+		if (handle == null) return false;
+
 		const id = typeof(handle) === 'object' ? handle[timerTokenSymbol] : handle;
 		const reg = this.timers.get(id);
 		if (!reg) return false;
