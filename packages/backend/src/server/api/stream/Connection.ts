@@ -243,7 +243,7 @@ export default class Connection {
 			case 'sr': await this.onSubscribeNote(body); break; // alias
 			case 'unsubNote': this.onUnsubscribeNote(body); break;
 			case 'un': this.onUnsubscribeNote(body); break; // alias
-			case 'connect': this.onChannelConnectRequested(body); break;
+			case 'connect': await this.onChannelConnectRequested(body); break;
 			case 'disconnect': this.onChannelDisconnectRequested(body); break;
 			case 'channel': this.onChannelMessageRequested(body); break;
 			case 'ch': this.onChannelMessageRequested(body); break; // alias
@@ -367,14 +367,14 @@ export default class Connection {
 	 * チャンネル接続要求時
 	 */
 	@bindThis
-	private onChannelConnectRequested(payload: JsonValue | undefined) {
+	private async onChannelConnectRequested(payload: JsonValue | undefined) {
 		if (!isJsonObject(payload)) return;
 		const { channel, id, params, pong } = payload;
 		if (typeof id !== 'string') return;
 		if (typeof channel !== 'string') return;
 		if (typeof pong !== 'boolean' && typeof pong !== 'undefined' && pong !== null) return;
 		if (typeof params !== 'undefined' && !isJsonObject(params)) return;
-		this.connectChannel(id, params, channel, pong ?? undefined);
+		await this.connectChannel(id, params, channel, pong ?? undefined);
 	}
 
 	/**
