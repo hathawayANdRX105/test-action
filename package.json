@@ -55,7 +55,7 @@
 		"clean": "node ./scripts/clean.mjs built temp",
 		"clean-all": "node ./scripts/clean.mjs built deps gen temp reports",
 		"cleanall": "pnpm clean-all",
-		"sync-dependency-versions": "node scripts/sync-deps.js"
+		"sync-dependency-versions": "node scripts/sync-deps.ts"
 	},
 	"dependencies": {
 		"js-yaml": "4.1.1"

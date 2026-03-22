@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /*
  * SPDX-FileCopyrightText: hazelnoot and other Sharkey contributors
  * SPDX-License-Identifier: AGPL-3.0-only
@@ -12,9 +13,8 @@ import nodeFs from 'node:fs/promises';
 
 /**
  * Filename patterns to exclude.
- * @type {RegExp[]}
  */
-const excludedPaths = [
+const excludedPaths: RegExp[] = [
 	/\/node_modules\//,
 	/\/(js_)?built\//i,
 	/\/temp\//i,
@@ -22,9 +22,8 @@ const excludedPaths = [
 
 /**
  * Keys containing dependency lists within a package.json file.
- * @type {DepType[]}
  */
-const dependencyProps = [
+const dependencyProps: DepType[] = [
 	'overrides',
 	'resolutions',
 	'peerDependencies',
@@ -33,20 +32,25 @@ const dependencyProps = [
 	'dependencies',
 ];
 
+// TODO implement overrides from pnpm-workspace
+// /**
+//  * PNPM workspace file to source configuration.
+//  */
+// const pnpmWorkspace = 'pnpm-workspace.yml';
+
 /*
  * Main Code
  */
 
 /**
  * Root directory of the repository.
- * @type {string}
  */
-const rootDir = nodePath.resolve(import.meta.dirname, '..');
+const rootDir: string = nodePath.resolve(import.meta.dirname, '..');
 
 /**
  * All packages located in the solution
  */
-const packages = await loadPackages();
+const packages: Package[] = await loadPackages();
 
 /**
  * All packages defined in the solution
@@ -63,16 +67,9 @@ if (allDependenciesWithDifference.length > 0) {
 }
 
 async function loadPackages() {
-	/**
-	 * @type {Package[]}
-	 */
-	let packages = [];
+	const packages: Package[] = [];
 
-	/**
-	 * @param {string} dir
-	 * @returns {Promise<void>}
-	 */
-	const loadPackagesFrom = async (dir) => {
+	const loadPackagesFrom = async (dir: string): Promise<void> => {
 		const files = await nodeFs.readdir(dir, { withFileTypes: true });
 
 		for (const entry of files) {
@@ -109,8 +106,7 @@ async function loadPackages() {
 					}
 
 					// Parse dependencies from all defined sections
-					/** @type {Record<string, Dependency[]>} */
-					const groups = {};
+					const groups: Record<string, Dependency[]> = {};
 					for (const type of dependencyProps) {
 						groups[type] = parseDependencies(packageName, packageJson, type);
 					}
@@ -141,18 +137,11 @@ async function loadPackages() {
 	return packages;
 }
 
-/**
- * @param {string} packageName
- * @param {Record<DepType, Dependency[]>} dependencyGroups
- * @returns {Dependency[]}
- */
-function mergeDependencies(packageName, dependencyGroups) {
-	/** @type {Dependency[]} */
-	const dependencies = [];
+function mergeDependencies(packageName: string, dependencyGroups: Record<DepType, Dependency[]>): Dependency[] {
+	const dependencies: Dependency[] = [];
 
 	for (const type of Object.keys(dependencyGroups)) {
-		/** @type {Dependency[]} */
-		const typeDependencies = dependencyGroups[type];
+		const typeDependencies: Dependency[] = dependencyGroups[type];
 		for (const dependency of typeDependencies) {
 			const existing = dependencies.find(d => d.name === dependency.name);
 			if (existing) {
@@ -166,15 +155,8 @@ function mergeDependencies(packageName, dependencyGroups) {
 	return dependencies;
 }
 
-/**
- * @param {string} packageName
- * @param {Record<DepType, unknown>} packageJson
- * @param {DepType} type
- * @returns {Dependency[]}
- */
-function parseDependencies(packageName, packageJson, type) {
-	/** @type {Dependency[]} */
-	const dependencies = [];
+function parseDependencies(packageName: string, packageJson: Record<DepType, unknown>, type: DepType): Dependency[] {
+	const dependencies: Dependency[] = [];
 
 	// Make sure we actually have this type
 	if (typeof(packageJson[type]) === 'object' && packageJson[type] != null) {
@@ -194,21 +176,13 @@ function parseDependencies(packageName, packageJson, type) {
 	return dependencies;
 }
 
-/**
- * @param {string} packageName
- * @param {DepType} depType
- * @param {string} depName
- * @param {unknown} rawVersion
- * @returns {DepVersion | null}
- */
-function parseVersionString(packageName, depType, depName, rawVersion) {
+function parseVersionString(packageName: string, depType: DepType, depName: string, rawVersion: unknown): DepVersion | null {
 	if (typeof(rawVersion) !== 'string') {
 		console.warn(`[${packageName}/${depType}/${depName}] Skipping version string "${rawVersion}" - incorrect type ${typeof(rawVersion)}`);
 		return null;
 	}
 
-	/** @type {string} */
-	let versionString = rawVersion;
+	let versionString: string = rawVersion;
 
 	if (versionString.startsWith('npm:') || versionString.startsWith('workspace:')) {
 		//console.warn(`[${packageName}/${depType}/${depName}] Skipping version string "${versionString}" - package redirects are not supported`);
@@ -240,9 +214,8 @@ function parseVersionString(packageName, depType, depName, rawVersion) {
 	const primaryVersion = versionMatch[2];
 
 	// Parse the primary version (x.y.z)
-	/** @type {DepVersion} */
 	/* @ts-expect-error validated by the Regex prior, but TS doesn't know that */
-	const parsedVersion = primaryVersion
+	const parsedVersion: DepVersion = primaryVersion
 		.split('.')
 		.map(p => p === '*' ? '*' : parseInt(p));
 
@@ -273,13 +246,8 @@ function parseVersionString(packageName, depType, depName, rawVersion) {
 	return parsedVersion;
 }
 
-/**
- * @param {Package[]} packages
- * @returns {Map<string, MappedDependency>}
- */
-function mapDependencies(packages) {
-	/** @type {Map<string, MappedDependency>} */
-	const mappedDependencies = new Map();
+function mapDependencies(packages: Package[]): Map<string, MappedDependency> {
+	const mappedDependencies = new Map<string, MappedDependency>();
 
 	for (const pkg of packages) {
 		for (const dependency of pkg.dependencies) {
@@ -313,12 +281,7 @@ function mapDependencies(packages) {
 	return mappedDependencies;
 }
 
-/**
- * @param {DepVersion} a
- * @param {DepVersion} b
- * @return {boolean}
- */
-function isNewer(a, b) {
+function isNewer(a: DepVersion, b: DepVersion): boolean {
 	return compareVersions(a, b) > 0;
 }
 
@@ -326,11 +289,8 @@ function isNewer(a, b) {
  * -1 => a is older / b is newer
  * 0 => same age
  * 1 => a is newer / b is older
- * @param {DepVersion} a
- * @param {DepVersion} b
- * @return {-1 | 0 | 1}
  */
-function compareVersions(a, b) {
+function compareVersions(a: DepVersion, b: DepVersion): -1 | 0 | 1 {
 	const limit = Math.max(a.length, b.length);
 
 	// Check each part (x.y.z and so on)
@@ -361,13 +321,8 @@ function compareVersions(a, b) {
 	return 0;
 }
 
-/**
- * @param {MappedDependency[]} dependencies
- * @returns {Promise<void>}
- */
-async function syncDependencies(dependencies) {
-	/** @type {Map<string, Package>} */
-	const modifiedPackages = new Map();
+async function syncDependencies(dependencies: MappedDependency[]): Promise<void> {
+	const modifiedPackages: Map<string, Package> = new Map();
 
 	for (const dependency of dependencies) {
 		for (const pkg of dependency.packages) {
@@ -385,34 +340,35 @@ async function syncDependencies(dependencies) {
 	}
 }
 
-/**
- * @typedef Package
- * @property {string} name
- * @property {string} path
- * @property {object} json
- * @property {Dependency[]} dependencies
- */
+interface Package {
+	name: string;
+	path: string;
+	json: object;
+	dependencies: Dependency[];
+}
 
-/**
- * @typedef Dependency
- * @property {string} name
- * @property {DepType} type
- * @property {DepVersion} version
- * @property {string} npmVersion
- */
+interface Dependency {
+	name: string;
+	type: DepType;
+	version: DepVersion;
+	npmVersion: string;
+}
 
-/**
- * @typedef {'dependencies' | 'devDependencies' | 'optionalDependencies' | 'peerDependencies' | 'resolutions' | 'overrides'} DepType
- * @typedef {[DepPart, ...DepPart[]]} DepVersion
- * @typedef {number | '*'} DepPart
- */
+type DepType =
+	'dependencies'
+	| 'devDependencies'
+	| 'optionalDependencies'
+	| 'peerDependencies'
+	| 'resolutions'
+	| 'overrides';
+type DepVersion = [DepPart, ...DepPart[]];
+type DepPart = number | '*';
 
-/**
- * @typedef MappedDependency
- * @property {string} name
- * @property {DepVersion} newestVersion
- * @property {string} newestNpmVersion
- * @property {boolean} hasDifference
- * @property {{package: Package, packageDependency: Dependency}[]} packages
- */
+interface MappedDependency {
+	name: string;
+	newestVersion: DepVersion;
+	newestNpmVersion: string;
+	hasDifference: boolean;
+	packages: { package: Package; packageDependency: Dependency; }[];
+}
 
