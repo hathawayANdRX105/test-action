@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { FollowingsRepository } from '@/models/_.js';
@@ -17,9 +16,11 @@ import { ApiError } from '../../error.js';
 export const meta = {
 	tags: ['following', 'users'],
 
+	// Up to 20, then 1 per 10 seconds
 	limit: {
-		duration: ms('1hour'),
-		max: 100,
+		type: 'bucket',
+		size: 20,
+		dripRate: 10 * 1000,
 	},
 
 	requireCredential: true,
