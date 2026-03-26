@@ -87,7 +87,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 
 			// Check not following
-			const exist = await this.cacheService.isFollowing(followee, followee);
+			const exist = await this.cacheService.isFollowing(follower, followee);
 
 			if (!exist) {
 				throw new ApiError(meta.errors.notFollowing);
