@@ -1096,8 +1096,8 @@ function pushMention(user: { id?: string; username: string; host: string | null 
 				: `${mention} ${text.value}`;
 		} else {
 			text.value = text.value.match(/\s$/)
-				? `${text.value}${mention}`
-				: `${text.value} ${mention}`;
+				? `${text.value}${mention} `
+				: `${text.value} ${mention} `;
 		}
 	}
 }
