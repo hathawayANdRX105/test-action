@@ -10,10 +10,10 @@ import type { IEndpointMeta } from '@/server/api/endpoints.js';
 import type { Schema } from '@/misc/json-schema.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { UserFollowingService } from '@/core/UserFollowingService.js';
+import { CacheService } from '@/core/CacheService.js';
 import { DI } from '@/di-symbols.js';
 import { GetterService } from '@/server/api/GetterService.js';
 import { ApiError } from '../../error.js';
-import { CacheService } from '@/core/CacheService.js';
 
 export const meta = {
 	tags: ['following', 'users'],
