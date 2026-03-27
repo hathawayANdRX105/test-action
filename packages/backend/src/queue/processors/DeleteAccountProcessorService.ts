@@ -23,6 +23,7 @@ import { NoteDeleteService } from '@/core/NoteDeleteService.js';
 import { QueueLoggerService } from '@/queue/QueueLoggerService.js';
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { InternalEventService } from '@/global/InternalEventService.js';
 import { ApDeliverManagerService } from '@/core/activitypub/ApDeliverManagerService.js';
 import type * as Bull from 'bullmq';
 import type { DbUserDeleteJobData } from '../types.js';
@@ -103,6 +104,7 @@ export class DeleteAccountProcessorService {
 		private readonly apRendererService: ApRendererService,
 		private readonly userEntityService: UserEntityService,
 		private readonly apDeliverManagerService: ApDeliverManagerService,
+		private readonly internalEventService: InternalEventService,
 	) {
 		this.logger = this.queueLoggerService.logger.createSubLogger('delete-account');
 	}
@@ -406,8 +408,65 @@ export class DeleteAccountProcessorService {
 			});
 
 			// soft指定されている場合は物理削除しない
-			if (!job.data.soft) {
-				await this.usersRepository.delete(user.id);
+			if (job.data.soft) {
+				await this.usersRepository.update({ id: user.id }, {
+					followersCount: 0,
+					followingCount: 0,
+					notesCount: 0,
+					avatarId: null,
+					avatarUrl: null,
+					avatarBlurhash: null,
+					bannerId: null,
+					bannerUrl: null,
+					bannerBlurhash: null,
+					backgroundId: null,
+					backgroundUrl: null,
+					backgroundBlurhash: null,
+					avatarDecorations: [],
+					tags: [],
+					emojis: [],
+					score: 0, // WTF is this?
+					noindex: true,
+					isLocked: true,
+					isExplorable: false,
+					requireSigninToViewContents: true,
+					makeNotesFollowersOnlyBefore: null,
+					makeNotesHiddenBefore: null,
+					chatScope: 'none',
+					featured: null,
+					followersUri: null,
+					enableRss: false,
+					allowUnsignedFetch: 'never',
+				});
+				await this.internalEventService.emit('userUpdated', { id: user.id });
+				await this.userProfilesRepository.update({ userId: user.id }, {
+					location: null,
+					birthday: null,
+					listenbrainz: null,
+					description: null,
+					followedMessage: null,
+					fields: [],
+					lang: null,
+					publicReactions: false,
+					followersVisibility: 'private',
+					followingVisibility: 'private',
+					clientData: {},
+					room: {}, // TODO isn't this obsolete?
+					autoAcceptFollowed: false,
+					noCrawle: true,
+					preventAiLearning: true,
+					defaultSensitive: true,
+					autoSensitive: false,
+					pinnedPageId: null,
+					mutedWords: [],
+					hardMutedWords: [],
+					mutedInstances: [],
+					notificationRecieveConfig: {},
+					defaultCW: null,
+				});
+				await this.internalEventService.emit('updateUserProfile', { userId: user.id, keys: null });
+			} else {
+				await this.usersRepository.delete({ id: user.id });
 			}
 
 			this.logger.info('Account data deleted');
