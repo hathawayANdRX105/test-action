@@ -480,7 +480,7 @@ export class UserEntityService implements OnModuleInit {
 				backgroundUrl: user.backgroundId == null ? null : user.backgroundUrl,
 				backgroundBlurhash: user.backgroundId == null ? null : user.backgroundBlurhash,
 				isLocked: user.isLocked,
-				isSuspended: !this.utilityService.isActiveUser(user),
+				isSuspended: user.isSuspended || (user.host != null && !this.utilityService.isFederationAllowedHost(user.host)),
 				location: profile!.location,
 				birthday: profile!.birthday,
 				listenbrainz: profile!.listenbrainz,
@@ -511,14 +511,18 @@ export class UserEntityService implements OnModuleInit {
 				}))),
 				memo: memo,
 				moderationNote: iAmModerator ? (profile!.moderationNote ?? '') : undefined,
+				isSystem: isSystemAccount(user),
 			} : {}),
 
 			...(isDetailed && (isMe || iAmModerator) ? {
 				twoFactorEnabled: profile!.twoFactorEnabled,
 				usePasswordLessLogin: profile!.usePasswordLessLogin,
 				securityKeys: profile!.twoFactorEnabled
+					// TODO make all this "exists" instead
 					? Promise.resolve(opts.hint?.securityKeyCounts?.get(user.id) ?? this.userSecurityKeysRepository.countBy({ userId: user.id })).then(result => result >= 1)
 					: false,
+				isDeleted: user.isDeleted,
+				deletedAt: user.deletedAt?.toISOString() ?? null,
 			} : {}),
 
 			...(isDetailed && iAmRoot ? {
@@ -532,7 +536,6 @@ export class UserEntityService implements OnModuleInit {
 				followedMessage: profile!.followedMessage,
 				isModerator: iAmModerator,
 				isAdmin: iAmAdmin,
-				isSystem: isSystemAccount(user),
 				injectFeaturedNote: profile!.injectFeaturedNote,
 				receiveAnnouncementEmail: profile!.receiveAnnouncementEmail,
 				alwaysMarkNsfw: profile!.alwaysMarkNsfw,
@@ -543,7 +546,6 @@ export class UserEntityService implements OnModuleInit {
 				noCrawle: profile!.noCrawle,
 				preventAiLearning: profile!.preventAiLearning,
 				isExplorable: user.isExplorable,
-				isDeleted: user.isDeleted,
 				twoFactorBackupCodesStock: profile?.twoFactorBackupSecret?.length === 5 ? 'full' : (profile?.twoFactorBackupSecret?.length ?? 0) > 0 ? 'partial' : 'none',
 				hideOnlineStatus: user.hideOnlineStatus,
 				hasUnreadSpecifiedNotes: false, // 後方互換性のため

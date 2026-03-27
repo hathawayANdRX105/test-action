@@ -4,19 +4,15 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { Not, IsNull } from 'typeorm';
-import type { FollowingsRepository, MiMeta, MiUser, UsersRepository } from '@/models/_.js';
+import type { MiMeta, MiUser, UsersRepository } from '@/models/_.js';
 import { QueueService } from '@/core/QueueService.js';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
-import { GlobalEventService } from '@/core/GlobalEventService.js';
-import { UserEntityService } from '@/core/entities/UserEntityService.js';
-import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
-import { ModerationLogService } from '@/core/ModerationLogService.js';
-import { SystemAccountService } from '@/core/SystemAccountService.js';
-import { InternalEventService } from '@/global/InternalEventService.js';
 import { isSystemAccount } from '@/misc/is-system-account.js';
-import { isLocalUser } from '@/models/User.js';
+import { isRemoteUser } from '@/models/User.js';
+import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { InternalEventService } from '@/global/InternalEventService.js';
+import { TimeService } from '@/global/TimeService.js';
 
 @Injectable()
 export class DeleteAccountService {
@@ -27,16 +23,10 @@ export class DeleteAccountService {
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 
-		@Inject(DI.followingsRepository)
-		private followingsRepository: FollowingsRepository,
-
-		private userEntityService: UserEntityService,
-		private apRendererService: ApRendererService,
 		private queueService: QueueService,
-		private globalEventService: GlobalEventService,
 		private moderationLogService: ModerationLogService,
-		private systemAccountService: SystemAccountService,
 		private readonly internalEventService: InternalEventService,
+		private readonly timeService: TimeService,
 	) {
 	}
 
@@ -51,45 +41,27 @@ export class DeleteAccountService {
 		}
 
 		if (moderator != null) {
-			this.moderationLogService.log(moderator, 'deleteAccount', {
+			await this.moderationLogService.log(moderator, 'deleteAccount', {
 				userId: user.id,
 				userUsername: _user.username,
 				userHost: user.host,
 			});
 		}
 
-		// 物理削除する前にDelete activityを送信する
-		if (isLocalUser(user)) {
-			// 知り得る全SharedInboxにDelete配信
-			const content = this.apRendererService.addContext(this.apRendererService.renderDelete(this.userEntityService.genLocalUserUri(user.id), user));
-
-			const followings = await this.followingsRepository.find({
-				where: [
-					{ followerSharedInbox: Not(IsNull()) },
-					{ followeeSharedInbox: Not(IsNull()) },
-				],
-				select: ['followerSharedInbox', 'followeeSharedInbox'],
-			});
-
-			const inboxes = followings.map(x => [x.followerSharedInbox ?? x.followeeSharedInbox as string, true] as const);
-			const queue = new Map<string, true>(inboxes);
-
-			await this.queueService.deliverMany(user, content, queue);
-
-			await this.queueService.createDeleteAccountJob(user, {
-				soft: false,
-			});
-		} else {
-			// リモートユーザーの削除は、完全にDBから物理削除してしまうと再度連合してきてアカウントが復活する可能性があるため、soft指定する
-			await this.queueService.createDeleteAccountJob(user, {
-				soft: true,
-			});
-		}
-
-		await this.usersRepository.update(user.id, {
+		// 1. Update database
+		await this.usersRepository.update({ id: user.id }, {
 			isDeleted: true,
+			deletedAt: this.timeService.date,
 		});
 
+		// 2. Sync to other processes
+		await this.internalEventService.emit('userUpdated', { id: user.id });
 		await this.internalEventService.emit('userChangeDeletedState', { id: user.id, isDeleted: true, token: user.token, uri: user.uri, usernameLower: user.username.toLowerCase(), host: user.host });
+
+		// 3. *then* finally start the background job
+		await this.queueService.createDeleteAccountJob(user, {
+			// soft-delete remote users, otherwise they may get re-created by federation.
+			soft: isRemoteUser(user),
+		});
 	}
 }

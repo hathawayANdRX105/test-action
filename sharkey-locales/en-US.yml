@@ -744,3 +744,8 @@ previousRootUser: "Previous root user"
 newRootUser: "New root user"
 
 carefulBot: "Follow requests from bots require approval"
+
+userDeleted: "This user has been deleted."
+restartDeletion: "Restart account deletion"
+restartDeletionDescription: "Account deletion was last attempted {date}. If the deletion failed or was incomplete, then you may click this button to restart the process."
+restartDeletionConfirm: "Are you sure you want to restart this account deletion?"

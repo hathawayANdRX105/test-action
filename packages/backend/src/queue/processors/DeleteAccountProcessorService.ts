@@ -13,6 +13,7 @@ import type { MiDriveFile } from '@/models/DriveFile.js';
 import type { MiNote } from '@/models/Note.js';
 import type { MiNoteReaction } from '@/models/NoteReaction.js';
 import { EmailService } from '@/core/EmailService.js';
+import { isLocalUser } from '@/models/User.js';
 import { bindThis } from '@/decorators.js';
 import { SearchService } from '@/core/SearchService.js';
 import { ApLogService } from '@/core/ApLogService.js';
@@ -20,6 +21,9 @@ import { ReactionService } from '@/core/ReactionService.js';
 import { QueueService } from '@/core/QueueService.js';
 import { NoteDeleteService } from '@/core/NoteDeleteService.js';
 import { QueueLoggerService } from '@/queue/QueueLoggerService.js';
+import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
+import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { ApDeliverManagerService } from '@/core/activitypub/ApDeliverManagerService.js';
 import type * as Bull from 'bullmq';
 import type { DbUserDeleteJobData } from '../types.js';
 
@@ -96,17 +100,36 @@ export class DeleteAccountProcessorService {
 		private reactionService: ReactionService,
 		private readonly apLogService: ApLogService,
 		private readonly noteDeleteService: NoteDeleteService,
+		private readonly apRendererService: ApRendererService,
+		private readonly userEntityService: UserEntityService,
+		private readonly apDeliverManagerService: ApDeliverManagerService,
 	) {
 		this.logger = this.queueLoggerService.logger.createSubLogger('delete-account');
 	}
 
 	@bindThis
-	public async process(job: Bull.Job<DbUserDeleteJobData>): Promise<string | void> {
+	public async process(job: Bull.Job<DbUserDeleteJobData>): Promise<string> {
 		this.logger.info(`Deleting account of ${job.data.user.id} ...`);
 
 		const user = await this.usersRepository.findOneBy({ id: job.data.user.id });
 		if (user == null) {
-			return;
+			return 'skip - user not found';
+		}
+
+		{ // Federate delete
+			if (isLocalUser(user)) {
+				// Federate Delete(Person) activities
+				const activity = this.apRendererService.addContext(this.apRendererService.renderDelete(this.userEntityService.genLocalUserUri(user.id), user));
+
+				const dm = this.apDeliverManagerService.createDeliverManager(user, activity);
+				dm.addNetworkRecipe(); // Send to sharedInbox of known network.
+				dm.addFollowersRecipe(); // Additionally send to regular inbox of followers who lack a sharedInbox.
+				await dm.execute();
+
+				this.logger.info('Delete(Person) activities have been queued.');
+			} else {
+				this.logger.debug('Not sending activities for remote user');
+			}
 		}
 
 		{ // Delete user clips
@@ -383,9 +406,7 @@ export class DeleteAccountProcessorService {
 			});
 
 			// soft指定されている場合は物理削除しない
-			if (job.data.soft) {
-				// nop
-			} else {
+			if (!job.data.soft) {
 				await this.usersRepository.delete(user.id);
 			}
 

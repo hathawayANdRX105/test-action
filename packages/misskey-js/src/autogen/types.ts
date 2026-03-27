@@ -10137,8 +10137,6 @@ export type components = {
             isAdmin: boolean;
             /** @default false */
             isModerator: boolean;
-            /** @default false */
-            isSystem: boolean;
             noindex: boolean;
             enableRss: boolean;
             mandatoryCW: string | null;
@@ -10226,6 +10224,9 @@ export type components = {
             twoFactorEnabled?: boolean;
             usePasswordLessLogin?: boolean;
             securityKeys?: boolean;
+            isDeleted?: boolean;
+            deletedAt?: string | null;
+            isSystem?: boolean;
             isFollowing?: boolean;
             isFollowed?: boolean;
             hasPendingFollowRequestFromYou?: boolean;
@@ -10259,7 +10260,6 @@ export type components = {
             noCrawle: boolean;
             preventAiLearning: boolean;
             isExplorable: boolean;
-            isDeleted: boolean;
             /** @enum {string} */
             twoFactorBackupCodesStock: 'full' | 'partial' | 'none';
             hideOnlineStatus: boolean;

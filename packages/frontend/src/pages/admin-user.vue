@@ -188,12 +188,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 						<div :class="$style.buttonStrip">
 							<MkButton v-if="user.host != null" inline @click="updateRemoteUser"><i class="ph-cloud-arrow-down ph-bold ph-lg"></i> {{ i18n.ts.updateRemoteUser }}</MkButton>
-							<MkButton v-if="user.host == null" inline accent @click="resetPassword"><i class="ph-password ph-bold ph-lg"></i> {{ i18n.ts.resetPassword }}</MkButton>
 							<MkButton v-if="info.movedTo && iAmAdmin" inline @click="restartMigration"><i class="ph-airplane-takeoff ph-bold ph-lg"></i> {{ i18n.ts.restartMigration }}</MkButton>
+							<MkButton v-if="user.isDeleted && iAmAdmin" inline @click="restartDeletion"><i class="ph-skull ph-bold ph-lg"></i> {{ i18n.ts.restartDeletion }}</MkButton>
+							<MkButton v-if="user.host == null" inline accent @click="resetPassword"><i class="ph-password ph-bold ph-lg"></i> {{ i18n.ts.resetPassword }}</MkButton>
 							<MkButton inline accent @click="unsetUserAvatar"><i class="ph-camera-slash ph-bold ph-lg"></i> {{ i18n.ts.unsetUserAvatar }}</MkButton>
 							<MkButton inline accent @click="unsetUserBanner"><i class="ph-image-broken ph-bold ph-lg"></i> {{ i18n.ts.unsetUserBanner }}</MkButton>
 							<MkButton inline danger @click="deleteAllFiles"><i class="ph-trash ph-bold ph-lg"></i> {{ i18n.ts.deleteAllFiles }}</MkButton>
-							<MkButton v-if="iAmAdmin" inline danger @click="deleteAccount"><i class="ph-skull ph-bold ph-lg"></i> {{ i18n.ts.deleteAccount }}</MkButton>
+							<MkButton v-if="!user.isDeleted && iAmAdmin" inline danger @click="deleteAccount"><i class="ph-skull ph-bold ph-lg"></i> {{ i18n.ts.deleteAccount }}</MkButton>
 						</div>
 					</div>
 				</FormSection>
@@ -782,6 +783,19 @@ async function restartMigration() {
 	if (confirm.canceled) return;
 	await os.promiseDialog(async () => {
 		await misskeyApi('admin/restart-migration', { userId: props.userId });
+		await refreshUser();
+	});
+}
+
+async function restartDeletion() {
+	const confirm = await os.confirm({
+		type: 'question',
+		title: i18n.ts.restartDeletion,
+		text: i18n.ts.restartDeletionConfirm,
+	});
+	if (confirm.canceled) return;
+	await os.promiseDialog(async () => {
+		await misskeyApi('admin/delete-account', { userId: props.userId });
 		await refreshUser();
 	});
 }
