@@ -763,12 +763,12 @@ export class QueueService implements OnModuleInit {
 			soft: opts.soft,
 		}, {
 			removeOnComplete: {
-				age: 3600 * 24 * 7, // keep up to 7 days
-				count: 30,
+				age: 3600 * 24 * 7, // keep up to 30 days
+				count: 10_000,
 			},
 			removeOnFail: {
-				age: 3600 * 24 * 7, // keep up to 7 days
-				count: 100,
+				age: 3600 * 24 * 7, // keep up to 30 days
+				count: 10_000,
 			},
 			deduplication: {
 				id: `deleteAccount_${user.id}`,
