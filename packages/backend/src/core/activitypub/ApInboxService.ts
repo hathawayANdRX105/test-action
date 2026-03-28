@@ -27,15 +27,14 @@ import { QueueService } from '@/core/QueueService.js';
 import type { UsersRepository, NotesRepository, FollowingsRepository, AbuseUserReportsRepository, FollowRequestsRepository, MiMeta } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import type { MiRemoteUser } from '@/models/User.js';
-import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { AbuseReportService } from '@/core/AbuseReportService.js';
 import { FederatedInstanceService } from '@/core/FederatedInstanceService.js';
+import { DeleteAccountService } from '@/core/DeleteAccountService.js';
 import { fromTuple } from '@/misc/from-tuple.js';
-import { IdentifiableError } from '@/misc/identifiable-error.js';
+import { IdentifiableError, errorCodes } from '@/misc/identifiable-error.js';
 import { renderInlineError } from '@/misc/render-inline-error.js';
 import { CacheService } from '@/core/CacheService.js';
 import { NoteVisibilityService } from '@/core/NoteVisibilityService.js';
-import { InternalEventService } from '@/global/InternalEventService.js';
 import { getApHrefNullable, getApId, getApIds, getApType, getNullableApId, isAccept, isActor, isAdd, isAnnounce, isApObject, isBlock, isCollectionOrOrderedCollection, isCreate, isDelete, isFlag, isFollow, isLike, isDislike, isMove, isPost, isReject, isRemove, isTombstone, isUndo, isUpdate, validActor, validPost, isActivity, IObjectWithId } from './type.js';
 import { ApNoteService } from './models/ApNoteService.js';
 import { ApLoggerService } from './ApLoggerService.js';
@@ -91,11 +90,10 @@ export class ApInboxService {
 		private apPersonService: ApPersonService,
 		private apQuestionService: ApQuestionService,
 		private queueService: QueueService,
-		private globalEventService: GlobalEventService,
 		private readonly federatedInstanceService: FederatedInstanceService,
 		private readonly cacheService: CacheService,
 		private readonly noteVisibilityService: NoteVisibilityService,
-		private readonly internalEventService: InternalEventService,
+		private readonly deleteAccountService: DeleteAccountService,
 	) {
 		this.logger = this.apLoggerService.logger;
 	}
@@ -560,20 +558,15 @@ export class ApInboxService {
 
 	@bindThis
 	private async deleteActor(actor: MiRemoteUser, uri: string): Promise<string> {
-		this.logger.info(`Deleting the Actor: ${uri}`);
-
 		if (actor.uri !== uri) {
-			return `skip: delete actor ${actor.uri} !== ${uri}`;
+			throw new IdentifiableError(errorCodes.apValidationFailed, `skip: Delete(Person) failed - actor ${actor.id} (${actor.uri}) cannot delete other actor ${uri}`);
 		}
 
-		if (!(await this.usersRepository.update({ id: actor.id, isDeleted: false }, { isDeleted: true })).affected) {
-			return 'skip: already deleted or actor not found';
+		if (actor.isDeleted) {
+			return 'skip: already deleted';
 		}
 
-		const job = await this.queueService.createDeleteAccountJob(actor);
-
-		await this.internalEventService.emit('userChangeDeletedState', { id: actor.id, isDeleted: true, token: null, uri: actor.uri, usernameLower: actor.username.toLowerCase(), host: actor.host });
-
+		const job = await this.deleteAccountService.deleteAccount(actor);
 		return `ok: queued ${job.name} ${job.id}`;
 	}
 
