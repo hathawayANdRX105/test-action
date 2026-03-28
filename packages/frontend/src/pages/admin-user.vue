@@ -33,11 +33,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #icon><i class="ph-list-bullets ph-bold ph-lg"></i></template>
 					<template #label>{{ i18n.ts.details }}</template>
 					<div style="display: flex; flex-direction: column; gap: 1em;">
-						<MkKeyValue v-if="user" :copy="user.id" oneline>
+						<MkKeyValue :copy="user.id" oneline>
 							<template #key>{{ i18n.ts.id }}</template>
 							<template #value><span class="_monospace">{{ user.id }}</span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="user" :copy="'@' + acct(user)" oneline>
+						<MkKeyValue :copy="'@' + acct(user)" oneline>
 							<template #key>{{ i18n.ts.username }}</template>
 							<template #value><span class="_monospace">@{{ acct(user) }}</span></template>
 						</MkKeyValue>
@@ -49,37 +49,67 @@ SPDX-License-Identifier: AGPL-3.0-only
 						-->
 						<MkKeyValue oneline>
 							<template #key>{{ i18n.ts.createdAt }}</template>
-							<template #value><span class="_monospace"><MkTime :time="user.createdAt" :mode="'detail'"/></span></template>
+							<template #value><span class="_monospace"><MkTime :time="user.createdAt" mode="detail"/></span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="info" oneline>
+						<MkKeyValue oneline>
+							<template #key>{{ i18n.ts.updatedAt }}</template>
+							<template #value><span class="_monospace"><MkTime :time="user.updatedAt" mode="detail"/></span></template>
+						</MkKeyValue>
+						<MkKeyValue v-if="user.host != null" oneline>
+							<template #key>{{ i18n.ts.lastFetchedAt }}</template>
+							<template #value><span class="_monospace"><MkTime :time="user.lastFetchedAt" mode="detail"/></span></template>
+						</MkKeyValue>
+						<MkKeyValue v-if="user.host != null" oneline>
+							<template #key>{{ i18n.ts.lastFetchedFeaturedAt }}</template>
+							<template #value><span class="_monospace"><MkTime :time="info.lastFetchedFeaturedAt" mode="detail"/></span></template>
+						</MkKeyValue>
+						<MkKeyValue v-if="user.host != null" oneline>
+							<template #key>{{ i18n.ts.lastFetchedOutboxAt }}</template>
+							<template #value><span class="_monospace"><MkTime :time="info.lastFetchedOutboxAt" mode="detail"/></span></template>
+						</MkKeyValue>
+						<MkKeyValue v-if="user.isDeleted" oneline>
+							<template #key>{{ i18n.ts.deletedAt }}</template>
+							<template #value>
+								<span v-if="user.deletedAt" class="_monospace"><MkTime :time="user.deletedAt" mode="detail"/></span>
+								<span v-else class="_monospace">{{ i18n.ts.unknown }}</span>
+							</template>
+						</MkKeyValue>
+						<MkKeyValue v-if="info.movedTo || info.alsoKnownAs" oneline>
+							<template #key>{{ i18n.ts.accountMigratedAt }}</template>
+							<template #value>
+								<span v-if="info.movedAt" class="_monospace"><MkTime :time="info.movedAt" mode="detail"/></span>
+								<span v-else class="_monospace">{{ i18n.ts.accountMigrationPending }}</span>
+							</template>
+						</MkKeyValue>
+						<MkKeyValue oneline>
 							<template #key>{{ i18n.ts.lastActiveDate }}</template>
-							<template #value><span class="_monospace"><MkTime :time="info.lastActiveDate" :mode="'detail'"/></span></template>
+							<template #value><span class="_monospace"><MkTime :time="info.lastActiveDate" mode="detail"/></span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="info" oneline>
+						<MkKeyValue v-if="info.email" oneline>
 							<template #key>{{ i18n.ts.email }}</template>
 							<template #value><span class="_monospace">{{ info.email }}</span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="info" oneline>
+						<MkKeyValue oneline>
 							<template #key>{{ i18n.ts.totalFollowers }}</template>
 							<template #value><span class="_monospace"><MkNumber :value="info.followStats.totalFollowers"></MkNumber></span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="info" oneline>
+						<MkKeyValue oneline>
 							<template #key>{{ i18n.ts.totalFollowing }}</template>
 							<template #value><span class="_monospace"><MkNumber :value="info.followStats.totalFollowing"></MkNumber></span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="info" oneline>
+						<MkKeyValue oneline>
 							<template #key>{{ i18n.ts.remoteFollowers }}</template>
 							<template #value><span class="_monospace"><MkNumber :value="info.followStats.remoteFollowers"></MkNumber></span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="info" oneline>
+						<MkKeyValue oneline>
 							<template #key>{{ i18n.ts.remoteFollowing }}</template>
 							<template #value><span class="_monospace"><MkNumber :value="info.followStats.remoteFollowing"></MkNumber></span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="info" oneline>
+						<MkKeyValue oneline>
 							<template #key>{{ i18n.ts.localFollowers }}</template>
 							<template #value><span class="_monospace"><MkNumber :value="info.followStats.localFollowers"></MkNumber></span></template>
 						</MkKeyValue>
-						<MkKeyValue v-if="info" oneline>
+						<MkKeyValue oneline>
 							<template #key>{{ i18n.ts.localFollowing }}</template>
 							<template #value><span class="_monospace"><MkNumber :value="info.followStats.localFollowing"></MkNumber></span></template>
 						</MkKeyValue>
@@ -100,9 +130,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #icon><i class="ph-network ph-bold ph-lg"></i></template>
 					<template #label>{{ i18n.ts.ip }}</template>
 					<MkInfo>{{ i18n.ts.ipTip }}</MkInfo>
-					<div v-for="record in ips" :key="record.ip" class="_monospace" :class="$style.ip" style="margin: 1em 0;">
-						<span class="date">{{ record.createdAt }}</span>
-						<span class="ip">{{ record.ip }}</span>
+					<div v-for="record of ips" :key="record.ip" class="_monospace">
+						<MkKeyValue :copy="record.ip">
+							<template #key><MkTime :time="record.createdAt" mode="detail"/></template>
+							<template #value>{{ record.ip }}</template>
+						</MkKeyValue>
+					</div>
+				</MkFolder>
+
+				<MkFolder v-if="loggedInDates.length > 0" :sticky="false">
+					<template #icon><i class="ph-calendar-dots ph-bold ph-lg"></i></template>
+					<template #label>{{ i18n.ts.loginDates }}</template>
+
+					<div v-for="date of loggedInDates" :key="date.getTime()" class="_monospace">
+						<MkTime :time="date" mode="detail" dateOnly/>
 					</div>
 				</MkFolder>
 
@@ -121,7 +162,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</MkKeyValue>
 								<MkKeyValue v-if="info.movedAt" oneline>
 									<template #key>{{ i18n.ts.accountMigratedAt }}</template>
-									<template #value><MkTime :time="info.movedAt" :mode="'detail'"/></template>
+									<template #value><MkTime :time="info.movedAt" mode="detail"/></template>
 								</MkKeyValue>
 								<MkKeyValue v-if="info.movedTo.user" oneline>
 									<template #key>{{ i18n.ts.accountMigratedTo }}</template>
@@ -320,7 +361,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, watch, ref } from 'vue';
 import * as Misskey from 'misskey-js';
-import { host as localHost, url } from '@@/js/config.js';
+import { host as localHost } from '@@/js/config.js';
 import type { Badge } from '@/components/SkBadgeStrip.vue';
 import type { ChartSrc } from '@/components/MkChart.vue';
 import MkChart from '@/components/MkChart.vue';
@@ -394,6 +435,14 @@ const filesPagination = {
 const badges = computed(() => {
 	const arr: Badge[] = [];
 	if (info.value && user.value) {
+		if (user.value.isDeleted) {
+			arr.push({
+				key: 'deleted',
+				label: i18n.ts.deleted,
+				style: 'error',
+			});
+		}
+
 		if (info.value.isSuspended) {
 			arr.push({
 				key: 'suspended',
@@ -434,7 +483,21 @@ const badges = computed(() => {
 			});
 		}
 
-		if (info.value.isAdministrator) {
+		if (info.value.isSystem) {
+			arr.push({
+				key: 'system',
+				label: i18n.ts.system,
+				style: 'neutral',
+			});
+		}
+
+		if (info.value.isRoot) {
+			arr.push({
+				key: 'root',
+				label: i18n.ts.root,
+				style: 'success',
+			});
+		} else if (info.value.isAdministrator) {
 			arr.push({
 				key: 'admin',
 				label: i18n.ts.administrator,
@@ -494,6 +557,11 @@ const announcementsPagination = {
 	})),
 };
 const expandedRoles = ref<string[]>([]);
+
+const loggedInDates = computed(() => {
+	if (!info.value) return [];
+	return Array.from(new Set(info.value.loggedInDates)).sort().map(date => new Date(date));
+});
 
 function createFetcher(withHint = true) {
 	return () => Promise.all([
