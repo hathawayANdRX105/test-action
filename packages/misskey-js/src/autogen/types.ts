@@ -174,7 +174,7 @@ export type paths = {
          * admin/accounts/delete
          * @description No description provided.
          *
-         *     **Credential required**: *Yes* / **Permission**: *write:admin:account*
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:delete-account*
          */
         post: operations['admin___accounts___delete'];
         delete?: never;
