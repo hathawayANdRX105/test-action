@@ -17,10 +17,11 @@ const ruleTester = new RuleTester({
 });
 
 function testCase(code, errors) {
-  return { code, errors, options: [ locale ], filename: 'test.ts' };
+  return { code, errors, options: [locale], filename: 'test.ts' };
 }
+
 function testCaseVue(code, errors) {
-  return { code, errors, options: [ locale ], filename: 'test.vue' };
+  return { code, errors, options: [locale], filename: 'test.vue' };
 }
 
 ruleTester.run(

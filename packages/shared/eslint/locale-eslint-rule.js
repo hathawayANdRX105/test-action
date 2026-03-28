@@ -82,10 +82,10 @@ function getArgumentObjectProperties(node) {
 }
 
 function getTranslationParameters(translation) {
-	return new Set(Array.from(translation.matchAll(/\{(\w+)\}/g)).map( m => m[1] ));
+	return new Set(Array.from(translation.matchAll(/\{(\w+)\}/g)).map(m => m[1]));
 }
 
-function setDifference(a,b) {
+function setDifference(a, b) {
 	const result = [];
 	for (const element of a.values()) {
 		if (!b.has(element)) {
@@ -113,7 +113,7 @@ function theRuleBody(context, node) {
 
 	// `method` is going to be `'ts'` or `'tsx'`, `path` is going to
 	// be the various translation steps/names
-	const [ method, ...path ] = collectMembers(node);
+	const [method, ...path] = collectMembers(node);
 	const pathStr = `i18n.${method}.${path.join('.')}`;
 
 	// does that path point to a real translation?
@@ -220,7 +220,7 @@ function theRule(context) {
 	// we get the locale/translations via the options; it's the data
 	// that goes into a specific language's JSON file, see
 	// `scripts/build-assets.mjs`
-	const locale = context.options[0];
+	// const locale = context.options[0];
 
 	// for all object member access that have an identifier 'i18n'...
 	return context.getSourceCode().parserServices.defineTemplateBodyVisitor(
