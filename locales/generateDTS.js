@@ -184,8 +184,24 @@ export default function generateDTS() {
 				),
 			]),
 		),
+
+		ts.factory.createJSDocComment('Read all YAML translation files and generate a locales table.'),
+		ts.factory.createFunctionDeclaration(
+			[ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
+			undefined,
+			ts.factory.createIdentifier('build'),
+			undefined,
+			[],
+			ts.factory.createTypeReferenceNode(
+				ts.factory.createIdentifier('Locales'),
+				undefined,
+			),
+			undefined,
+		),
+
+		ts.factory.createJSDocComment('Locales table generated from all YAML translation files.'),
 		ts.factory.createVariableStatement(
-			[ts.factory.createToken(ts.SyntaxKind.DeclareKeyword)],
+			[ts.factory.createToken(ts.SyntaxKind.ExportKeyword)],
 			ts.factory.createVariableDeclarationList(
 				[
 					ts.factory.createVariableDeclaration(
@@ -200,19 +216,25 @@ export default function generateDTS() {
 				ts.NodeFlags.Const,
 			),
 		),
-		ts.factory.createFunctionDeclaration(
-			[ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
-			undefined,
-			ts.factory.createIdentifier('build'),
-			undefined,
-			[],
-			ts.factory.createTypeReferenceNode(
-				ts.factory.createIdentifier('Locales'),
-				undefined,
-			),
-			undefined,
-		),
+
+		ts.factory.createJSDocComment('Locales table generated from all YAML translation files.'),
 		ts.factory.createExportDefault(ts.factory.createIdentifier('locales')),
+
+		ts.factory.createJSDocComment('Hash-derived version identifier for the current locales table.\nGenerated automatically with each build.'),
+		ts.factory.createVariableStatement(
+			[ts.factory.createToken(ts.SyntaxKind.ExportKeyword)],
+			ts.factory.createVariableDeclarationList(
+				[
+					ts.factory.createVariableDeclaration(
+						ts.factory.createIdentifier('localesVersion'),
+						undefined,
+						ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+						undefined,
+					),
+				],
+				ts.NodeFlags.Const,
+			),
+		),
 	];
 	ts.addSyntheticLeadingComment(
 		elements[0],

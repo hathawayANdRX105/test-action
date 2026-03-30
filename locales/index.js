@@ -2,6 +2,7 @@
  * Languages Loader
  */
 
+import { createHash } from 'crypto';
 import { merge, loadOptionalYaml } from './util.js';
 
 /** @typedef {import('./index.d.ts').ILocale} ILocale */
@@ -86,4 +87,17 @@ export function build() {
 		})(), a), {});
 }
 
-export default build();
+export const locales = build();
+export default locales;
+
+// MD5 is acceptable because we don't need cryptographic security.
+const md5 = createHash('md5');
+
+// Derive the version hash from locale content exclusively.
+// This avoids the problem of "stuck" translations after modifying locale files.
+const localesText = JSON.stringify(locales);
+md5.update(localesText, 'utf8');
+
+// We can't use regular base64 since this becomes part of a filename.
+// Base64URL avoids special characters that would cause an issue.
+export const localesVersion = md5.digest().toString('base64url');
