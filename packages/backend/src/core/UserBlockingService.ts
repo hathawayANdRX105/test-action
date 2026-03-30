@@ -59,7 +59,7 @@ export class UserBlockingService implements OnModuleInit {
 	}
 
 	@bindThis
-	onModuleInit() {
+	public onModuleInit() {
 		this.userFollowingService = this.moduleRef.get('UserFollowingService');
 	}
 

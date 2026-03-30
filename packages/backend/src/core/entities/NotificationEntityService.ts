@@ -56,7 +56,7 @@ export class NotificationEntityService implements OnModuleInit {
 	}
 
 	@bindThis
-	onModuleInit() {
+	public onModuleInit() {
 		this.userEntityService = this.moduleRef.get('UserEntityService');
 		this.noteEntityService = this.moduleRef.get('NoteEntityService');
 		this.roleEntityService = this.moduleRef.get('RoleEntityService');

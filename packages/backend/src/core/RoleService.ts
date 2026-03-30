@@ -263,7 +263,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 	}
 
 	@bindThis
-	async onModuleInit() {
+	public async onModuleInit() {
 		this.notificationService = this.moduleRef.get('NotificationService');
 		this.cacheService = this.moduleRef.get('CacheService');
 	}

@@ -125,7 +125,7 @@ export class NoteEntityService implements OnModuleInit {
 	}
 
 	@bindThis
-	onModuleInit() {
+	public onModuleInit() {
 		this.userEntityService = this.moduleRef.get('UserEntityService');
 		this.driveFileEntityService = this.moduleRef.get('DriveFileEntityService');
 		this.cacheService = this.moduleRef.get('CacheService');

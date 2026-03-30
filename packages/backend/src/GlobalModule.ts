@@ -202,7 +202,7 @@ export class GlobalModule implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	async onApplicationShutdown(signal: string): Promise<void> {
+	public async onApplicationShutdown(signal: string): Promise<void> {
 		await this.dispose();
 	}
 

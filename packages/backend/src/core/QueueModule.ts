@@ -258,7 +258,7 @@ export class QueueModule implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	async onApplicationShutdown(): Promise<void> {
+	public async onApplicationShutdown(): Promise<void> {
 		// Wait for all potential queue jobs
 		this.logger.info('Finalizing active promises...');
 		await allSettled();

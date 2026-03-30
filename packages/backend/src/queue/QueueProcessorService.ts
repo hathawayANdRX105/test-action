@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import * as Bull from 'bullmq';
 import * as Sentry from '@sentry/node';
 import type { Config } from '@/config.js';
@@ -104,7 +104,7 @@ function _getJobInfo(now: number, job: Bull.Job | undefined, increment = false):
 }
 
 @Injectable()
-export class QueueProcessorService implements OnApplicationShutdown {
+export class QueueProcessorService implements BeforeApplicationShutdown {
 	private logger: Logger;
 	private systemQueueWorker: Bull.Worker;
 	private dbQueueWorker: Bull.Worker;
@@ -711,7 +711,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	public async onApplicationShutdown(signal?: string | undefined): Promise<void> {
+	public async beforeApplicationShutdown(): Promise<void> {
 		this.logger.info('Stopping BullMQ workers...');
 		await this.stop();
 		this.logger.info('Workers disposed.');

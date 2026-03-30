@@ -121,7 +121,7 @@ export class S3Service implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	onApplicationShutdown() {
+	public onApplicationShutdown() {
 		this.dispose();
 	}
 }

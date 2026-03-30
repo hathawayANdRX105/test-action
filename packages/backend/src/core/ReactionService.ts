@@ -116,7 +116,7 @@ export class ReactionService implements OnModuleInit {
 	}
 
 	@bindThis
-	onModuleInit() {
+	public onModuleInit() {
 		this.roleService = this.moduleRef.get('RoleService');
 	}
 

@@ -151,7 +151,7 @@ export class ApPersonService implements OnModuleInit {
 	}
 
 	@bindThis
-	onModuleInit(): void {
+	public onModuleInit(): void {
 		this.driveFileEntityService = this.moduleRef.get('DriveFileEntityService');
 		this.federatedInstanceService = this.moduleRef.get('FederatedInstanceService');
 		this.fetchInstanceMetadataService = this.moduleRef.get('FetchInstanceMetadataService');

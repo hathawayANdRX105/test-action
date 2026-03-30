@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, type OnModuleInit, type OnApplicationShutdown } from '@nestjs/common';
 import si from 'systeminformation';
 import { InternalEventService } from '@/global/InternalEventService.js';
 import { bindThis } from '@/decorators.js';
@@ -13,7 +13,7 @@ import type * as Misskey from 'misskey-js';
 export const ServerStatsLogSize = 200;
 
 @Injectable()
-export class ServerStatsService implements OnApplicationShutdown, OnApplicationBootstrap {
+export class ServerStatsService implements OnApplicationShutdown, OnModuleInit {
 	private readonly log: Misskey.entities.ServerStats[] = [];
 
 	public constructor(
@@ -85,7 +85,7 @@ export class ServerStatsService implements OnApplicationShutdown, OnApplicationB
 	}
 
 	@bindThis
-	public onApplicationBootstrap(): void {
+	public onModuleInit(): void {
 		this.internalEventService.on('pushServerStats', this.onServerStats);
 	}
 

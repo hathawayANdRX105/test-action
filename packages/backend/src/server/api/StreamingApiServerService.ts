@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import * as WebSocket from 'ws';
 import proxyAddr from 'proxy-addr';
@@ -54,7 +54,7 @@ interface ClientState {
 }
 
 @Injectable()
-export class StreamingApiServerService implements OnApplicationShutdown {
+export class StreamingApiServerService implements BeforeApplicationShutdown {
 	private cleanConnectionsTimer: TimerHandle | null = null;
 	private isAttached = false;
 
@@ -358,7 +358,7 @@ export class StreamingApiServerService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	public async onApplicationShutdown(): Promise<void> {
+	public async beforeApplicationShutdown(): Promise<void> {
 		await this.detach();
 
 		// Close server *only* in actual shutdown, since it's irreversible.

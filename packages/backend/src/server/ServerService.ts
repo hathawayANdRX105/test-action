@@ -6,7 +6,7 @@
 import cluster from 'node:cluster';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyRawBody from 'fastify-raw-body';
@@ -42,7 +42,7 @@ import { InternalEventService } from '@/global/InternalEventService.js';
 const _dirname = fileURLToPath(new URL('.', import.meta.url));
 
 @Injectable()
-export class ServerService implements OnApplicationShutdown {
+export class ServerService implements BeforeApplicationShutdown {
 	private logger: Logger;
 	#fastify?: FastifyInstance;
 
@@ -334,7 +334,7 @@ export class ServerService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	async onApplicationShutdown(signal: string): Promise<void> {
+	public async beforeApplicationShutdown(signal: string): Promise<void> {
 		await this.dispose();
 	}
 }
