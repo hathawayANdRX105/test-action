@@ -300,6 +300,7 @@ export type ServerStats = {
 
 export type ServerStatsLog = ServerStats[];
 
+// sync with backend src/queue/const.ts
 export const QUEUE_TYPES = [
 	'system',
 	'endedPollNotification',

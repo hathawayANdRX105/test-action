@@ -869,8 +869,7 @@ export type Channels = {
         };
         receives: {
             requestLog: {
-                id: string | number;
-                length: number;
+                length?: number;
             };
         };
     };
@@ -882,8 +881,7 @@ export type Channels = {
         };
         receives: {
             requestLog: {
-                id: string | number;
-                length: number;
+                length?: number;
             };
         };
     };
@@ -4079,8 +4077,8 @@ type V2AdminEmojiListResponse = operations['v2___admin___emoji___list']['respons
 // Warnings were encountered during analysis:
 //
 // built/entities.d.ts:32:5 - (ae-forgotten-export) The symbol "ModerationLogPayloads" needs to be exported by the entry point index.d.ts
-// built/streaming.types.d.ts:219:13 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// built/streaming.types.d.ts:233:13 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// built/streaming.types.d.ts:217:13 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// built/streaming.types.d.ts:231:13 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

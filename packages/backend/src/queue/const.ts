@@ -4,13 +4,24 @@
  */
 
 import { MetricsTime } from 'bullmq';
-import * as Misskey from 'misskey-js';
-import { Config } from '@/config.js';
+import type { Config } from '@/config.js';
 import type * as Bull from 'bullmq';
 
-export type QueueType = Misskey.entities.QueueType;
+export const QUEUE_TYPES = [
+	'system',
+	'endedPollNotification',
+	'deliver',
+	'inbox',
+	'db',
+	'relationship',
+	'objectStorage',
+	'userWebhookDeliver',
+	'systemWebhookDeliver',
+	'scheduleNotePost',
+	'backgroundTask',
+] as const;
 
-export const QUEUE_TYPES = Misskey.entities.QUEUE_TYPES;
+export type QueueType = typeof QUEUE_TYPES[number];
 
 export const QUEUE = {
 	DELIVER: 'deliver',
