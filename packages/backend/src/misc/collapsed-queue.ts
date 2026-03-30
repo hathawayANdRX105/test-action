@@ -102,15 +102,13 @@ export class CollapsedQueue<V> {
 
 	@bindThis
 	public async performAllNow(): Promise<void> {
-		for (const job of this.jobs.values()) {
-			this.timeService.stopTimer(job.timer);
-		}
-
+		// Swap the entries to make sure duplicate calls don't conflict
 		const entries = this.jobs.entries().toArray();
 		this.jobs.clear();
 
 		// TODO use the no-bail logic when merged
 		const results = await promiseMap(entries, async ([key, job]) => {
+			this.timeService.stopTimer(job.timer);
 			return await this.performSafe(key, job.value);
 		}, {
 			limiter: this.limiter,

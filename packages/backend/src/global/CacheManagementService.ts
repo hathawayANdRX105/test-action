@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
+import {
+	Inject,
+	Injectable,
+	type BeforeApplicationShutdown,
+	type OnApplicationShutdown,
+} from '@nestjs/common';
 import {
 	MemoryKVCache,
 	MemorySingleCache,
@@ -20,13 +25,13 @@ import {
 	type QuantumKVOpts,
 	type QuantumCacheServices,
 } from '@/misc/QuantumKVCache.js';
-import { bindThis } from '@/decorators.js';
-import { DI } from '@/di-symbols.js';
 import { CollapsedQueue, type CollapsedQueueOpts, type CollapsedQueueServices } from '@/misc/collapsed-queue.js';
 import { TimeService, type TimerHandle } from '@/global/TimeService.js';
 import { InternalEventService } from '@/global/InternalEventService.js';
-import { callAllAsync, callAllOn, callAllOnAsync } from '@/misc/call-all.js';
 import { LoggerService } from '@/core/LoggerService.js';
+import { callAllAsync, callAllOn, callAllOnAsync } from '@/misc/call-all.js';
+import { bindThis } from '@/decorators.js';
+import { DI } from '@/di-symbols.js';
 import type Logger from '@/logger.js';
 import type * as Redis from 'ioredis';
 
@@ -53,7 +58,7 @@ export const GC_INTERVAL = 1000 * 60 * 3; // 3m
  * Instances produced by this class are automatically tracked for disposal when the application shuts down.
  */
 @Injectable()
-export class CacheManagementService implements OnApplicationShutdown {
+export class CacheManagementService implements BeforeApplicationShutdown, OnApplicationShutdown {
 	private readonly collapsedQueueLogger: Logger;
 
 	private readonly managedCaches = new Map<string, CacheManager>();
@@ -159,6 +164,14 @@ export class CacheManagementService implements OnApplicationShutdown {
 		this.managedQueues.clear();
 
 		await callAllOnAsync(toDispose, 'dispose');
+	}
+
+	@bindThis
+	public async beforeApplicationShutdown(): Promise<void> {
+		// Synchronous cleanup to avoid overloading the DB during shutdown
+		for (const queue of this.managedQueues.values()) {
+			await queue.performAllNow();
+		}
 	}
 
 	@bindThis

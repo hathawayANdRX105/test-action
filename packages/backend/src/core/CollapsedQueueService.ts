@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import type { PartialEntityUpdate } from '@/types.js';
 import { FederatedInstanceService } from '@/core/FederatedInstanceService.js';
 import { bindThis } from '@/decorators.js';
-import { callAllAsync } from '@/misc/call-all.js';
 import { InternalEventService } from '@/global/InternalEventService.js';
 import type {
 	MiAntenna,
@@ -421,18 +420,6 @@ export class CollapsedQueueService implements OnApplicationShutdown {
 	public dispose(): void {
 		this.internalEventService.off('userChangeDeletedState', this.onUserDeleted);
 		this.internalEventService.off('antennaDeleted', this.onAntennaDeleted);
-	}
-
-	@bindThis
-	public async performAllNow(): Promise<void> {
-		await callAllAsync([
-			async () => await this.updateInstanceQueue.performAllNow(),
-			async () => await this.updateUserQueue.performAllNow(),
-			async () => await this.updateNoteQueue.performAllNow(),
-			async () => await this.updateAccessTokenQueue.performAllNow(),
-			async () => await this.updateAntennaQueue.performAllNow(),
-			async () => await this.updateChannelQueue.performAllNow(),
-		]);
 	}
 
 	@bindThis
