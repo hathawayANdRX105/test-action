@@ -6,17 +6,6 @@ import sharedConfig from './packages/shared/eslint.config.js';
 export default [
 	...sharedConfig,
 	{
-		ignores: [
-			'**/node_modules/',
-			'**/built/',
-			'**/built-test/',
-			'**/js-built/',
-			'**/temp/',
-			'**/coverage/',
-			'**/*.min.js',
-		],
-	},
-	{
 		files: ['*.js', '*.mjs', '*.ts', '*.mts'],
 		languageOptions: {
 			parserOptions: {

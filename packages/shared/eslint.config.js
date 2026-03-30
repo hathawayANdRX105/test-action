@@ -4,6 +4,18 @@ import pluginMisskey from '@misskey-dev/eslint-plugin';
 export default [
 	...pluginMisskey.configs['recommended'],
 	{
+		ignores: [
+			'**/.pnpm/',
+			'**/node_modules/',
+			'**/built/',
+			'**/built-test/',
+			'**/js-built/',
+			'**/temp/',
+			'**/coverage/',
+			'**/*.min.js',
+		],
+	},
+	{
 		files: ['**/*.cjs'],
 		languageOptions: {
 			sourceType: 'commonjs',
