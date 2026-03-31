@@ -3,15 +3,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import {
-	FindOneOptions,
-	InsertQueryBuilder,
-	ObjectLiteral,
-	QueryRunner,
-	Repository,
-	SelectQueryBuilder,
-} from 'typeorm';
-import type { PartialEntityUpdate } from '@/types.js';
 import { MiAbuseReportNotificationRecipient } from '@/models/AbuseReportNotificationRecipient.js';
 import { MiAbuseUserReport } from '@/models/AbuseUserReport.js';
 import { MiAccessToken } from '@/models/AccessToken.js';
@@ -92,6 +83,12 @@ import { SkApInboxLog } from '@/models/SkApInboxLog.js';
 import { SkApFetchLog } from '@/models/SkApFetchLog.js';
 import { SkApContext } from '@/models/SkApContext.js';
 import { SkLatestNote } from '@/models/LatestNote.js';
+import type {
+	FindOneOptions,
+	ObjectLiteral,
+	Repository,
+	PartialEntityUpdate,
+} from 'typeorm';
 
 export interface MiRepository<T extends ObjectLiteral> {
 	/**

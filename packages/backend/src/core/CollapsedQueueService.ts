@@ -4,7 +4,6 @@
  */
 
 import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
-import type { PartialEntityUpdate } from '@/types.js';
 import { FederatedInstanceService } from '@/core/FederatedInstanceService.js';
 import { bindThis } from '@/decorators.js';
 import { InternalEventService } from '@/global/InternalEventService.js';
@@ -22,7 +21,7 @@ import { DI } from '@/di-symbols.js';
 import { CacheManagementService, type ManagedCollapsedQueue } from '@/global/CacheManagementService.js';
 import { AntennaService } from '@/core/AntennaService.js';
 import { CacheService } from '@/core/CacheService.js';
-import type { Brackets, ObjectLiteral, Repository, UpdateQueryBuilder } from 'typeorm';
+import type { Brackets, ObjectLiteral, Repository, UpdateQueryBuilder, PartialEntityUpdate } from 'typeorm';
 
 export type UpdateInstanceJob = {
 	latestRequestReceivedAt?: Date,

@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
-import { In } from 'typeorm';
+import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
+import { In, type PartialEntityUpdate } from 'typeorm';
 import type { InstancesRepository } from '@/models/_.js';
 import type { MiMeta } from '@/models/Meta.js';
 import type { MiInstance } from '@/models/Instance.js';
-import type { PartialEntityUpdate } from '@/types.js';
 import { IdService } from '@/core/IdService.js';
 import { DI } from '@/di-symbols.js';
 import { TimeService } from '@/global/TimeService.js';
