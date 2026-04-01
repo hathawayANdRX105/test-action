@@ -5,6 +5,18 @@
 
 import { MetricsTime } from 'bullmq';
 import type { Config } from '@/config.js';
+import type {
+	DeliverJobData,
+	EndedPollNotificationJobData,
+	InboxJobData,
+	RelationshipJobData,
+	UserWebhookDeliverJobData,
+	SystemWebhookDeliverJobData,
+	ScheduleNotePostJobData,
+	BackgroundTaskJobData,
+	ObjectStorageJobData,
+	DbJobType,
+} from '@/queue/types.js';
 import type * as Bull from 'bullmq';
 
 export const QUEUE_TYPES = [
@@ -37,21 +49,91 @@ export const QUEUE = {
 	BACKGROUND_TASK: 'backgroundTask',
 } satisfies Record<string, QueueType>;
 
-export function baseQueueOptions(config: Config, queueName: typeof QUEUE[keyof typeof QUEUE]): Bull.QueueOptions {
+export type QueueData = {
+	deliver: DeliverJobData;
+	inbox: InboxJobData;
+	system: { type: string };
+	endedPollNotification: EndedPollNotificationJobData;
+	db: DbJobType;
+	relationship: RelationshipJobData;
+	objectStorage: ObjectStorageJobData;
+	userWebhookDeliver: UserWebhookDeliverJobData;
+	systemWebhookDeliver: SystemWebhookDeliverJobData;
+	scheduleNotePost: ScheduleNotePostJobData;
+	backgroundTask: BackgroundTaskJobData;
+};
+
+// Keep in sync with all the YML configs!
+export const QueueDefaults: Partial<Config> = {
+	deliverJobConcurrency: 128,
+	deliverJobPerSec: 128,
+	deliverJobMaxAttempts: 12,
+
+	inboxJobConcurrency: 16,
+	inboxJobPerSec: 32,
+	inboxJobMaxAttempts: 8,
+
+	relationshipJobConcurrency: 16,
+	relationshipJobPerSec: 64,
+
+	objectStorageJobConcurrency: 16,
+	objectStorageJobMaxAttempts: 4,
+
+	userWebhookDeliverJobConcurrency: 64,
+	userWebhookDeliverJobPerSec: 64,
+	userWebhookDeliverJobMaxAttempts: 4,
+
+	systemWebhookDeliverJobConcurrency: 16,
+	systemWebhookDeliverJobPerSec: 16,
+	systemWebhookDeliverJobMaxAttempts: 4,
+
+	backgroundTaskJobConcurrency: 32,
+	backgroundTaskJobPerSec: 256,
+	backgroundTaskJobMaxAttempts: 8,
+};
+
+export const DefaultMaxAttempts = 1;
+export const DefaultJobPerSec = 0;
+export const DefaultJobConcurrency = 1;
+
+export type Queues = {
+	// <data type, result type, name type>
+	[QT in QueueType]: Bull.Queue<QueueData[QT], FIXME, string>;
+};
+
+export function baseQueueOptions<QT extends QueueType>(config: Config, queueName: QT) {
 	return {
 		connection: {
 			...config.redisForJobQueue,
 			keyPrefix: undefined,
 		},
 		prefix: config.redisForJobQueue.prefix ? `${config.redisForJobQueue.prefix}:queue:${queueName}` : `queue:${queueName}`,
-	};
+	} satisfies Bull.QueueOptions;
 }
 
-export function baseWorkerOptions(config: Config, queueName: typeof QUEUE[keyof typeof QUEUE]): Bull.WorkerOptions {
+export function baseWorkerOptions<QT extends QueueType>(config: Config, queueName: QT) {
+	const jobsPerSec = config[`${queueName}JobPerSec`] ?? QueueDefaults[`${queueName}JobPerSec`] ?? DefaultJobPerSec;
+	const concurrency = config[`${queueName}JobConcurrency`] ?? QueueDefaults[`${queueName}JobConcurrency`] ?? DefaultJobConcurrency;
+
 	return {
 		...baseQueueOptions(config, queueName),
 		metrics: {
 			maxDataPoints: MetricsTime.ONE_WEEK,
 		},
-	};
+		concurrency,
+		limiter: jobsPerSec < 1 ? undefined : {
+			max: jobsPerSec,
+			duration: 1000,
+		},
+		autorun: false,
+	} satisfies Bull.WorkerOptions;
+}
+
+export function baseJobOptions<QT extends QueueType>(config: Config, queueName: QT) {
+	const maxAttempts = config[`${queueName}JobMaxAttempts`] ?? QueueDefaults[`${queueName}JobMaxAttempts`] ?? DefaultMaxAttempts;
+
+	return {
+		// https://docs.bullmq.io/guide/retrying-failing-jobs#custom-back-off-strategies
+		attempts: maxAttempts,
+	} satisfies Bull.JobsOptions;
 }

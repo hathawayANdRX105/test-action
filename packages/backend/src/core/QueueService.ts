@@ -4,9 +4,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable, type OnModuleInit, type OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationBootstrap, type OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import { MetricsTime, type JobType } from 'bullmq';
+import { MetricsTime } from 'bullmq';
 import { parse as parseRedisInfo } from 'redis-info';
 import type { IActivity } from '@/core/activitypub/type.js';
 import type { MiDriveFile } from '@/models/DriveFile.js';
@@ -14,20 +14,26 @@ import type { MiWebhook, WebhookEventTypes } from '@/models/Webhook.js';
 import type { MiSystemWebhook, SystemWebhookEventType } from '@/models/SystemWebhook.js';
 import type { Config } from '@/config.js';
 import type { Packed } from '@/misc/json-schema.js';
-import { QUEUE_TYPES, type QueueType } from '@/queue/const.js';
+import {
+	baseJobOptions,
+	QUEUE_TYPES,
+	type QueueData,
+	type Queues,
+	type QueueType,
+} from '@/queue/const.js';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
-import type { Antenna } from '@/server/api/endpoints/i/import-antennas.js';
 import { ApRequestCreator } from '@/core/activitypub/ApRequestService.js';
 import { TimeService } from '@/global/TimeService.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import { EnvService } from '@/global/EnvService.js';
-import type Logger from '@/logger.js';
+import type { Antenna } from '@/server/api/endpoints/i/import-antennas.js';
+import type { Logger } from '@/logger.js';
 import type { SystemWebhookPayload } from '@/core/SystemWebhookService.js';
 import type { MiNote } from '@/models/Note.js';
 import type { MinimalNote } from '@/misc/is-renote.js';
-import { type UserWebhookPayload } from './UserWebhookService.js';
+import type { UserWebhookPayload } from '@/core/UserWebhookService.js';
 import type {
 	BackgroundTaskJobData,
 	DbJobData,
@@ -36,49 +42,21 @@ import type {
 	SystemWebhookDeliverJobData,
 	ThinUser,
 	UserWebhookDeliverJobData,
-} from '../queue/types.js';
-import type {
-	DbQueue,
-	DeliverQueue,
-	EndedPollNotificationQueue,
-	InboxQueue,
-	ObjectStorageQueue,
-	RelationshipQueue,
-	SystemQueue,
-	SystemWebhookDeliverQueue,
-	UserWebhookDeliverQueue,
-	ScheduleNotePostQueue,
-	BackgroundTaskQueue,
-} from './QueueModule.js';
+} from '@/queue/types.js';
 import type httpSignature from '@peertube/http-signature';
 import type * as Bull from 'bullmq';
 
 @Injectable()
 export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	private readonly logger: Logger;
+	private readonly queues = {} as {
+		[QT in QueueType]: Queues[QT];
+	};
+	private readonly queueEvents = {} as {
+		[QT in QueueType]: Bull.QueueEvents;
+	};
 
-	private systemQueue: SystemQueue;
-	private systemQueueEvents: Bull.QueueEvents;
-	private endedPollNotificationQueue: EndedPollNotificationQueue;
-	private endedPollNotificationQueueEvents: Bull.QueueEvents;
-	private deliverQueue: DeliverQueue;
-	private deliverQueueEvents: Bull.QueueEvents;
-	private inboxQueue: InboxQueue;
-	private inboxQueueEvents: Bull.QueueEvents;
-	private dbQueue: DbQueue;
-	private dbQueueEvents: Bull.QueueEvents;
-	private relationshipQueue: RelationshipQueue;
-	private relationshipQueueEvents: Bull.QueueEvents;
-	private objectStorageQueue: ObjectStorageQueue;
-	private objectStorageQueueEvents: Bull.QueueEvents;
-	private userWebhookDeliverQueue: UserWebhookDeliverQueue;
-	private userWebhookDeliverQueueEvents: Bull.QueueEvents;
-	private systemWebhookDeliverQueue: SystemWebhookDeliverQueue;
-	private systemWebhookDeliverQueueEvents: Bull.QueueEvents;
-	private scheduleNotePostQueue: ScheduleNotePostQueue;
-	private scheduleNotePostQueueEvents: Bull.QueueEvents;
-	private backgroundTaskQueue: BackgroundTaskQueue;
-	private backgroundTaskQueueEvents: Bull.QueueEvents;
+	private systemQueue: Queues['system'];
 
 	constructor(
 		protected readonly moduleRef: ModuleRef,
@@ -98,9 +76,11 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	public onModuleInit() {
 		// Resolve all queues
 		for (const queueType of QUEUE_TYPES) {
-			this[`${queueType}Queue`] = this.moduleRef.get(`queue:${queueType}`, { strict: false });
-			this[`${queueType}QueueEvents`] = this.moduleRef.get(`queue:${queueType}:events`, { strict: false });
+			this.queues[queueType] = this.moduleRef.get(`queue:${queueType}`, { strict: false });
+			this.queueEvents[queueType] = this.moduleRef.get(`queue:${queueType}:events`, { strict: false });
 		}
+
+		this.systemQueue = this.queues['system'];
 	}
 
 	@bindThis
@@ -323,6 +303,40 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	}
 
 	@bindThis
+	public async add<
+		QT extends QueueType,
+		Data extends Bull.ExtractDataType<QueueData[QT], QueueData[QT]>,
+		Name extends Bull.ExtractNameType<QueueData[QT], string>,
+	>(qt: QT, name: Name, data: Data, opts?: Bull.JobsOptions) {
+		// Apply default options
+		opts = {
+			...baseJobOptions(this.config, qt),
+			...(opts ?? {}),
+		};
+
+		// Locate the queu and add
+		return await this.queues[qt].add(name, data, opts);
+	}
+
+	public async addBulk<
+		QT extends QueueType,
+		Data extends Bull.ExtractDataType<QueueData[QT], QueueData[QT]>,
+		Name extends Bull.ExtractNameType<QueueData[QT], string>,
+	>(qt: QT, jobs: { name: Name, data: Data, opts?: Bull.JobsOptions }[]) {
+		// Apply default options
+		jobs = jobs.map(job => ({
+			...job,
+			opts: {
+				...baseJobOptions(this.config, qt),
+				...(job.opts ?? {}),
+			},
+		}));
+
+		// Locate the queu and add
+		return await this.queues[qt].addBulk(jobs);
+	}
+
+	@bindThis
 	public async deliver(user: ThinUser, content: IActivity | null, to: string | null, isSharedInbox: boolean) {
 		if (content == null) return null;
 		if (to == null) return null;
@@ -342,8 +356,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 		const label = to.replace('https://', '').replace('/inbox', '');
 
-		return await this.deliverQueue.add(label, data, {
-			attempts: this.config.deliverJobMaxAttempts ?? 12,
+		return await this.add('deliver', label, data, {
 			backoff: {
 				type: 'custom',
 			},
@@ -372,7 +385,6 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 		const digest = ApRequestCreator.createDigest(contentBody);
 
 		const opts = {
-			attempts: this.config.deliverJobMaxAttempts ?? 12,
 			backoff: {
 				type: 'custom',
 			},
@@ -386,7 +398,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 			},
 		};
 
-		await this.deliverQueue.addBulk(Array.from(inboxes.entries(), d => ({
+		await this.addBulk('deliver', Array.from(inboxes.entries(), d => ({
 			name: d[0].replace('https://', '').replace('/inbox', ''),
 			data: {
 				user: {
@@ -412,8 +424,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 		const label = (activity.id ?? '').replace('https://', '').replace('/activity', '');
 
-		return this.inboxQueue.add(label, data, {
-			attempts: this.config.inboxJobMaxAttempts ?? 8,
+		return this.add('inbox', label, data, {
 			backoff: {
 				type: 'custom',
 			},
@@ -433,7 +444,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createDeleteDriveFilesJob(user: ThinUser) {
-		return this.dbQueue.add('deleteDriveFiles', {
+		return this.add('db', 'deleteDriveFiles', {
 			user: { id: user.id },
 			dbJobType: 'deleteDriveFiles',
 		}, {
@@ -453,7 +464,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportCustomEmojisJob(user: ThinUser) {
-		return this.dbQueue.add('exportCustomEmojis', {
+		return this.add('db', 'exportCustomEmojis', {
 			user: { id: user.id },
 			dbJobType: 'exportCustomEmojis',
 		}, {
@@ -473,7 +484,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportAccountDataJob(user: ThinUser) {
-		return this.dbQueue.add('exportAccountData', {
+		return this.add('db', 'exportAccountData', {
 			user: { id: user.id },
 			dbJobType: 'exportAccountData',
 		}, {
@@ -487,7 +498,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportNotesJob(user: ThinUser) {
-		return this.dbQueue.add('exportNotes', {
+		return this.add('db', 'exportNotes', {
 			user: { id: user.id },
 			dbJobType: 'exportNotes',
 		}, {
@@ -507,7 +518,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportClipsJob(user: ThinUser) {
-		return this.dbQueue.add('exportClips', {
+		return this.add('db', 'exportClips', {
 			user: { id: user.id },
 			dbJobType: 'exportClips',
 		}, {
@@ -527,7 +538,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportFavoritesJob(user: ThinUser) {
-		return this.dbQueue.add('exportFavorites', {
+		return this.add('db', 'exportFavorites', {
 			user: { id: user.id },
 			dbJobType: 'exportFavorites',
 		}, {
@@ -547,7 +558,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportFollowingJob(user: ThinUser, excludeMuting = false, excludeInactive = false) {
-		return this.dbQueue.add('exportFollowing', {
+		return this.add('db', 'exportFollowing', {
 			user: { id: user.id },
 			excludeMuting,
 			excludeInactive,
@@ -569,7 +580,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportMuteJob(user: ThinUser) {
-		return this.dbQueue.add('exportMuting', {
+		return this.add('db', 'exportMuting', {
 			user: { id: user.id },
 			dbJobType: 'exportMuting',
 		}, {
@@ -589,7 +600,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportBlockingJob(user: ThinUser) {
-		return this.dbQueue.add('exportBlocking', {
+		return this.add('db', 'exportBlocking', {
 			user: { id: user.id },
 			dbJobType: 'exportBlocking',
 		}, {
@@ -609,7 +620,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportUserListsJob(user: ThinUser) {
-		return this.dbQueue.add('exportUserLists', {
+		return this.add('db', 'exportUserLists', {
 			user: { id: user.id },
 			dbJobType: 'exportUserLists',
 		}, {
@@ -629,7 +640,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createExportAntennasJob(user: ThinUser) {
-		return this.dbQueue.add('exportAntennas', {
+		return this.add('db', 'exportAntennas', {
 			user: { id: user.id },
 			dbJobType: 'exportAntennas',
 		}, {
@@ -649,7 +660,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createImportFollowingJob(user: ThinUser, fileId: MiDriveFile['id'], withReplies?: boolean) {
-		return this.dbQueue.add('importFollowing', {
+		return this.add('db', 'importFollowing', {
 			user: { id: user.id },
 			fileId: fileId,
 			withReplies,
@@ -671,7 +682,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createImportNotesJob(user: ThinUser, fileId: MiDriveFile['id'], type: string | null | undefined) {
-		return this.dbQueue.add('importNotes', {
+		return this.add('db', 'importNotes', {
 			user: { id: user.id },
 			fileId: fileId,
 			type: type ?? undefined,
@@ -688,48 +699,48 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	@bindThis
 	public createImportTweetsToDbJob(user: ThinUser, targets: string[], note: MiNote['id'] | null) {
 		const jobs = targets.map(rel => this.generateToDbJobData('importTweetsToDb', { user: { id: user.id }, target: rel, note }));
-		return this.dbQueue.addBulk(jobs);
+		return this.addBulk('db', jobs);
 	}
 
 	@bindThis
 	public createImportMastoToDbJob(user: ThinUser, targets: string[], note: MiNote['id'] | null) {
 		const jobs = targets.map(rel => this.generateToDbJobData('importMastoToDb', { user: { id: user.id }, target: rel, note }));
-		return this.dbQueue.addBulk(jobs);
+		return this.addBulk('db', jobs);
 	}
 
 	@bindThis
 	public createImportPleroToDbJob(user: ThinUser, targets: string[], note: MiNote['id'] | null) {
 		const jobs = targets.map(rel => this.generateToDbJobData('importPleroToDb', { user: { id: user.id }, target: rel, note }));
-		return this.dbQueue.addBulk(jobs);
+		return this.addBulk('db', jobs);
 	}
 
 	@bindThis
 	public createImportKeyNotesToDbJob(user: ThinUser, targets: string[], note: MiNote['id'] | null) {
 		const jobs = targets.map(rel => this.generateToDbJobData('importKeyNotesToDb', { user: { id: user.id }, target: rel, note }));
-		return this.dbQueue.addBulk(jobs);
+		return this.addBulk('db', jobs);
 	}
 
 	@bindThis
 	public createImportIGToDbJob(user: ThinUser, targets: string[]) {
 		const jobs = targets.map(rel => this.generateToDbJobData('importIGToDb', { user: { id: user.id }, target: rel }));
-		return this.dbQueue.addBulk(jobs);
+		return this.addBulk('db', jobs);
 	}
 
 	@bindThis
 	public createImportFBToDbJob(user: ThinUser, targets: string[]) {
 		const jobs = targets.map(rel => this.generateToDbJobData('importFBToDb', { user: { id: user.id }, target: rel }));
-		return this.dbQueue.addBulk(jobs);
+		return this.addBulk('db', jobs);
 	}
 
 	@bindThis
 	public createImportFollowingToDbJob(user: ThinUser, targets: string[], withReplies?: boolean) {
 		const jobs = targets.map(rel => this.generateToDbJobData('importFollowingToDb', { user: { id: user.id }, target: rel, withReplies }));
-		return this.dbQueue.addBulk(jobs);
+		return this.addBulk('db', jobs);
 	}
 
 	@bindThis
 	public createImportMutingJob(user: ThinUser, fileId: MiDriveFile['id']) {
-		return this.dbQueue.add('importMuting', {
+		return this.add('db', 'importMuting', {
 			user: { id: user.id },
 			fileId: fileId,
 			dbJobType: 'importMuting',
@@ -750,7 +761,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createImportBlockingJob(user: ThinUser, fileId: MiDriveFile['id']) {
-		return this.dbQueue.add('importBlocking', {
+		return this.add('db', 'importBlocking', {
 			user: { id: user.id },
 			fileId: fileId,
 			dbJobType: 'importBlocking',
@@ -772,7 +783,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	@bindThis
 	public createImportBlockingToDbJob(user: ThinUser, targets: string[]) {
 		const jobs = targets.map(rel => this.generateToDbJobData('importBlockingToDb', { user: { id: user.id }, target: rel }));
-		return this.dbQueue.addBulk(jobs);
+		return this.addBulk('db', jobs);
 	}
 
 	@bindThis
@@ -802,7 +813,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createImportUserListsJob(user: ThinUser, fileId: MiDriveFile['id']) {
-		return this.dbQueue.add('importUserLists', {
+		return this.add('db', 'importUserLists', {
 			user: { id: user.id },
 			fileId: fileId,
 			dbJobType: 'importUserLists',
@@ -823,7 +834,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createImportCustomEmojisJob(user: ThinUser, fileId: MiDriveFile['id']) {
-		return this.dbQueue.add('importCustomEmojis', {
+		return this.add('db', 'importCustomEmojis', {
 			user: { id: user.id },
 			fileId: fileId,
 			dbJobType: 'importCustomEmojis',
@@ -844,7 +855,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createImportAntennasJob(user: ThinUser, antenna: Antenna, fileId: MiDriveFile['id']) {
-		return this.dbQueue.add('importAntennas', {
+		return this.add('db', 'importAntennas', {
 			user: { id: user.id },
 			antenna,
 			fileId,
@@ -866,7 +877,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createDeleteAccountJob(user: ThinUser, opts: { soft?: boolean; } = {}) {
-		return this.dbQueue.add('deleteAccount', {
+		return this.add('db', 'deleteAccount', {
 			user: { id: user.id },
 			soft: opts.soft,
 			dbJobType: 'deleteAccount',
@@ -888,37 +899,37 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	@bindThis
 	public createFollowJob(followings: { from: ThinUser, to: ThinUser, requestId?: string, silent?: boolean, withReplies?: boolean }[]) {
 		const jobs = followings.map(rel => this.generateRelationshipJobData('follow', rel));
-		return this.relationshipQueue.addBulk(jobs);
+		return this.addBulk('relationship', jobs);
 	}
 
 	@bindThis
 	public createUnfollowJob(followings: { from: ThinUser, to: ThinUser, requestId?: string }[]) {
 		const jobs = followings.map(rel => this.generateRelationshipJobData('unfollow', rel));
-		return this.relationshipQueue.addBulk(jobs);
+		return this.addBulk('relationship', jobs);
 	}
 
 	@bindThis
 	public createDelayedUnfollowJob(followings: { from: ThinUser, to: ThinUser, requestId?: string }[], delay: number) {
 		const jobs = followings.map(rel => this.generateRelationshipJobData('unfollow', rel, { delay }));
-		return this.relationshipQueue.addBulk(jobs);
+		return this.addBulk('relationship', jobs);
 	}
 
 	@bindThis
 	public createBlockJob(blockings: { from: ThinUser, to: ThinUser, silent?: boolean }[]) {
 		const jobs = blockings.map(rel => this.generateRelationshipJobData('block', rel));
-		return this.relationshipQueue.addBulk(jobs);
+		return this.addBulk('relationship', jobs);
 	}
 
 	@bindThis
 	public createUnblockJob(blockings: { from: ThinUser, to: ThinUser, silent?: boolean }[]) {
 		const jobs = blockings.map(rel => this.generateRelationshipJobData('unblock', rel));
-		return this.relationshipQueue.addBulk(jobs);
+		return this.addBulk('relationship', jobs);
 	}
 
 	@bindThis
 	public createMoveJob(from: ThinUser, to: ThinUser) {
 		const job = this.generateRelationshipJobData('move', { from, to });
-		return this.relationshipQueue.add(job.name, job.data, job.opts);
+		return this.add('relationship', job.name, job.data, job.opts);
 	}
 
 	@bindThis
@@ -956,7 +967,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createDeleteObjectStorageFileJob(key: string) {
-		return this.objectStorageQueue.add(`deleteFile/${key}`, {
+		return this.add('objectStorage', `deleteFile/${key}`, {
 			type: 'deleteFile',
 			key: key,
 		}, {
@@ -976,7 +987,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 
 	@bindThis
 	public createCleanRemoteFilesJob(olderThanSeconds: number = 0, keepFilesInUse: boolean = false) {
-		return this.objectStorageQueue.add('cleanRemoteFiles', {
+		return this.add('objectStorage', 'cleanRemoteFiles', {
 			type: 'cleanRemoteFiles',
 			keepFilesInUse,
 			olderThanSeconds,
@@ -1077,7 +1088,8 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	}
 
 	protected async createBackgroundTask<T extends BackgroundTaskJobData>(data: T, duplication?: string | { id: string, ttl?: number }): Promise<void> {
-		await this.backgroundTaskQueue.add(
+		this.add(
+			'backgroundTask',
 			data.type,
 			data,
 			{
@@ -1118,8 +1130,8 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 			eventId: randomUUID(),
 		};
 
-		return this.userWebhookDeliverQueue.add(webhook.id, data, {
-			attempts: opts?.attempts ?? 4,
+		return this.add('userWebhookDeliver', webhook.id, data, {
+			...opts,
 			backoff: {
 				type: 'custom',
 			},
@@ -1155,8 +1167,8 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 			eventId: randomUUID(),
 		};
 
-		return this.systemWebhookDeliverQueue.add(webhook.id, data, {
-			attempts: opts?.attempts ?? 4,
+		return this.add('systemWebhookDeliver', webhook.id, data, {
+			...opts,
 			backoff: {
 				type: 'custom',
 			},
@@ -1172,39 +1184,13 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	}
 
 	@bindThis
-	public getQueue(type: QueueType): Bull.Queue {
-		switch (type) {
-			case 'system': return this.systemQueue;
-			case 'endedPollNotification': return this.endedPollNotificationQueue;
-			case 'deliver': return this.deliverQueue;
-			case 'inbox': return this.inboxQueue;
-			case 'db': return this.dbQueue;
-			case 'relationship': return this.relationshipQueue;
-			case 'objectStorage': return this.objectStorageQueue;
-			case 'userWebhookDeliver': return this.userWebhookDeliverQueue;
-			case 'systemWebhookDeliver': return this.systemWebhookDeliverQueue;
-			case 'scheduleNotePost': return this.scheduleNotePostQueue;
-			case 'backgroundTask': return this.backgroundTaskQueue;
-			default: throw new Error(`Unrecognized queue type: ${type}`);
-		}
+	public getQueue<QT extends QueueType>(type: QT): Queues[QT] {
+		return this.queues[type];
 	}
 
 	@bindThis
 	public getQueueEvents(type: QueueType): Bull.QueueEvents {
-		switch (type) {
-			case 'system': return this.systemQueueEvents;
-			case 'endedPollNotification': return this.endedPollNotificationQueueEvents;
-			case 'deliver': return this.deliverQueueEvents;
-			case 'inbox': return this.inboxQueueEvents;
-			case 'db': return this.dbQueueEvents;
-			case 'relationship': return this.relationshipQueueEvents;
-			case 'objectStorage': return this.objectStorageQueueEvents;
-			case 'userWebhookDeliver': return this.userWebhookDeliverQueueEvents;
-			case 'systemWebhookDeliver': return this.systemWebhookDeliverQueueEvents;
-			case 'scheduleNotePost': return this.scheduleNotePostQueueEvents;
-			case 'backgroundTask': return this.backgroundTaskQueueEvents;
-			default: throw new Error(`Unrecognized queue type: ${type}`);
-		}
+		return this.queueEvents[type];
 	}
 
 	@bindThis
@@ -1291,7 +1277,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	}
 
 	@bindThis
-	public async queueGetJobs(queueType: QueueType, jobTypes: JobType[], search?: string) {
+	public async queueGetJobs(queueType: QueueType, jobTypes: Bull.JobType[], search?: string) {
 		const RETURN_LIMIT = 100;
 		const queue = this.getQueue(queueType);
 		let jobs: (Bull.Job | null)[];

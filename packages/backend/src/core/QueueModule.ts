@@ -14,38 +14,26 @@ import { ModuleRef } from '@nestjs/core';
 import * as Bull from 'bullmq';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
-import { baseQueueOptions, QUEUE, QUEUE_TYPES } from '@/queue/const.js';
+import type { Logger } from '@/logger.js';
+import { GlobalModule } from '@/GlobalModule.js';
+import { LoggerService } from '@/core/LoggerService.js';
+import { baseQueueOptions, QUEUE, QUEUE_TYPES, type Queues } from '@/queue/const.js';
 import { renderInlineError } from '@/misc/render-inline-error.js';
 import { allSettled } from '@/misc/promise-tracker.js';
 import { promiseTry } from '@/misc/promise-try.js';
 import { bindThis } from '@/decorators.js';
-import { Logger } from '@/logger.js';
-import { GlobalModule } from '@/GlobalModule.js';
-import { LoggerService } from '@/core/LoggerService.js';
-import type {
-	DeliverJobData,
-	EndedPollNotificationJobData,
-	InboxJobData,
-	RelationshipJobData,
-	UserWebhookDeliverJobData,
-	SystemWebhookDeliverJobData,
-	ScheduleNotePostJobData,
-	BackgroundTaskJobData,
-	ObjectStorageJobData,
-	DbJobType,
-} from '../queue/types.js';
 
-export type SystemQueue = Bull.Queue<{ type: string }>;
-export type EndedPollNotificationQueue = Bull.Queue<EndedPollNotificationJobData>;
-export type DeliverQueue = Bull.Queue<DeliverJobData>;
-export type InboxQueue = Bull.Queue<InboxJobData>;
-export type DbQueue = Bull.Queue<DbJobType>;
-export type RelationshipQueue = Bull.Queue<RelationshipJobData>;
-export type ObjectStorageQueue = Bull.Queue<ObjectStorageJobData>;
-export type UserWebhookDeliverQueue = Bull.Queue<UserWebhookDeliverJobData>;
-export type SystemWebhookDeliverQueue = Bull.Queue<SystemWebhookDeliverJobData>;
-export type ScheduleNotePostQueue = Bull.Queue<ScheduleNotePostJobData>;
-export type BackgroundTaskQueue = Bull.Queue<BackgroundTaskJobData>;
+export type SystemQueue = Queues['system'];
+export type EndedPollNotificationQueue = Queues['endedPollNotification'];
+export type DeliverQueue = Queues['deliver'];
+export type InboxQueue = Queues['inbox'];
+export type DbQueue = Queues['db'];
+export type RelationshipQueue = Queues['relationship'];
+export type ObjectStorageQueue = Queues['objectStorage'];
+export type UserWebhookDeliverQueue = Queues['userWebhookDeliver'];
+export type SystemWebhookDeliverQueue = Queues['systemWebhookDeliver'];
+export type ScheduleNotePostQueue = Queues['scheduleNotePost'];
+export type BackgroundTaskQueue = Queues['backgroundTask'];
 
 const $system: Provider[] = [{
 	provide: 'queue:system',

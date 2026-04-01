@@ -17,6 +17,7 @@ import type {
 	RelationshipJobData,
 } from '@/queue/types.js';
 import { DI } from '@/di-symbols.js';
+import { QUEUE, baseWorkerOptions } from '@/queue/const.js';
 import { bindThis } from '@/decorators.js';
 import { renderInlineError } from '@/misc/render-inline-error.js';
 import { renderFullError } from '@/misc/render-full-error.js';
@@ -60,7 +61,6 @@ import { CleanProcessorService } from './processors/CleanProcessorService.js';
 import { AggregateRetentionProcessorService } from './processors/AggregateRetentionProcessorService.js';
 import { ScheduleNotePostProcessorService } from './processors/ScheduleNotePostProcessorService.js';
 import { QueueLoggerService } from './QueueLoggerService.js';
-import { QUEUE, baseWorkerOptions } from './const.js';
 import { ImportNotesProcessorService } from './processors/ImportNotesProcessorService.js';
 import { CleanupApLogsProcessorService } from './processors/CleanupApLogsProcessorService.js';
 import { HibernateUsersProcessorService } from './processors/HibernateUsersProcessorService.js';
@@ -207,7 +207,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.SYSTEM),
-				autorun: false,
 			});
 
 			const logger = this.logger.createSubLogger('system');
@@ -273,7 +272,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.DB),
-				autorun: false,
 			});
 
 			const logger = this.logger.createSubLogger('db');
@@ -305,12 +303,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.DELIVER),
-				autorun: false,
-				concurrency: this.config.deliverJobConcurrency ?? 128,
-				limiter: {
-					max: this.config.deliverJobPerSec ?? 128,
-					duration: 1000,
-				},
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
@@ -345,12 +337,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.INBOX),
-				autorun: false,
-				concurrency: this.config.inboxJobConcurrency ?? 16,
-				limiter: {
-					max: this.config.inboxJobPerSec ?? 32,
-					duration: 1000,
-				},
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
@@ -385,12 +371,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.USER_WEBHOOK_DELIVER),
-				autorun: false,
-				concurrency: 64,
-				limiter: {
-					max: 64,
-					duration: 1000,
-				},
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
@@ -425,12 +405,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.SYSTEM_WEBHOOK_DELIVER),
-				autorun: false,
-				concurrency: 16,
-				limiter: {
-					max: 16,
-					duration: 1000,
-				},
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
@@ -476,12 +450,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.RELATIONSHIP),
-				autorun: false,
-				concurrency: this.config.relationshipJobConcurrency ?? 16,
-				limiter: {
-					max: this.config.relationshipJobPerSec ?? 64,
-					duration: 1000,
-				},
 			});
 
 			const logger = this.logger.createSubLogger('relationship');
@@ -521,8 +489,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.OBJECT_STORAGE),
-				autorun: false,
-				concurrency: 16,
 			});
 
 			const logger = this.logger.createSubLogger('objectStorage');
@@ -556,7 +522,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			}, {
 				...baseWorkerOptions(this.config, QUEUE.ENDED_POLL_NOTIFICATION),
-				autorun: false,
 			});
 			this.endedPollNotificationQueueWorker
 				.on('active', (job) => logger.debug(`active id=${job.id}`))
@@ -581,7 +546,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 
 			this.schedulerNotePostQueueWorker = new Bull.Worker(QUEUE.SCHEDULE_NOTE_POST, async (job) => await this.scheduleNotePostProcessorService.process(job), {
 				...baseWorkerOptions(this.config, QUEUE.SCHEDULE_NOTE_POST),
-				autorun: false,
 			});
 			this.schedulerNotePostQueueWorker
 				.on('active', (job) => logger.debug(`active id=${job.id}`))
@@ -606,12 +570,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 
 			this.backgroundTaskWorker = new Bull.Worker(QUEUE.BACKGROUND_TASK, async (job) => await this.backgroundTaskProcessorService.process(job.data), {
 				...baseWorkerOptions(this.config, QUEUE.BACKGROUND_TASK),
-				autorun: false,
-				concurrency: this.config.backgroundTaskJobConcurrency ?? 32,
-				limiter: {
-					max: this.config.backgroundTaskJobPerSec ?? 256,
-					duration: 1000,
-				},
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
