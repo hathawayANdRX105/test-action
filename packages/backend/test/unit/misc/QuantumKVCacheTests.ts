@@ -40,7 +40,9 @@ describe(QuantumKVCache, () => {
 
 	beforeAll(() => {
 		mockTimeService = new GodOfTimeService();
-		mockInternalEventService = MockInternalEventService.create();
+		mockInternalEventService = MockInternalEventService.create({
+			timeService: mockTimeService,
+		});
 	});
 
 	afterEach(async () => {

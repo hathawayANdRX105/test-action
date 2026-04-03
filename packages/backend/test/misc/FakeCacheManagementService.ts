@@ -119,7 +119,14 @@ export class FakeCacheManagementService extends CacheManagementService {
 		const redisForSub = opts?.redisForSub ?? redisClient;
 
 		// Core services
-		const internalEventService = opts?.internalEventService ?? MockInternalEventService.create({ config, redisForPub, redisForSub, idService, nodeId });
+		const internalEventService = opts?.internalEventService ?? MockInternalEventService.create({
+			timeService,
+			config,
+			redisForPub,
+			redisForSub,
+			idService,
+			nodeId,
+		});
 
 		return new FakeCacheManagementService(redisClient, globalLogger, timeService, internalEventService);
 	}

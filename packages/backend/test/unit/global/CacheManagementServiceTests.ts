@@ -33,9 +33,13 @@ describe(CacheManagementService, () => {
 	beforeAll(() => {
 		mockTimeService = new GodOfTimeService();
 		mockRedisClient = new MockRedis(mockTimeService);
-		mockInternalEventService = MockInternalEventService.create();
 		mockConsole = new MockConsole();
 		mockEnvService = new MockEnvService();
+		mockInternalEventService = MockInternalEventService.create({
+			timeService: mockTimeService,
+			redisForPub: mockRedisClient,
+			redisForSub: mockRedisClient,
+		});
 
 		const loggerService = new LoggerService(mockConsole, mockTimeService, mockEnvService);
 		fakeGlobalLogger = loggerService.getLogger('global');

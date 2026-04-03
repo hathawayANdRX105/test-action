@@ -45,7 +45,12 @@ describe(SkRateLimiterService, () => {
 			host: 'example.com',
 			id: 'aidx',
 		} as unknown as Config;
-		mockInternalEventService = MockInternalEventService.create({ config: fakeConfig });
+		mockInternalEventService = MockInternalEventService.create({
+			config: fakeConfig,
+			timeService: mockTimeService,
+			redisForSub: mockRedis,
+			redisForPub: mockRedis,
+		});
 
 		mockConsole = new MockConsole();
 
