@@ -56,10 +56,10 @@ export class MockInternalEventService extends InternalEventService {
 		@Inject(DI.redisForSub)
 		redisForSub: Redis,
 
-		@Inject(IdService)
-		idService: IdService,
+		@Inject(DI.nodeId)
+		nodeId: string,
 	) {
-		super(redisForPub, redisForSub, config, idService);
+		super(redisForPub, redisForSub, config, nodeId);
 	}
 
 	@bindThis
@@ -115,6 +115,7 @@ export class MockInternalEventService extends InternalEventService {
 		redisForSub?: Redis,
 		config?: Config,
 		idService?: IdService,
+		nodeId?: string,
 	}): MockInternalEventService {
 		const timeService = opts?.timeService ?? new GodOfTimeService();
 		const redisForPub = opts?.redisForPub ?? opts?.redisForSub ?? new MockRedis(timeService);
@@ -125,8 +126,9 @@ export class MockInternalEventService extends InternalEventService {
 			id: 'aidx',
 		} as Config;
 		const idService = opts?.idService ?? new IdService(timeService, config);
+		const nodeId = opts?.nodeId ?? idService.genSimple();
 
-		return new MockInternalEventService(config, redisForPub, redisForSub, idService);
+		return new MockInternalEventService(config, redisForPub, redisForSub, nodeId);
 	}
 }
 

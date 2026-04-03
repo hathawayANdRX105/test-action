@@ -155,6 +155,11 @@ const $LoggerService: Provider[] = [LoggerService, { provide: 'LoggerService', u
 const $Console: Provider[] = [{ provide: DI.console, useFactory: () => global.console }]; // useValue will break overrideProvider for some reason
 const $DependencyService: Provider[] = [DependencyService, { provide: 'DependencyService', useExisting: DependencyService }];
 const $IdService: Provider[] = [IdService, { provide: 'IdService', useExisting: IdService }];
+const $nodeId: Provider = {
+	provide: DI.nodeId,
+	useFactory: (idService: IdService) => idService.genSimple(),
+	inject: [IdService],
+};
 
 @Global()
 @Module({
@@ -173,6 +178,7 @@ const $IdService: Provider[] = [IdService, { provide: 'IdService', useExisting: 
 		// Repositories
 		repositoryProviders,
 		$meta,
+		$nodeId,
 
 		// Services
 		$CacheManagementService,
@@ -202,6 +208,7 @@ const $IdService: Provider[] = [IdService, { provide: 'IdService', useExisting: 
 		// Repositories
 		repositoryProviders,
 		$meta,
+		$nodeId,
 
 		// Services
 		$CacheManagementService,

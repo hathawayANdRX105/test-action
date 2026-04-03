@@ -97,6 +97,7 @@ export class FakeCacheManagementService extends CacheManagementService {
 		config?: Config,
 		internalEventService?: InternalEventService,
 		idService?: IdService,
+		nodeId?: string,
 	}): FakeCacheManagementService {
 		// Global services
 		const timeService = opts?.timeService ?? new GodOfTimeService();
@@ -110,6 +111,7 @@ export class FakeCacheManagementService extends CacheManagementService {
 			id: 'aidx',
 		} as Config;
 		const idService = opts?.idService ?? new IdService(timeService, config);
+		const nodeId = opts?.nodeId ?? idService.genSimple();
 
 		// Redis connections
 		const redisClient = opts?.redisClient ?? opts?.redisForPub ?? opts?.redisForSub ?? new MockRedis(timeService);
@@ -117,7 +119,7 @@ export class FakeCacheManagementService extends CacheManagementService {
 		const redisForSub = opts?.redisForSub ?? redisClient;
 
 		// Core services
-		const internalEventService = opts?.internalEventService ?? MockInternalEventService.create({ config, redisForPub, redisForSub, idService });
+		const internalEventService = opts?.internalEventService ?? MockInternalEventService.create({ config, redisForPub, redisForSub, idService, nodeId });
 
 		return new FakeCacheManagementService(redisClient, globalLogger, timeService, internalEventService);
 	}

@@ -142,14 +142,8 @@ export interface InternalEventContext {
 
 @Injectable()
 export class InternalEventService extends SkEventSource<InternalEventTypes, InternalEventProps, InternalEventContext> implements OnModuleInit, OnApplicationShutdown {
-	/**
-	 * Unique identifier used to detect and ignore our own messages sent through Redis IPC.
-	 * Implemented as a random 50-bit integer encoded in 10 characters, which provides a good balance of uniqueness vs memory space.
-	 */
-	private readonly nodeId: string;
-
 	constructor(
-		@Inject(DI.redis)
+		@Inject(DI.redisForPub)
 		private readonly redisForPub: Redis,
 
 		@Inject(DI.redisForSub)
@@ -158,10 +152,10 @@ export class InternalEventService extends SkEventSource<InternalEventTypes, Inte
 		@Inject(DI.config)
 		private readonly config: Pick<Config, 'host'>,
 
-		idService: IdService,
+		@Inject(DI.nodeId)
+		private readonly nodeId: string,
 	) {
 		super();
-		this.nodeId = idService.genSimple();
 	}
 
 	@bindThis
