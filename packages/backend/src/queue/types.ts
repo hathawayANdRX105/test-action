@@ -47,6 +47,10 @@ export type Jobs = {
 	[QT in QueueType]: Bull.Job<QueueData[QT]>;
 };
 
+export type Workers = {
+	[QT in QueueType]: Bull.Worker<QueueData[QT], string | void, string>;
+};
+
 export type DeliverJobData = {
 	/** Actor */
 	user: ThinUser;

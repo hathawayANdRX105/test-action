@@ -3,13 +3,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
+import {
+	Inject,
+	Injectable,
+	type OnApplicationBootstrap,
+	type BeforeApplicationShutdown,
+} from '@nestjs/common';
 import * as Bull from 'bullmq';
 import * as Sentry from '@sentry/node';
 import type { Config } from '@/config.js';
-import type Logger from '@/logger.js';
+import type { Logger } from '@/logger.js';
 import type {
 	Jobs,
+	Workers,
+	QueueType,
+	QueueData,
 	CleanRemoteFilesJobData,
 	DbDeleteDriveFilesJobData,
 	DbExportAccountDataJobData,
@@ -45,7 +53,8 @@ import type {
 	DaemonJobData,
 } from '@/queue/types.js';
 import { DI } from '@/di-symbols.js';
-import { QUEUE, baseWorkerOptions } from '@/queue/const.js';
+import { promiseTry } from '@/misc/promise-try.js';
+import { getWorkerOptions } from '@/queue/const.js';
 import { bindThis } from '@/decorators.js';
 import { renderInlineError } from '@/misc/render-inline-error.js';
 import { renderFullError } from '@/misc/render-full-error.js';
@@ -132,20 +141,9 @@ function _getJobInfo(now: number, job: Bull.Job | undefined, increment = false):
 }
 
 @Injectable()
-export class QueueProcessorService implements BeforeApplicationShutdown {
-	private logger: Logger;
-	private systemQueueWorker: Bull.Worker;
-	private readonly daemonQueueWorker: Bull.Worker;
-	private dbQueueWorker: Bull.Worker;
-	private deliverQueueWorker: Bull.Worker;
-	private inboxQueueWorker: Bull.Worker;
-	private userWebhookDeliverQueueWorker: Bull.Worker;
-	private systemWebhookDeliverQueueWorker: Bull.Worker;
-	private relationshipQueueWorker: Bull.Worker;
-	private objectStorageQueueWorker: Bull.Worker;
-	private endedPollNotificationQueueWorker: Bull.Worker;
-	private schedulerNotePostQueueWorker: Bull.Worker;
-	private readonly backgroundTaskWorker: Bull.Worker;
+export class QueueProcessorService implements OnApplicationBootstrap, BeforeApplicationShutdown {
+	private readonly logger: Logger;
+	private readonly workers = {} as Partial<Workers>;
 
 	constructor(
 		@Inject(DI.config)
@@ -196,12 +194,10 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 		private readonly serverStatsService: ServerStatsService,
 	) {
 		this.logger = this.queueLoggerService.logger;
+	}
 
-		// This is just to avoid modifying all the existing code.
-		const getJobInfo = (job: Bull.Job | undefined, increment = false) => {
-			return _getJobInfo(this.timeService.now, job, increment);
-		};
-
+	@bindThis
+	public onApplicationBootstrap() {
 		//#region system
 		{
 			const processer = async (job: Bull.Job<SystemJobData>) => {
@@ -221,32 +217,7 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			};
 
-			this.systemQueueWorker = new Bull.Worker<SystemJobData>(QUEUE.SYSTEM, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: System: ' + job.name }, async () => await processer(job));
-				} else {
-					return await processer(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.SYSTEM),
-			});
-
-			const logger = this.logger.createSubLogger('system');
-
-			this.systemQueueWorker
-				.on('active', (job) => logger.debug(`active id=${job.id}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
-				.on('failed', (job, err: Error) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: System: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+			this.createWorker('system', processer);
 		}
 		//#endregion
 
@@ -267,32 +238,7 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			};
 
-			this.daemonQueueWorker = new Bull.Worker<DaemonJobData>(QUEUE.DAEMON, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: Daemon: ' + job.name }, async () => await processer(job));
-				} else {
-					return await processer(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.DAEMON),
-			});
-
-			const logger = this.logger.createSubLogger('daemon');
-
-			this.daemonQueueWorker
-				.on('active', (job) => logger.debug(`active id=${job.id}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
-				.on('failed', (job, err: Error) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: Daemon: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+			this.createWorker('daemon', processer);
 		}
 		//#endregion
 
@@ -332,168 +278,47 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			};
 
-			this.dbQueueWorker = new Bull.Worker(QUEUE.DB, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: DB: ' + job.name }, async () => await processer(job));
-				} else {
-					return await processer(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.DB),
-			});
-
-			const logger = this.logger.createSubLogger('db');
-
-			this.dbQueueWorker
-				.on('active', (job) => logger.debug(`active id=${job.id}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: DB: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+			this.createWorker('db', processer);
 		}
 		//#endregion
 
 		//#region deliver
 		{
-			this.deliverQueueWorker = new Bull.Worker(QUEUE.DELIVER, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: Deliver' }, async () => await this.deliverProcessorService.process(job));
-				} else {
-					return await this.deliverProcessorService.process(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.DELIVER),
+			this.createWorker('deliver', this.deliverProcessorService.process, {
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
 			});
-
-			const logger = this.logger.createSubLogger('deliver');
-
-			this.deliverQueueWorker
-				.on('active', (job) => logger.debug(`active ${getJobInfo(job, true)} to=${job.data.to}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) ${getJobInfo(job, true)} to=${job.data.to}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: Deliver: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
 		}
 		//#endregion
 
 		//#region inbox
 		{
-			this.inboxQueueWorker = new Bull.Worker(QUEUE.INBOX, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: Inbox' }, async () => await this.inboxProcessorService.process(job));
-				} else {
-					return await this.inboxProcessorService.process(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.INBOX),
+			this.createWorker('inbox', this.inboxProcessorService.process, {
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
 			});
-
-			const logger = this.logger.createSubLogger('inbox');
-
-			this.inboxQueueWorker
-				.on('active', (job) => logger.debug(`active ${getJobInfo(job, true)}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) ${getJobInfo(job, true)}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: Inbox: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
 		}
 		//#endregion
 
 		//#region user-webhook deliver
 		{
-			this.userWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.USER_WEBHOOK_DELIVER, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: UserWebhookDeliver' }, async () => await this.userWebhookDeliverProcessorService.process(job));
-				} else {
-					return await this.userWebhookDeliverProcessorService.process(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.USER_WEBHOOK_DELIVER),
+			this.createWorker('userWebhookDeliver', this.userWebhookDeliverProcessorService.process, {
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
 			});
-
-			const logger = this.logger.createSubLogger('user-webhook');
-
-			this.userWebhookDeliverQueueWorker
-				.on('active', (job) => logger.debug(`active ${getJobInfo(job, true)} to=${job.data.to}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) ${getJobInfo(job, true)} to=${job.data.to}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: UserWebhookDeliver: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
 		}
 		//#endregion
 
 		//#region system-webhook deliver
 		{
-			this.systemWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.SYSTEM_WEBHOOK_DELIVER, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: SystemWebhookDeliver' }, async () => await this.systemWebhookDeliverProcessorService.process(job));
-				} else {
-					return await this.systemWebhookDeliverProcessorService.process(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.SYSTEM_WEBHOOK_DELIVER),
+			this.createWorker('systemWebhookDeliver', this.systemWebhookDeliverProcessorService.process, {
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
 			});
-
-			const logger = this.logger.createSubLogger('system-webhook');
-
-			this.systemWebhookDeliverQueueWorker
-				.on('active', (job) => logger.debug(`active ${getJobInfo(job, true)} to=${job.data.to}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) ${getJobInfo(job, true)} to=${job.data.to}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: SystemWebhookDeliver: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
 		}
 		//#endregion
 
@@ -510,32 +335,7 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			};
 
-			this.relationshipQueueWorker = new Bull.Worker<RelationshipJobData>(QUEUE.RELATIONSHIP, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: Relationship: ' + job.name }, async () => await processer(job));
-				} else {
-					return await processer(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.RELATIONSHIP),
-			});
-
-			const logger = this.logger.createSubLogger('relationship');
-
-			this.relationshipQueueWorker
-				.on('active', (job) => logger.debug(`active id=${job.id}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: Relationship: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+			this.createWorker('relationship', processer);
 		}
 		//#endregion
 
@@ -550,125 +350,71 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 				}
 			};
 
-			this.objectStorageQueueWorker = new Bull.Worker<ObjectStorageJobData>(QUEUE.OBJECT_STORAGE, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: ObjectStorage: ' + job.name }, async () => await processer(job));
-				} else {
-					return await processer(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.OBJECT_STORAGE),
-			});
-
-			const logger = this.logger.createSubLogger('objectStorage');
-
-			this.objectStorageQueueWorker
-				.on('active', (job) => logger.debug(`active id=${job.id}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: ObjectStorage: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+			this.createWorker('objectStorage', processer);
 		}
 		//#endregion
 
 		//#region ended poll notification
 		{
-			const logger = this.logger.createSubLogger('endedPollNotification');
-
-			this.endedPollNotificationQueueWorker = new Bull.Worker(QUEUE.ENDED_POLL_NOTIFICATION, async job => {
-				if (this.config.sentryForBackend) {
-					return await Sentry.startSpan({ name: 'Queue: EndedPollNotification' }, () => this.endedPollNotificationProcessorService.process(job));
-				} else {
-					return await this.endedPollNotificationProcessorService.process(job);
-				}
-			}, {
-				...baseWorkerOptions(this.config, QUEUE.ENDED_POLL_NOTIFICATION),
-			});
-			this.endedPollNotificationQueueWorker
-				.on('active', (job) => logger.debug(`active id=${job.id}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: EndedPollNotification: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+			this.createWorker('endedPollNotification', this.endedPollNotificationProcessorService.process);
 		}
 		//#endregion
 
 		//#region schedule note post
 		{
-			const logger = this.logger.createSubLogger('scheduleNotePost');
-
-			this.schedulerNotePostQueueWorker = new Bull.Worker(QUEUE.SCHEDULE_NOTE_POST, async (job) => await this.scheduleNotePostProcessorService.process(job), {
-				...baseWorkerOptions(this.config, QUEUE.SCHEDULE_NOTE_POST),
-			});
-			this.schedulerNotePostQueueWorker
-				.on('active', (job) => logger.debug(`active id=${job.id}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: ${QUEUE.SCHEDULE_NOTE_POST}: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+			this.createWorker('scheduleNotePost', this.scheduleNotePostProcessorService.process);
 		}
 		//#endregion
 
 		//#region background tasks
 		{
-			const logger = this.logger.createSubLogger('backgroundTask');
-
-			this.backgroundTaskWorker = new Bull.Worker(QUEUE.BACKGROUND_TASK, async (job) => await this.backgroundTaskProcessorService.process(job.data), {
-				...baseWorkerOptions(this.config, QUEUE.BACKGROUND_TASK),
+			this.createWorker('backgroundTask', async job => await this.backgroundTaskProcessorService.process(job.data), {
 				settings: {
 					backoffStrategy: httpRelatedBackoff,
 				},
-				// Keep a lot of jobs, because this queue moves *fast*!
-				// https://docs.bullmq.io/guide/workers/auto-removal-of-jobs
-				removeOnComplete: {
-					age: 3600 * 24 * 7, // keep up to 7 days
-					count: 1000,
-				},
-				removeOnFail: {
-					age: 3600 * 24 * 7, // keep up to 7 days
-					count: 1000,
-				},
 			});
-			this.backgroundTaskWorker
-				.on('active', (job) => logger.debug(`active id=${job.id}`))
-				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
-				.on('failed', (job, err) => {
-					this.logError(logger, err, job);
-					if (config.sentryForBackend) {
-						Sentry.captureMessage(`Queue: ${QUEUE.BACKGROUND_TASK}: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
-							level: 'error',
-							extra: { job, err },
-						});
-					}
-				})
-				.on('error', (err: Error) => this.logError(logger, err))
-				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
 		}
 		//#endregion
+	}
+
+	@bindThis
+	private createWorker<QT extends QueueType>(qt: QT, processor: (job: Jobs[QT]) => Promise<string | void>, opts?: Partial<Bull.WorkerOptions>): void {
+		const logger = this.logger.createSubLogger(qt);
+		const options = getWorkerOptions(this.config, qt);
+		if (options.concurrency < 1) {
+			logger.info(`Not connecting ${qt} queue - disabled in config (concurrency < 1)`);
+			return;
+		}
+
+		logger.debug(`Connecting ${qt} queue...`);
+		const worker = new Bull.Worker<QueueData[QT], string | void, string>(qt, async (job: Jobs[QT]) => {
+			if (this.config.sentryForBackend) {
+				return await Sentry.startSpan({ name: `Queue: ${qt}: ` + job.name }, async () => await processor(job));
+			} else {
+				return await processor(job);
+			}
+		}, {
+			...options,
+			...(opts ?? {}),
+		});
+
+		worker
+			.on('active', (job) => logger.debug(`active id=${job.id}`))
+			.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
+			.on('failed', (job, err: Error) => {
+				this.logError(logger, err, job);
+				if (this.config.sentryForBackend) {
+					Sentry.captureMessage(`Queue: System: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
+						level: 'error',
+						extra: { job, err },
+					});
+				}
+			})
+			.on('error', (err: Error) => this.logError(logger, err))
+			.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+
+		// For some reason the type cast is needed...
+		this.workers[qt] = worker as Workers[QT];
 	}
 
 	private logError(logger: Logger, err: unknown, job?: Bull.Job | null): void {
@@ -704,42 +450,23 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 		//   These calls to run only return on shutdown or error, so we can't await them.
 		//   They also don't emit any events when starting, so we can wrap in a promise either.
 
-		this.systemQueueWorker.run();
-		this.daemonQueueWorker.run();
-		this.dbQueueWorker.run();
-		this.deliverQueueWorker.run();
-		this.inboxQueueWorker.run();
-		this.userWebhookDeliverQueueWorker.run();
-		this.systemWebhookDeliverQueueWorker.run();
-		this.relationshipQueueWorker.run();
-		this.objectStorageQueueWorker.run();
-		this.endedPollNotificationQueueWorker.run();
-		this.schedulerNotePostQueueWorker.run();
-		this.backgroundTaskWorker.run();
+		for (const [queue, worker] of Object.entries(this.workers)) {
+			this.logger.debug(`Starting ${queue} worker...`);
+			worker.run();
+		}
 	}
 
 	@bindThis
 	public async stop(): Promise<void> {
-		await Promise.allSettled([
-			this.systemQueueWorker.close(),
-			this.daemonQueueWorker.close(),
-			this.dbQueueWorker.close(),
-			this.deliverQueueWorker.close(),
-			this.inboxQueueWorker.close(),
-			this.userWebhookDeliverQueueWorker.close(),
-			this.systemWebhookDeliverQueueWorker.close(),
-			this.relationshipQueueWorker.close(),
-			this.objectStorageQueueWorker.close(),
-			this.endedPollNotificationQueueWorker.close(),
-			this.schedulerNotePostQueueWorker.close(),
-			this.backgroundTaskWorker.close(),
-		]).then(res => {
+		const promises = Object.values(this.workers).map(w => promiseTry(() => w.close()));
+		const res = await Promise.allSettled(promises);
+		{
 			for (const result of res) {
 				if (result.status === 'rejected') {
 					this.logger.error(`Error closing queue: ${renderInlineError(result.reason)}`);
 				}
 			}
-		});
+		}
 	}
 
 	@bindThis

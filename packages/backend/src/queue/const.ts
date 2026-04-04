@@ -72,7 +72,7 @@ export const DefaultMaxAttempts = 1;
 export const DefaultJobPerSec = 0;
 export const DefaultJobConcurrency = 1;
 
-export function baseQueueOptions<QT extends QueueType>(config: Config, queueName: QT) {
+export function getQueueOptions<QT extends QueueType>(config: Config, queueName: QT) {
 	return {
 		connection: {
 			...config.redisForJobQueue,
@@ -82,12 +82,12 @@ export function baseQueueOptions<QT extends QueueType>(config: Config, queueName
 	} satisfies Bull.QueueOptions;
 }
 
-export function baseWorkerOptions<QT extends QueueType>(config: Config, queueName: QT) {
+export function getWorkerOptions<QT extends QueueType>(config: Config, queueName: QT) {
 	const jobsPerSec = config[`${queueName}JobPerSec`] ?? QueueDefaults[`${queueName}JobPerSec`] ?? DefaultJobPerSec;
 	const concurrency = config[`${queueName}JobConcurrency`] ?? QueueDefaults[`${queueName}JobConcurrency`] ?? DefaultJobConcurrency;
 
 	return {
-		...baseQueueOptions(config, queueName),
+		...getQueueOptions(config, queueName),
 		metrics: {
 			maxDataPoints: MetricsTime.ONE_WEEK,
 		},
@@ -96,11 +96,19 @@ export function baseWorkerOptions<QT extends QueueType>(config: Config, queueNam
 			max: jobsPerSec,
 			duration: 1000,
 		},
+		removeOnComplete: {
+			age: 3600 * 24 * 7, // keep up to 7 days
+			count: 1000, // Keep up to 1000 successful results
+		},
+		removeOnFail: {
+			age: 3600 * 24 * 7, // keep up to 7 days
+			count: 1000, // Keep up to 1000 failed results
+		},
 		autorun: false,
 	} satisfies Bull.WorkerOptions;
 }
 
-export function baseJobOptions<QT extends QueueType>(config: Config, queueName: QT) {
+export function getJobOptions<QT extends QueueType>(config: Config, queueName: QT) {
 	const maxAttempts = config[`${queueName}JobMaxAttempts`] ?? QueueDefaults[`${queueName}JobMaxAttempts`] ?? DefaultMaxAttempts;
 
 	return {

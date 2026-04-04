@@ -20,7 +20,7 @@ import type { Logger } from '@/logger.js';
 import { EnvService } from '@/global/EnvService.js';
 import { GlobalModule } from '@/GlobalModule.js';
 import { LoggerService } from '@/core/LoggerService.js';
-import { baseQueueOptions, QUEUE_TYPES } from '@/queue/const.js';
+import { getQueueOptions, QUEUE_TYPES } from '@/queue/const.js';
 import { renderInlineError } from '@/misc/render-inline-error.js';
 import { allSettled } from '@/misc/promise-tracker.js';
 import { promiseTry } from '@/misc/promise-try.js';
@@ -60,13 +60,13 @@ const $queues: Provider[] = QUEUE_TYPES.flatMap(qt => {
 		// Queue instance
 		{
 			provide: queueDI,
-			useFactory: (config: Config) => new Bull.Queue(qt, baseQueueOptions(config, qt)),
+			useFactory: (config: Config) => new Bull.Queue(qt, getQueueOptions(config, qt)),
 			inject: [DI.config],
 		},
 		// Event connection
 		{
 			provide: `queue:${qt}:events`,
-			useFactory: (config: Config) => new Bull.QueueEvents(qt, baseQueueOptions(config, qt)),
+			useFactory: (config: Config) => new Bull.QueueEvents(qt, getQueueOptions(config, qt)),
 			inject: [DI.config],
 		},
 		makeAliasProvider(`queues:${qt}`, queueDI),

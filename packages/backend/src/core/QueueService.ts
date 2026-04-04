@@ -14,7 +14,7 @@ import type { MiWebhook, WebhookEventTypes } from '@/models/Webhook.js';
 import type { MiSystemWebhook, SystemWebhookEventType } from '@/models/SystemWebhook.js';
 import type { Config } from '@/config.js';
 import type { Packed } from '@/misc/json-schema.js';
-import { baseJobOptions, QUEUE_TYPES } from '@/queue/const.js';
+import { getJobOptions, QUEUE_TYPES } from '@/queue/const.js';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
@@ -328,7 +328,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	>(qt: QT, name: Name, data: Data, opts?: Bull.JobsOptions) {
 		// Apply default options
 		opts = {
-			...baseJobOptions(this.config, qt),
+			...getJobOptions(this.config, qt),
 			...(opts ?? {}),
 		};
 
@@ -355,7 +355,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 		jobs = jobs.map(job => ({
 			...job,
 			opts: {
-				...baseJobOptions(this.config, qt),
+				...getJobOptions(this.config, qt),
 				...(job.opts ?? {}),
 			},
 		}));
