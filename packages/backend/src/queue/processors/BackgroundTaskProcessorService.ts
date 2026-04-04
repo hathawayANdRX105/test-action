@@ -44,6 +44,7 @@ import { CollapsedQueueService } from '@/core/CollapsedQueueService.js';
 import { isRemoteUser } from '@/models/User.js';
 import { errorCodes, IdentifiableError } from '@/misc/identifiable-error.js';
 import { TimeService } from '@/global/TimeService.js';
+import { bindThis } from '@/decorators.js';
 
 @Injectable()
 export class BackgroundTaskProcessorService {
@@ -87,6 +88,7 @@ export class BackgroundTaskProcessorService {
 		this.logger = queueLoggerService.logger.createSubLogger('background-task');
 	}
 
+	@bindThis
 	public async process(job: BackgroundTaskJobData): Promise<string> {
 		if (job.type === 'update-user') {
 			return await this.processUpdateUser(job);
