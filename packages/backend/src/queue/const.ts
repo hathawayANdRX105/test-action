@@ -24,21 +24,6 @@ export const QUEUE_TYPES = [
 	'backgroundTask',
 ] as const;
 
-export const QUEUE = {
-	DELIVER: 'deliver',
-	INBOX: 'inbox',
-	SYSTEM: 'system',
-	DAEMON: 'daemon',
-	ENDED_POLL_NOTIFICATION: 'endedPollNotification',
-	DB: 'db',
-	RELATIONSHIP: 'relationship',
-	OBJECT_STORAGE: 'objectStorage',
-	USER_WEBHOOK_DELIVER: 'userWebhookDeliver',
-	SYSTEM_WEBHOOK_DELIVER: 'systemWebhookDeliver',
-	SCHEDULE_NOTE_POST: 'scheduleNotePost',
-	BACKGROUND_TASK: 'backgroundTask',
-} satisfies Record<string, QueueType>;
-
 // Keep in sync with all the YML configs!
 export const QueueDefaults: Partial<Config> = {
 	deliverJobConcurrency: 128,
