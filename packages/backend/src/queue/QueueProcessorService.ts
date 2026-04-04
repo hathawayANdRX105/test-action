@@ -42,6 +42,7 @@ import type {
 	ObjectStorageJobData,
 	RelationshipJobData,
 	SystemJobData,
+	DaemonJobData,
 } from '@/queue/types.js';
 import { DI } from '@/di-symbols.js';
 import { QUEUE, baseWorkerOptions } from '@/queue/const.js';
@@ -134,6 +135,7 @@ function _getJobInfo(now: number, job: Bull.Job | undefined, increment = false):
 export class QueueProcessorService implements BeforeApplicationShutdown {
 	private logger: Logger;
 	private systemQueueWorker: Bull.Worker;
+	private readonly daemonQueueWorker: Bull.Worker;
 	private dbQueueWorker: Bull.Worker;
 	private deliverQueueWorker: Bull.Worker;
 	private inboxQueueWorker: Bull.Worker;
@@ -214,14 +216,6 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 					case 'clean': return await this.cleanProcessorService.process();
 					case 'cleanupApLogs': return await this.cleanupApLogsProcessorService.process();
 					case 'hibernateUsers': return await this.hibernateUsersProcessorService.process();
-					case 'tickServerStats': {
-						await this.serverStatsService.tick();
-						return 'ok';
-					}
-					case 'tickQueueCounts': {
-						await this.queueStatsService.tick();
-						return 'ok';
-					}
 					// @ts-expect-error it doesn't realize that we're *trying* to catch unknown values here
 					default: throw new Error(`unrecognized job type ${job.data.type} for system`);
 				}
@@ -246,6 +240,52 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 					this.logError(logger, err, job);
 					if (config.sentryForBackend) {
 						Sentry.captureMessage(`Queue: System: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
+							level: 'error',
+							extra: { job, err },
+						});
+					}
+				})
+				.on('error', (err: Error) => this.logError(logger, err))
+				.on('stalled', (jobId) => logger.warn(`stalled id=${jobId}`));
+		}
+		//#endregion
+
+		//#region daemon
+		{
+			const processer = async (job: Bull.Job<DaemonJobData>) => {
+				switch (job.data.type) {
+					case 'tickServerStats': {
+						await this.serverStatsService.tick();
+						return 'ok';
+					}
+					case 'tickQueueCounts': {
+						await this.queueStatsService.tick();
+						return 'ok';
+					}
+					// @ts-expect-error it doesn't realize that we're *trying* to catch unknown values here
+					default: throw new Error(`unrecognized job type ${job.data.type} for daemon`);
+				}
+			};
+
+			this.daemonQueueWorker = new Bull.Worker<DaemonJobData>(QUEUE.DAEMON, async job => {
+				if (this.config.sentryForBackend) {
+					return await Sentry.startSpan({ name: 'Queue: Daemon: ' + job.name }, async () => await processer(job));
+				} else {
+					return await processer(job);
+				}
+			}, {
+				...baseWorkerOptions(this.config, QUEUE.DAEMON),
+			});
+
+			const logger = this.logger.createSubLogger('daemon');
+
+			this.daemonQueueWorker
+				.on('active', (job) => logger.debug(`active id=${job.id}`))
+				.on('completed', (job, result) => logger.debug(`completed(${result}) id=${job.id}`))
+				.on('failed', (job, err: Error) => {
+					this.logError(logger, err, job);
+					if (config.sentryForBackend) {
+						Sentry.captureMessage(`Queue: Daemon: ${job?.name ?? '?'}: ${err.name}: ${err.message}`, {
 							level: 'error',
 							extra: { job, err },
 						});
@@ -665,6 +705,7 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 		//   They also don't emit any events when starting, so we can wrap in a promise either.
 
 		this.systemQueueWorker.run();
+		this.daemonQueueWorker.run();
 		this.dbQueueWorker.run();
 		this.deliverQueueWorker.run();
 		this.inboxQueueWorker.run();
@@ -681,6 +722,7 @@ export class QueueProcessorService implements BeforeApplicationShutdown {
 	public async stop(): Promise<void> {
 		await Promise.allSettled([
 			this.systemQueueWorker.close(),
+			this.daemonQueueWorker.close(),
 			this.dbQueueWorker.close(),
 			this.deliverQueueWorker.close(),
 			this.inboxQueueWorker.close(),

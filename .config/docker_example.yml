@@ -344,6 +344,11 @@ id: 'aidx'
 #systemJobPerSec: 0
 #systemJobMaxAttempts: 1
 #
+## Daemon queue - processes brief, recurrent tasks.
+#daemonJobConcurrency: 4
+#daemonJobPerSec: 0
+#daemonJobMaxAttempts: 1
+#
 ## Ended Poll Notification queue - refreshes completed polls and notifies all interested users.
 #endedPollNotificationJobConcurrency: 4
 #endedPollNotificationJobPerSec: 0

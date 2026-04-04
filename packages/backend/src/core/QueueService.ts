@@ -52,6 +52,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 	private readonly queueEvents = {} as QueueEvents;
 
 	private systemQueue: Queues['system'];
+	private daemonQueue: Queues['daemon'];
 
 	constructor(
 		protected readonly moduleRef: ModuleRef,
@@ -76,6 +77,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 		}
 
 		this.systemQueue = this.queues['system'];
+		this.daemonQueue = this.queues['daemon'];
 	}
 
 	@bindThis
@@ -89,38 +91,59 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 		await this.upsertScheduledJobs();
 	}
 
+	// TODO move to System queue
 	@bindThis
 	private async upsertScheduledJobs() {
+		// Update this whenever a new job scheduler is added.
+		const knownJobsByQueue: Partial<Record<QueueType, string[]>> = {
+			system: [
+				'tickCharts-scheduler',
+				'resyncCharts-scheduler',
+				'cleanCharts-scheduler',
+				'aggregateRetention-scheduler',
+				'checkExpiredMutings-scheduler',
+				'bakeBufferedReactions-scheduler',
+				'checkModeratorsActivity-scheduler',
+				'clean-scheduler',
+				'cleanupApLogs-scheduler',
+				'hibernateUsers-scheduler',
+			],
+			daemon: [
+				'tickQueueCounts-scheduler',
+				'tickServerStats-scheduler',
+			],
+		};
+
 		// Remove any obsolete scheduled jobs
-		const removeScheduleJobs = async (jobs: { key: string, id?: string | null, name?: string | null }[]) => {
+		const removeScheduleJobs = async (qt: QueueType, jobs: { key: string, id?: string | null, name?: string | null }[]) => {
+			const queue = this.queues[qt];
+			const allowed: string[] = knownJobsByQueue[qt] ?? [];
+
 			for (const job of jobs) {
-				// Known schedulers will be updated below.
-				if (job.id === 'tickCharts-scheduler' || job.key === 'tickCharts-scheduler') continue;
-				if (job.id === 'resyncCharts-scheduler' || job.key === 'resyncCharts-scheduler') continue;
-				if (job.id === 'cleanCharts-scheduler' || job.key === 'cleanCharts-scheduler') continue;
-				if (job.id === 'aggregateRetention-scheduler' || job.key === 'aggregateRetention-scheduler') continue;
-				if (job.id === 'clean-scheduler' || job.key === 'clean-scheduler') continue;
-				if (job.id === 'checkExpiredMutings-scheduler' || job.key === 'checkExpiredMutings-scheduler') continue;
-				if (job.id === 'bakeBufferedReactions-scheduler' || job.key === 'bakeBufferedReactions-scheduler') continue;
-				if (job.id === 'checkModeratorsActivity-scheduler' || job.key === 'checkModeratorsActivity-scheduler') continue;
-				if (job.id === 'cleanupApLogs-scheduler' || job.key === 'cleanupApLogs-scheduler') continue;
-				if (job.id === 'hibernateUsers-scheduler' || job.key === 'hibernateUsers-scheduler') continue;
-				if (job.id === 'tickQueueCounts-scheduler' || job.key === 'tickQueueCounts-scheduler') continue;
-				if (job.id === 'tickServerStats-scheduler' || job.key === 'tickServerStats-scheduler') continue;
+				if (allowed.includes(job.key)) continue;
+				if (job.id && allowed.includes(job.id)) continue;
 
 				if (job.id) {
-					this.logger.info(`Removing obsolete job scheduler key=${job.key} id=${job.id} name=${job.name}`);
-					await this.systemQueue.removeJobScheduler(job.id);
+					this.logger.info(`Removing obsolete job scheduler key=${job.key}, name=${job.name}, id=${job.id} from queue ${qt}`);
+					await queue.removeJobScheduler(job.id);
 				} else {
-					this.logger.info(`Removing obsolete repeatable job key=${job.key} id=${job.id} name=${job.name}`);
-					await this.systemQueue.removeRepeatableByKey(job.key);
+					this.logger.info(`Removing obsolete repeatable job key=${job.key}, name=${job.name} from queue ${qt}`);
+					await queue.removeRepeatableByKey(job.key);
 				}
 			}
 		};
 
-		// These have to be separate, since there's some unpredictable overlap between the results!
-		await removeScheduleJobs(await this.systemQueue.getJobSchedulers());
-		await removeScheduleJobs(await this.systemQueue.getRepeatableJobs());
+		for (const qt of QUEUE_TYPES) {
+			this.logger.debug(`Cleaning obsolete queue jobs from ${qt}...`);
+			const queue = this.queues[qt];
+
+			// These have to be separate, since there's some unpredictable overlap between the results!
+			const schedulers = await queue.getJobSchedulers();
+			await removeScheduleJobs(qt, schedulers);
+
+			const repeatables = await queue.getRepeatableJobs();
+			await removeScheduleJobs(qt, repeatables);
+		}
 
 		await this.systemQueue.upsertJobScheduler(
 			'tickCharts-scheduler',
@@ -263,7 +286,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 				},
 			});
 
-		await this.systemQueue.upsertJobScheduler(
+		await this.daemonQueue.upsertJobScheduler(
 			'tickQueueCounts-scheduler',
 			{ every: 2 * 1000 }, // every 2 seconds - https://docs.bullmq.io/guide/job-schedulers/repeat-strategies#every-strategy
 			{
@@ -278,7 +301,7 @@ export class QueueService implements OnModuleInit, OnApplicationBootstrap {
 			},
 		);
 
-		await this.systemQueue.upsertJobScheduler(
+		await this.daemonQueue.upsertJobScheduler(
 			'tickServerStats-scheduler',
 			{ every: 2 * 1000 }, // every 2 seconds - https://docs.bullmq.io/guide/job-schedulers/repeat-strategies#every-strategy
 			{

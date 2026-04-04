@@ -23,6 +23,7 @@ export type QueueData = {
 	deliver: DeliverJobData;
 	inbox: InboxJobData;
 	system: SystemJobData;
+	daemon: DaemonJobData;
 	endedPollNotification: EndedPollNotificationJobData;
 	db: DbJobData;
 	relationship: RelationshipJobData;
@@ -69,9 +70,7 @@ export type SystemJobData =
 	SystemCheckModeratorsActivityJobData |
 	SystemCleanJobData |
 	SystemCleanupApLogsJobData |
-	SystemHibernateUsersJobData |
-	SystemTickServerStatsJobData |
-	SystemTickQueueCountsJobData;
+	SystemHibernateUsersJobData;
 
 export type SystemTickChartsJobData = {
 	type: 'tickCharts';
@@ -113,17 +112,21 @@ export type SystemHibernateUsersJobData = {
 	type: 'hibernateUsers';
 };
 
-export type SystemTickServerStatsJobData = {
-	type: 'tickServerStats';
-};
-
-export type SystemTickQueueCountsJobData = {
-	type: 'tickQueueCounts';
-};
-
 export type InboxJobData = {
 	activity: IActivity;
 	signature: httpSignature.IParsedSignature;
+};
+
+export type DaemonJobData =
+	TickServerStatsDaemonJobData |
+	TickQueueCountsDaemonJobData;
+
+export type TickServerStatsDaemonJobData = {
+	type: 'tickServerStats';
+};
+
+export type TickQueueCountsDaemonJobData = {
+	type: 'tickQueueCounts';
 };
 
 export type RelationshipJobData = {
