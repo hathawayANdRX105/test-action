@@ -184,6 +184,10 @@ export const packedRolePoliciesSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		scheduleNoteMax: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
 		mentionLimit: {
 			type: 'integer',
 			optional: false, nullable: false,
@@ -302,10 +306,6 @@ export const packedRolePoliciesSchema = {
 		},
 		canImportUserLists: {
 			type: 'boolean',
-			optional: false, nullable: false,
-		},
-		scheduleNoteMax: {
-			type: 'integer',
 			optional: false, nullable: false,
 		},
 		chatAvailability: {
