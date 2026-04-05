@@ -698,7 +698,7 @@ export class ClientServerService {
 					this.cacheService.userProfileCache.fetchMaybe(clip.userId),
 					this.generateCommonPugData(this.meta),
 				]);
-				if (!user || !profile || !this.utilityService.isActiveUser(user)) {
+				if (!user || !profile || !this.utilityService.isActiveUser(user) || user.requireSigninToViewContents) {
 					return await renderBase(reply);
 				}
 
@@ -874,16 +874,26 @@ export class ClientServerService {
 
 			const clip = await this.clipsRepository.findOneBy({
 				id: request.params.clip,
+				isPublic: true,
 			});
 
 			if (clip == null) return;
 
-			const _clip = await this.clipEntityService.pack(clip);
+			const [user, _clip, commonData] = await Promise.all([
+				this.cacheService.findOptionalUserById(clip.userId),
+				this.clipEntityService.pack(clip),
+				this.generateCommonPugData(this.meta),
+			]);
+
+			if (user == null) return;
+			if (user.host != null) return;
+			if (!this.utilityService.isActiveUser(user)) return;
+			if (user.requireSigninToViewContents) return;
 
 			reply.header('Cache-Control', 'public, max-age=3600');
 			return await reply.view('base-embed', {
 				title: this.meta.name ?? 'Sharkey',
-				...await this.generateCommonPugData(this.meta),
+				...commonData,
 				embedCtx: htmlSafeJsonStringify({
 					clip: _clip,
 				}),
