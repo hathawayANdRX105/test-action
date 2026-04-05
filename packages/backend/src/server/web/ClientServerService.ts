@@ -576,11 +576,10 @@ export class ClientServerService {
 			const note = await this.notesRepository.findOne({
 				where: {
 					id: request.params.note,
-					visibility: In(['public', 'home']),
 				},
 			});
 
-			if (!note) {
+			if (!note || ['specified', 'followers'].includes(note.visibility) || note.userHost != null) {
 				return await renderBase(reply);
 			}
 
@@ -857,12 +856,20 @@ export class ClientServerService {
 			if (['specified', 'followers'].includes(note.visibility)) return;
 			if (note.userHost != null) return;
 
-			const _note = await this.noteEntityService.pack(note, null, { detail: true });
+			const [user, _note, commonData] = await Promise.all([
+				this.cacheService.findOptionalUserById(note.userId),
+				this.noteEntityService.pack(note, null, { detail: true }),
+				this.generateCommonPugData(this.meta),
+			]);
+
+			if (!user) return;
+			if (!this.utilityService.isActiveUser(user)) return;
+			if (user.requireSigninToViewContents) return;
 
 			reply.header('Cache-Control', 'public, max-age=3600');
 			return await reply.view('base-embed', {
 				title: this.meta.name ?? 'Sharkey',
-				...await this.generateCommonPugData(this.meta),
+				...commonData,
 				embedCtx: htmlSafeJsonStringify({
 					note: _note,
 				}),
