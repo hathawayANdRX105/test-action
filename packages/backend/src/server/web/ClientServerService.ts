@@ -513,14 +513,11 @@ export class ClientServerService {
 		//#region SSR
 		// User
 		fastify.get<{ Params: { user: string; sub?: string; } }>('/@:user/:sub?', async (request, reply) => {
-			let user = await this.cacheService.findOptionalUserByAcct(request.params.user);
-			if (!user || !this.utilityService.isActiveUser(user)) {
-				user = undefined;
-			}
+			const user = await this.cacheService.findOptionalUserByAcct(request.params.user);
 
 			vary(reply.raw, 'Accept');
 
-			if (user != null) {
+			if (user && this.utilityService.isActiveUser(user) && !user.requireSigninToViewContents) {
 				const profile = await this.cacheService.userProfileCache.fetch(user.id);
 				const me = profile.fields
 					? profile.fields
@@ -535,16 +532,19 @@ export class ClientServerService {
 					reply.header('X-Robots-Tag', 'noai');
 				}
 
-				const _user = await this.userEntityService.pack(user, null, {
-					schema: 'UserDetailed',
-					hint: { userProfile: profile },
-				});
+				const [_user, commonData] = await Promise.all([
+					this.userEntityService.pack(user, null, {
+						schema: 'UserDetailed',
+						hint: { userProfile: profile },
+					}),
+					this.generateCommonPugData(this.meta),
+				]);
 
 				return await reply.view('user', {
 					user, profile, me,
 					avatarUrl: _user.avatarUrl,
 					sub: request.params.sub,
-					...await this.generateCommonPugData(this.meta),
+					...commonData,
 					clientCtx: htmlSafeJsonStringify({
 						user: _user,
 					}),
@@ -559,7 +559,7 @@ export class ClientServerService {
 		fastify.get<{ Params: { user: string; } }>('/users/:user', async (request, reply) => {
 			const user = await this.cacheService.findOptionalUserById(request.params.user);
 
-			if (!user || !this.utilityService.isActiveUser(user) || user.requireSigninToViewContents) {
+			if (!user || !this.utilityService.isActiveUser(user)) {
 				reply.code(404);
 				return;
 			}
