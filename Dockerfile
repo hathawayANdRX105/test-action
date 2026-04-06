@@ -7,7 +7,6 @@ FROM node:${NODE_VERSION} as build
 RUN apk add git linux-headers alpine-sdk pixman pango cairo cairo-dev pango-dev pixman-dev
 
 ENV PYTHONUNBUFFERED=1
-ENV COREPACK_DEFAULT_TO_LATEST=0
 RUN apk add --update python3 && ln -sf python3 /usr/bin/python
 RUN apk add py3-pip py3-setuptools
 
@@ -39,7 +38,6 @@ FROM node:${NODE_VERSION}
 
 ARG UID="991"
 ARG GID="991"
-ENV COREPACK_DEFAULT_TO_LATEST=0
 
 RUN apk add ffmpeg tini jemalloc pixman pango cairo libpng librsvg font-noto font-noto-cjk font-noto-thai \
 	&& corepack enable \
