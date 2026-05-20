@@ -217,7 +217,7 @@ describe('ActivityPub', () => {
 
 	beforeEach(async () => {
 		// This will cascade-delete everything else
-		await usersRepository.clear();
+		await usersRepository.deleteAll();
 
 		// Clear all caches app-wide
 		await cacheManagementService.clear();
