@@ -4,7 +4,7 @@
  */
 
 import { URL } from 'node:url';
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import httpSignature from '@peertube/http-signature';
 import * as Bull from 'bullmq';
 import type Logger from '@/logger.js';
@@ -30,7 +30,6 @@ import { DI } from '@/di-symbols.js';
 import { SkApInboxLog } from '@/models/_.js';
 import type { Config } from '@/config.js';
 import { ApLogService, calculateDurationSince } from '@/core/ApLogService.js';
-import { TimeService } from '@/global/TimeService.js';
 import { isRetryableError } from '@/misc/is-retryable-error.js';
 import { renderInlineError } from '@/misc/render-inline-error.js';
 import { QueueService } from '@/core/QueueService.js';
@@ -38,19 +37,9 @@ import { trackPromise } from '@/misc/promise-tracker.js';
 import { QueueLoggerService } from '../QueueLoggerService.js';
 import type { InboxJobData } from '../types.js';
 
-// Moved to CollapsedQueueService
-/*
-type UpdateInstanceJob = {
-	latestRequestReceivedAt: Date,
-	shouldUnsuspend: boolean,
-};
- */
-
 @Injectable()
-export class InboxProcessorService implements OnApplicationShutdown {
+export class InboxProcessorService {
 	private logger: Logger;
-	// Moved to CollapsedQueueService
-	//private updateInstanceQueue: CollapsedQueue<MiNote['id'], UpdateInstanceJob>;
 
 	constructor(
 		@Inject(DI.meta)
@@ -71,7 +60,6 @@ export class InboxProcessorService implements OnApplicationShutdown {
 		private federationChart: FederationChart,
 		private queueLoggerService: QueueLoggerService,
 		private readonly apLogService: ApLogService,
-		private readonly timeService: TimeService,
 		private readonly queueService: QueueService,
 	) {
 		this.logger = this.queueLoggerService.logger.createSubLogger('inbox');
@@ -297,16 +285,5 @@ export class InboxProcessorService implements OnApplicationShutdown {
 			throw e;
 		}
 		return 'ok';
-	}
-
-	// collapseUpdateInstanceJobs moved to CollapsedQueueService
-	// performUpdateInstance moved to CollapsedQueueService
-
-	@bindThis
-	public async dispose(): Promise<void> {}
-
-	@bindThis
-	async onApplicationShutdown(signal?: string) {
-		await this.dispose();
 	}
 }
