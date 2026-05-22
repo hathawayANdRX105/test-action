@@ -913,9 +913,9 @@ customHtml:
           display: inline-flex !important;
           align-items: center !important;
           justify-content: center !important;
-          width: 52px !important;
-          min-width: 52px !important;
-          max-width: 52px !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: none !important;
           height: 52px !important;
           min-height: 52px !important;
           padding: 0 !important;
@@ -929,6 +929,22 @@ customHtml:
           opacity: 1 !important;
           visibility: visible !important;
           -webkit-tap-highlight-color: transparent !important;
+        }
+
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]::before,
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:hover::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:hover::before,
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:active::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:active::before,
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:focus::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:focus::before,
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:focus-visible::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:focus-visible::before {
+          content: none !important;
+          display: none !important;
+          background: transparent !important;
+          background-image: none !important;
         }
 
         [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form] [class*="navbar-postIcon-"],
@@ -1516,13 +1532,6 @@ customHtml:
       [class*=" MkButton-root-"][class*=" MkButton-primary-"]:not(:disabled):active {
         background: var(--MI_THEME-accent, #1d9bf0) !important;
         color: var(--MI_THEME-fgOnAccent, #ffffff) !important;
-      }
-
-      ._button[class*="MkButton-gradate-"]:not(:disabled):hover,
-      ._button[class*="MkButton-gradate-"]:not(:disabled):active,
-      [class*=" MkButton-root-"][class*=" MkButton-gradate-"]:not(:disabled):hover,
-      [class*=" MkButton-root-"][class*=" MkButton-gradate-"]:not(:disabled):active {
-        background: linear-gradient(90deg, var(--MI_THEME-buttonGradateA, rgb(134, 179, 0)), var(--MI_THEME-buttonGradateB, rgb(74, 179, 0))) !important;
       }
     </style>
     <style id="codex-x-common-pages-polish">
@@ -2854,9 +2863,9 @@ customHtml:
           display: inline-flex !important;
           align-items: center !important;
           justify-content: center !important;
-          width: 52px !important;
-          min-width: 52px !important;
-          max-width: 52px !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: none !important;
           height: 52px !important;
           min-height: 52px !important;
           padding: 0 !important;
@@ -2874,6 +2883,22 @@ customHtml:
           box-shadow: none !important;
           text-decoration: none !important;
           -webkit-tap-highlight-color: transparent !important;
+        }
+
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]::before,
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:hover::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:hover::before,
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:active::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:active::before,
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:focus::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:focus::before,
+        [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:focus-visible::before,
+        [class*=" navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form]:focus-visible::before {
+          content: none !important;
+          display: none !important;
+          background: transparent !important;
+          background-image: none !important;
         }
 
         [class^="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form] [class*="navbar-postIcon-"],
