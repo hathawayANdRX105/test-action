@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <PageWithHeader :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 1100px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
 		<div class="_gaps_m">
-			<MkFolder v-if="iAmAdmin" :defaultOpen="true">
+			<MkFolder :defaultOpen="true">
 				<template #icon><i class="ph-chats-circle ph-bold ph-lg"></i></template>
 				<template #label>{{ i18n.ts.chatSettings }}</template>
 				<template v-if="serverForm.modified.value" #footer>
@@ -32,8 +32,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo v-if="!serverFormCanSave" warn>{{ i18n.tsx.inputRangeError({ min: MIN_LIMIT, max: MAX_LIMIT }) }}</MkInfo>
 				</div>
 			</MkFolder>
-
-			<MkInfo v-else warn>{{ i18n.ts._adminChatSettings.moderatorLimited }}</MkInfo>
 
 			<MkFolder :defaultOpen="true">
 				<template #icon><i class="ph-list-magnifying-glass ph-bold ph-lg"></i></template>
@@ -183,7 +181,7 @@ import * as os from '@/os.js';
 import { fetchInstance } from '@/instance.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { useForm } from '@/use/use-form.js';
-import { iAmAdmin, iAmModerator } from '@/i.js';
+import { iAmAdmin } from '@/i.js';
 
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 10000;
@@ -198,18 +196,16 @@ type AdminChatRoomInfo = {
 };
 type ChatRoomJoinMode = Misskey.entities.ChatRoom['joinMode'];
 
-if (!iAmModerator) {
-	throw new Error('moderator required');
+if (!iAmAdmin) {
+	throw new Error('admin required');
 }
 
-const meta = iAmAdmin ? await misskeyApi('admin/meta') as Misskey.entities.AdminMetaResponse : null;
+const meta = await misskeyApi('admin/meta') as Misskey.entities.AdminMetaResponse;
 
 const serverForm = useForm({
 	chatAvailability: meta?.policies.chatAvailability ?? 'available',
 	chatRoomDefaultMemberLimit: meta?.chatRoomDefaultMemberLimit ?? 500,
 }, async (state) => {
-	if (meta == null) return;
-
 	const nextLimit = Number(state.chatRoomDefaultMemberLimit);
 	if (!isValidLimit(nextLimit)) return;
 

@@ -124,11 +124,11 @@ export class ApiInstanceMastodon {
 				},
 				icon: [
 					{
-						src: this.meta.app192IconUrl || '/static-assets/icons/192.png',
+						src: this.meta.app192IconUrl || '/client-assets/about-icon.png',
 						size: '192x192',
 					},
 					{
-						src: this.meta.app512IconUrl || '/static-assets/icons/512.png',
+						src: this.meta.app512IconUrl || '/client-assets/about-icon.png',
 						size: '512x512',
 					},
 				],

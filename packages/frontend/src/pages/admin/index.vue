@@ -46,7 +46,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { lookupUser, lookupUserByEmail, lookupFile } from '@/utility/admin-lookup.js';
 import { definePage, provideMetadataReceiver, provideReactiveMetadata } from '@/page.js';
 import { useRouter } from '@/router.js';
-import { iAmModerator } from '@/i.js';
+import { iAmAdmin } from '@/i.js';
 
 const isEmpty = (x: string | null) => x == null || x === '';
 
@@ -204,7 +204,7 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts.general,
 		to: '/admin/settings',
 		active: currentPage.value?.route.name === 'settings',
-	}, ...(iAmModerator ? [{
+	}, ...(iAmAdmin ? [{
 		icon: 'ph-chats-circle ph-bold ph-lg',
 		text: i18n.ts.chatSettings,
 		to: '/admin/chat-settings',
