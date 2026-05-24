@@ -16,6 +16,7 @@ import fastifyView from '@fastify/view';
 import fastifyProxy from '@fastify/http-proxy';
 import vary from 'vary';
 import htmlSafeJsonStringify from 'htmlescape';
+import locales, { localesVersion } from '../../../../../locales/index.js';
 import type { Config } from '@/config.js';
 import { getNoteSummary } from '@/misc/get-note-summary.js';
 import { DI } from '@/di-symbols.js';
@@ -174,6 +175,8 @@ export class ClientServerService {
 			instanceUrl: this.config.url,
 			randomMOTD: this.config.customMOTD ? this.config.customMOTD[Math.floor(Math.random() * this.config.customMOTD.length)] : undefined,
 			metaJson: htmlSafeJsonStringify(await this.metaEntityService.packDetailed(meta)),
+			langs: Object.keys(locales),
+			langsVersion: localesVersion,
 			now: this.timeService.now,
 		};
 	}

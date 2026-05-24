@@ -9,16 +9,16 @@
 (async () => {
 	window.onerror = (e) => {
 		console.error(e);
-		renderError('SOMETHING_HAPPENED');
+		renderError('SOMETHING_HAPPENED', e);
 	};
 	window.onunhandledrejection = (e) => {
 		console.error(e);
-		renderError('SOMETHING_HAPPENED_IN_PROMISE');
+		renderError('SOMETHING_HAPPENED_IN_PROMISE', e?.reason ?? e);
 	};
 
 	let forceError = localStorage.getItem('forceError');
 	if (forceError != null) {
-		renderError('FORCED_ERROR');
+		renderError('FORCED_ERROR', 'This error is forced by having forceError in local storage.');
 		return;
 	}
 
@@ -32,7 +32,7 @@
 	}
 
 	// Force update when locales change
-	const langsVersion = LANGS_VERSION;
+	const langsVersion = typeof LANGS_VERSION === 'string' ? LANGS_VERSION : VERSION;
 	const localeVersion = localStorage.getItem('localeVersion');
 	if (localeVersion !== langsVersion) {
 		console.info(`Updating locales from version ${localeVersion ?? 'N/A'} to ${langsVersion}`);
@@ -42,7 +42,7 @@
 
 	//#region Detect language & fetch translations
 	if (!localStorage.getItem('locale')) {
-		const supportedLangs = LANGS;
+		const supportedLangs = Array.isArray(LANGS) ? LANGS : ['en-US'];
 		/** @type {string | null | undefined} */
 		let lang = localStorage.getItem('lang');
 		if (lang == null || !supportedLangs.includes(lang)) {
@@ -62,13 +62,14 @@
 			lang = 'en-US';
 		}
 
-		const localRes = await window.fetch(`/assets/locales/${lang}.${langsVersion}.json`);
+		const localeFile = `${lang}.${langsVersion}.json`;
+		const localRes = await window.fetch(`/assets/locales/${localeFile}`);
 		if (localRes.status === 200) {
 			localStorage.setItem('lang', lang);
 			localStorage.setItem('locale', await localRes.text());
 			localStorage.setItem('localeVersion', langsVersion);
 		} else {
-			renderError('LOCALE_FETCH');
+			renderError('LOCALE_FETCH', `Failed to load locale: ${localeFile} (${localRes.status})`);
 			return;
 		}
 	}
@@ -79,7 +80,7 @@
 		await import(`/embed_vite/${CLIENT_ENTRY}`)
 			.catch(async e => {
 				console.error(e);
-				renderError('APP_IMPORT');
+				renderError('APP_IMPORT', e);
 			});
 	}
 
@@ -105,9 +106,10 @@
 
 	/**
 	 * @param {string} code
+	 * @param {any} [details]
 	 * @returns {Promise<void>}
 	 */
-	async function renderError(code) {
+	async function renderError(code, details) {
 		// Cannot set property 'innerHTML' of null を回避
 		if (document.readyState === 'loading') {
 			await new Promise(resolve => window.addEventListener('DOMContentLoaded', resolve));
@@ -117,15 +119,35 @@
 
 		const title = locale?._bootErrors?.title || 'Failed to initialize Sharkey';
 		const reload = locale?.reload || 'Reload';
+		const detailsText = details == null ? '' : (() => {
+			try {
+				if (details instanceof Error) return `${details.name}: ${details.message}\n${details.stack ?? ''}`;
+				if (typeof details === 'string') return details;
+				return `${String(details)} ${JSON.stringify(details)}`;
+			} catch (err) {
+				return String(details);
+			}
+		})();
 
-		document.body.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 9v4" /><path d="M12 16v.01" /></svg>
+		document.body.innerHTML = `<main class="boot-error">
+		<div class="boot-error__mark">!</div>
 		<div class="message">${title}</div>
 		<div class="submessage">Failed to initialize Sharkey</div>
 		<div class="submessage">Error Code: ${code}</div>
 		<button onclick="location.reload(!0)">
 			<div>${reload}</div>
-		</button>`;
+		</button>
+		<details class="errorInfo">
+			<summary>Details</summary>
+			<pre><code></code></pre>
+		</details>
+		</main>`;
+		document.querySelector('.errorInfo code').textContent = detailsText;
 		addStyle(`
+		* {
+			box-sizing: border-box;
+		}
+
 		#sharkey_app,
 		#splash {
 			display: none !important;
@@ -138,21 +160,19 @@
 
 		body {
 			position: relative;
-			color: #dee7e4;
+			background: #000;
+			color: #f5f5f5;
 			font-family: Hiragino Maru Gothic Pro, BIZ UDGothic, Roboto, HelveticaNeue, Arial, sans-serif;
 			line-height: 1.35;
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
+			display: grid;
+			place-items: center;
 			min-height: 100vh;
 			margin: 0;
 			padding: 24px;
-			box-sizing: border-box;
 			overflow: hidden;
 
-			border-radius: var(--radius, 12px);
-			border: 1px solid rgba(231, 255, 251, 0.14);
+			border-radius: var(--radius, 16px);
+			border: 1px solid #2f3336;
 		}
 
 		body::before {
@@ -162,8 +182,8 @@
 			left: 0;
 			width: 100%;
 			height: 100%;
-			background: #192320;
-			border-radius: var(--radius, 12px);
+			background: #000;
+			border-radius: var(--radius, 16px);
 			z-index: -1;
 		}
 
@@ -176,24 +196,36 @@
 			border: none;
 		}
 
-		.icon {
-			max-width: 60px;
+		.boot-error {
+			max-width: 420px;
+			text-align: center;
 			width: 100%;
-			height: auto;
-			margin-bottom: 20px;
-			color: #dec340;
+		}
+
+		.boot-error__mark {
+			align-items: center;
+			border: 1px solid #2f3336;
+			border-radius: 999px;
+			display: inline-flex;
+			font-size: 18px;
+			font-weight: 800;
+			height: 44px;
+			justify-content: center;
+			margin-bottom: 18px;
+			width: 44px;
 		}
 
 		.message {
 			text-align: center;
-			font-size: 20px;
-			font-weight: 700;
-			margin-bottom: 20px;
+			font-size: 22px;
+			font-weight: 800;
+			margin-bottom: 12px;
 		}
 
 		.submessage {
+			color: #71767b;
 			text-align: center;
-			font-size: 90%;
+			font-size: 14px;
 			margin-bottom: 7.5px;
 		}
 
@@ -202,21 +234,47 @@
 		}
 
 		button {
-			padding: 7px 14px;
+			padding: 0 18px;
+			min-height: 40px;
 			min-width: 100px;
 			font-weight: 700;
 			font-family: Hiragino Maru Gothic Pro, BIZ UDGothic, Roboto, HelveticaNeue, Arial, sans-serif;
 			line-height: 1.35;
 			border-radius: 99rem;
-			background-color: #b4e900;
-			color: #192320;
-			border: none;
+			background-color: #eff3f4;
+			color: #0f1419;
+			border: 1px solid #eff3f4;
 			cursor: pointer;
 			-webkit-tap-highlight-color: transparent;
 		}
 
 		button:hover {
-			background-color: #c6ff03;
+			background-color: #d7dbdc;
+			border-color: #d7dbdc;
+		}
+
+		.errorInfo {
+			background: #16181c;
+			border: 1px solid #2f3336;
+			border-radius: 16px;
+			color: #e7e9ea;
+			margin-top: 18px;
+			padding: 12px 14px;
+			text-align: left;
+			width: 100%;
+		}
+
+		.errorInfo summary {
+			cursor: pointer;
+			font-weight: 700;
+		}
+
+		.errorInfo pre {
+			color: #71767b;
+			font-family: Fira, FiraCode, Menlo, Consolas, monospace;
+			margin: 10px 0 0;
+			overflow-wrap: anywhere;
+			white-space: pre-wrap;
 		}`);
 	}
 })();

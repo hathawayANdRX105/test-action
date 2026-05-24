@@ -43,6 +43,8 @@ html(class='embed')
 		script.
 			var VERSION = "#{version}";
 			var CLIENT_ENTRY = "#{entry.file}";
+			var LANGS = !{JSON.stringify(langs)};
+			var LANGS_VERSION = "#{langsVersion}";
 
 		script(type='application/json' id='misskey_meta' data-generated-at=now)
 			!= metaJson

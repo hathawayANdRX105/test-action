@@ -23,7 +23,7 @@
 	}
 
 	// Force update when locales change
-	const langsVersion = LANGS_VERSION;
+	const langsVersion = typeof LANGS_VERSION === 'string' ? LANGS_VERSION : VERSION;
 	const localeVersion = localStorage.getItem('localeVersion');
 	if (localeVersion !== langsVersion) {
 		console.info(`Updating locales from version ${localeVersion ?? 'N/A'} to ${langsVersion}`);
@@ -33,7 +33,7 @@
 
 	//#region Detect language & fetch translations
 	if (!localStorage.getItem('locale')) {
-		const supportedLangs = LANGS;
+		const supportedLangs = Array.isArray(LANGS) ? LANGS : ['en-US'];
 		/** @type {string | null | undefined} */
 		let lang = localStorage.getItem('lang');
 		if (lang == null || !supportedLangs.includes(lang)) {
@@ -53,13 +53,14 @@
 			lang = 'en-US';
 		}
 
-		const localRes = await window.fetch(`/assets/locales/${lang}.${langsVersion}.json`);
+		const localeFile = `${lang}.${langsVersion}.json`;
+		const localRes = await window.fetch(`/assets/locales/${localeFile}`);
 		if (localRes.status === 200) {
 			localStorage.setItem('lang', lang);
 			localStorage.setItem('locale', await localRes.text());
 			localStorage.setItem('localeVersion', langsVersion);
 		} else {
-			renderError('LOCALE_FETCH');
+			renderError('LOCALE_FETCH', `Failed to load locale: ${localeFile} (${localRes.status})`);
 			return;
 		}
 	}
@@ -191,26 +192,35 @@
 			otherOption3: 'Start the repair tool',
 		}, locale?._bootErrors || {});
 		const reload = locale?.reload || 'Reload';
+		const detailsText = details == null ? '' : (() => {
+			try {
+				if (details instanceof Error) return `${details.name}: ${details.message}\n${details.stack ?? ''}`;
+				if (typeof details === 'string') return details;
+				return `${String(details)} ${JSON.stringify(details)}`;
+			} catch (err) {
+				return String(details);
+			}
+		})();
 
 		let errorsElement = document.getElementById('errors');
 
 		if (!errorsElement) {
 			document.body.innerHTML = `
-			<svg class="icon-warning" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-				<path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-				<path d="M12 9v2m0 4v.01"></path>
-				<path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75"></path>
-			</svg>
-			<h1>${messages.title}</h1>
-			<button class="button-big" onclick="location.reload(true);">
-				<span class="button-label-big">${reload}</span>
-			</button>
-			<p><b>${messages.solution}</b></p>
-			<p>${messages.solution1}</p>
-			<p>${messages.solution2}</p>
-			<p>${messages.solution3}</p>
-			<p>${messages.solution4}</p>
-			<details style="color: #86b300;">
+			<main class="boot-error">
+				<div class="boot-error__mark">!</div>
+				<p class="boot-error__eyebrow">Startup error</p>
+				<h1>${messages.title}</h1>
+				<p class="boot-error__lead">${messages.solution}</p>
+				<button class="button-big" onclick="location.reload(true);">
+					<span class="button-label-big">${reload}</span>
+				</button>
+				<div class="boot-error__tips">
+					<p>${messages.solution1}</p>
+					<p>${messages.solution2}</p>
+					<p>${messages.solution3}</p>
+					<p>${messages.solution4}</p>
+				</div>
+				<details class="boot-error__options">
 				<summary>${messages.otherOption}</summary>
 				<a href="/flush">
 					<button class="button-small">
@@ -229,23 +239,24 @@
 						<span class="button-label-small">${messages.otherOption3}</span>
 					</button>
 				</a>
-			</details>
-			<br>
-			<div id="errors"></div>
+				</details>
+				<div id="errors"></div>
+			</main>
 			`;
 			errorsElement = document.getElementById('errors');
 		}
 		const detailsElement = document.createElement('details');
 		detailsElement.id = 'errorInfo';
 		detailsElement.innerHTML = `
-		<br>
 		<summary>
 			<code>ERROR CODE: ${code}</code>
 		</summary>
-		<code>${details.toString()} ${JSON.stringify(details)}</code>`;
+		<pre><code></code></pre>`;
+		detailsElement.querySelector('code:last-child').textContent = detailsText;
 		errorsElement?.appendChild(detailsElement);
 		addStyle(`
 		* {
+			box-sizing: border-box;
 			font-family: BIZ UDGothic, Roboto, HelveticaNeue, Arial, sans-serif;
 		}
 
@@ -256,99 +267,158 @@
 
 		body,
 		html {
-			background-color: #222;
-			color: #dfddcc;
+			min-height: 100%;
+			margin: 0;
+		}
+
+		body {
+			background: #000;
+			color: #f5f5f5;
+			display: grid;
+			min-height: 100vh;
+			place-items: center;
+			padding: 24px;
+		}
+
+		.boot-error {
+			width: min(100%, 560px);
+			text-align: left;
+		}
+
+		.boot-error__mark {
+			align-items: center;
+			border: 1px solid #2f3336;
+			border-radius: 999px;
+			display: inline-flex;
+			font-size: 22px;
+			font-weight: 800;
+			height: 48px;
 			justify-content: center;
-			margin: auto;
-			padding: 10px;
-			text-align: center;
+			margin-bottom: 24px;
+			width: 48px;
+		}
+
+		.boot-error__eyebrow {
+			color: #71767b;
+			font-size: 13px;
+			font-weight: 700;
+			letter-spacing: 0;
+			margin: 0 0 8px;
+			text-transform: uppercase;
+		}
+
+		h1 {
+			color: #f5f5f5;
+			font-size: 31px;
+			line-height: 1.15;
+			margin: 0 0 12px;
+		}
+
+		.boot-error__lead {
+			color: #e7e9ea;
+			font-size: 16px;
+			line-height: 1.45;
+			margin: 0 0 20px;
 		}
 
 		button {
 			border-radius: 999px;
-			padding: 0px 12px 0px 12px;
-			border: none;
 			cursor: pointer;
-			margin-bottom: 12px;
+			font-weight: 700;
+			min-height: 44px;
+			padding: 0 18px;
 		}
 
 		.button-big {
-			background: linear-gradient(90deg, rgb(134, 179, 0), rgb(74, 179, 0));
-			line-height: 50px;
+			background: #eff3f4;
+			border: 1px solid #eff3f4;
+			color: #0f1419;
+			margin-bottom: 24px;
 		}
 
 		.button-big:hover {
-			background: rgb(153, 204, 0);
+			background: #d7dbdc;
+			border-color: #d7dbdc;
 		}
 
 		.button-small {
-			background: #444;
-			line-height: 40px;
+			background: transparent;
+			border: 1px solid #536471;
+			color: #eff3f4;
+			margin: 10px 8px 0 0;
 		}
 
 		.button-small:hover {
-			background: #555;
+			background: rgba(239, 243, 244, 0.1);
 		}
 
-		.button-label-big {
-			color: #222;
-			font-weight: bold;
-			font-size: 1.2em;
-			padding: 12px;
-		}
-
+		.button-label-big,
 		.button-label-small {
-			color: rgb(153, 204, 0);
-			font-size: 16px;
-			padding: 12px;
+			color: inherit;
+			font-size: 15px;
 		}
 
 		a {
-			color: rgb(134, 179, 0);
+			color: inherit;
 			text-decoration: none;
 		}
 
-		p,
-		li {
-			font-size: 16px;
+		.boot-error__tips {
+			border-bottom: 1px solid #2f3336;
+			border-top: 1px solid #2f3336;
+			color: #71767b;
+			line-height: 1.45;
+			margin-bottom: 18px;
+			padding: 16px 0;
 		}
 
-		.icon-warning {
-			color: #dec340;
-			height: 4rem;
-			padding-top: 2rem;
+		.boot-error__tips p {
+			margin: 0 0 8px;
 		}
 
-		h1 {
-			font-size: 1.5em;
-			margin: 1em;
+		.boot-error__tips p:last-child {
+			margin-bottom: 0;
 		}
 
-		code {
-			font-family: Fira, FiraCode, monospace;
+		.boot-error__options {
+			color: #eff3f4;
+			margin-bottom: 16px;
+		}
+
+		code,
+		pre {
+			font-family: Fira, FiraCode, Menlo, Consolas, monospace;
 		}
 
 		#errorInfo {
-			background: #333;
-			margin-bottom: 2rem;
-			padding: 0.5rem 1rem;
-			width: 40rem;
-			border-radius: 10px;
-			justify-content: center;
-			margin: auto;
+			background: #16181c;
+			border: 1px solid #2f3336;
+			border-radius: 16px;
+			color: #e7e9ea;
+			margin-top: 16px;
+			padding: 14px 16px;
+			width: 100%;
 		}
 
+		#errorInfo pre {
+			color: #71767b;
+			margin: 12px 0 0;
+			overflow-wrap: anywhere;
+			white-space: pre-wrap;
+		}
+
+		.boot-error__options summary,
 		#errorInfo summary {
 			cursor: pointer;
 		}
 
-		#errorInfo summary > * {
-			display: inline;
-		}
-
 		@media screen and (max-width: 500px) {
-			#errorInfo {
-				width: 50%;
+			body {
+				padding: 20px;
+			}
+
+			h1 {
+				font-size: 26px;
 			}
 		}`);
 	}
