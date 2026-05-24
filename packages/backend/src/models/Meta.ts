@@ -623,6 +623,11 @@ export class MiMeta {
 	})
 	public enableAchievements: boolean;
 
+	@Column('integer', {
+		default: 500,
+	})
+	public chatRoomDefaultMemberLimit: number;
+
 	@Column('text', {
 		nullable: true,
 	})

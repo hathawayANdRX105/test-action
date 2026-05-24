@@ -32,6 +32,8 @@ export * as 'admin/avatar-decorations/create' from './endpoints/admin/avatar-dec
 export * as 'admin/avatar-decorations/delete' from './endpoints/admin/avatar-decorations/delete.js';
 export * as 'admin/avatar-decorations/list' from './endpoints/admin/avatar-decorations/list.js';
 export * as 'admin/avatar-decorations/update' from './endpoints/admin/avatar-decorations/update.js';
+export * as 'admin/chat/rooms/show' from './endpoints/admin/chat/rooms/show.js';
+export * as 'admin/chat/rooms/update' from './endpoints/admin/chat/rooms/update.js';
 export * as 'admin/captcha/current' from './endpoints/admin/captcha/current.js';
 export * as 'admin/captcha/save' from './endpoints/admin/captcha/save.js';
 export * as 'admin/cw-instance' from './endpoints/admin/cw-instance.js';

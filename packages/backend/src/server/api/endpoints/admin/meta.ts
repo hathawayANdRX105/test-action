@@ -394,6 +394,12 @@ export const meta = {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
+			chatRoomDefaultMemberLimit: {
+				type: 'integer',
+				optional: false, nullable: false,
+				minimum: 1,
+				maximum: 10000,
+			},
 			robotsTxt: {
 				type: 'string',
 				optional: false, nullable: true,
@@ -777,6 +783,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				enableStatsForFederatedInstances: instance.enableStatsForFederatedInstances,
 				enableServerMachineStats: instance.enableServerMachineStats,
 				enableAchievements: instance.enableAchievements,
+				chatRoomDefaultMemberLimit: instance.chatRoomDefaultMemberLimit,
 				robotsTxt: instance.robotsTxt,
 				enableIdenticonGeneration: instance.enableIdenticonGeneration,
 				bannedEmailDomains: instance.bannedEmailDomains,

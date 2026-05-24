@@ -37,6 +37,11 @@ export const meta = {
 			code: 'NO_SUCH_ROOM',
 			id: '916f9507-49ba-4e90-b57f-1fd4deaa47a5',
 		},
+		roomFull: {
+			message: 'Room is full. Member limit has been reached.',
+			code: 'ROOM_FULL',
+			id: '917bb5fc-0c8a-489a-b9c7-899c3287f36c',
+		},
 	},
 } as const;
 
@@ -62,7 +67,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (room == null) {
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
-			const invitation = await this.chatService.createRoomInvitation(me.id, room.id, ps.userId);
+			let invitation;
+			try {
+				invitation = await this.chatService.createRoomInvitation(me.id, room.id, ps.userId);
+			} catch (err) {
+				if (err instanceof Error && err.message === 'room is full') {
+					throw new ApiError(meta.errors.roomFull);
+				}
+				throw err;
+			}
 			return await this.chatEntityService.packRoomInvitation(invitation, me);
 		});
 	}

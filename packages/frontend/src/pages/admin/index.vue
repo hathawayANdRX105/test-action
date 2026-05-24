@@ -204,6 +204,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		to: '/admin/settings',
 		active: currentPage.value?.route.name === 'settings',
 	}, {
+		icon: 'ph-chats-circle ph-bold ph-lg',
+		text: i18n.ts.chatSettings,
+		to: '/admin/chat-settings',
+		active: currentPage.value?.route.name === 'chat-settings',
+	}, {
 		icon: 'ti ti-paint',
 		text: i18n.ts.branding,
 		to: '/admin/branding',

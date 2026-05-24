@@ -8,6 +8,7 @@ import type { MiMeta } from '@/models/Meta.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
+import { MAX_CHAT_ROOM_MEMBER_LIMIT, MIN_CHAT_ROOM_MEMBER_LIMIT } from '@/core/ChatService.js';
 import { instanceUnsignedFetchOptions } from '@/const.js';
 import { DI } from '@/di-symbols.js';
 
@@ -154,6 +155,7 @@ export const paramDef = {
 		enableStatsForFederatedInstances: { type: 'boolean' },
 		enableServerMachineStats: { type: 'boolean' },
 		enableAchievements: { type: 'boolean' },
+		chatRoomDefaultMemberLimit: { type: 'integer', minimum: MIN_CHAT_ROOM_MEMBER_LIMIT, maximum: MAX_CHAT_ROOM_MEMBER_LIMIT },
 		robotsTxt: { type: 'string', nullable: true },
 		enableIdenticonGeneration: { type: 'boolean' },
 		serverRules: { type: 'array', items: { type: 'string' } },
@@ -685,6 +687,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.enableAchievements = ps.enableAchievements;
 			}
 
+			if (ps.chatRoomDefaultMemberLimit !== undefined) {
+				set.chatRoomDefaultMemberLimit = ps.chatRoomDefaultMemberLimit;
+			}
+
 			if (ps.robotsTxt !== undefined) {
 				set.robotsTxt = ps.robotsTxt;
 			}
@@ -827,4 +833,3 @@ function sanitize(meta: Partial<MiMeta & OnApplicationShutdown & OnApplicationBo
 	};
 	return meta;
 }
-
