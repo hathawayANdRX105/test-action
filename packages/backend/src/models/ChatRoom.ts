@@ -7,6 +7,10 @@ import { PrimaryColumn, Entity, Index, JoinColumn, Column, ManyToOne } from 'typ
 import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
+export const chatRoomJoinModes = ['inviteOnly', 'open'] as const;
+
+export type ChatRoomJoinMode = typeof chatRoomJoinModes[number];
+
 @Entity('chat_room')
 export class MiChatRoom {
 	@PrimaryColumn(id())
@@ -38,4 +42,14 @@ export class MiChatRoom {
 		default: false,
 	})
 	public isArchived: boolean;
+
+	@Column('varchar', {
+		length: 32, default: 'inviteOnly',
+	})
+	public joinMode: ChatRoomJoinMode;
+
+	@Column('integer', {
+		nullable: true,
+	})
+	public memberLimitOverride: number | null;
 }

@@ -91,14 +91,37 @@ async function startUser() {
 }
 
 async function createRoom() {
-	const { canceled, result } = await os.inputText({
-		title: i18n.ts.name,
-		minLength: 1,
+	const { canceled, result } = await os.form(i18n.ts._chat.createRoom, {
+		name: {
+			type: 'string',
+			label: i18n.ts.name,
+		},
+		description: {
+			type: 'string',
+			label: i18n.ts.description,
+			required: false,
+			multiline: true,
+		},
+		joinMode: {
+			type: 'radio',
+			label: i18n.ts._chat.roomJoinMode,
+			default: 'inviteOnly',
+			options: [{
+				label: i18n.ts._chat.inviteOnlyRoom,
+				value: 'inviteOnly',
+			}, {
+				label: i18n.ts._chat.openRoom,
+				value: 'open',
+			}],
+		},
 	});
 	if (canceled) return;
+	if (result.name.trim() === '') return;
 
 	const room = await misskeyApi('chat/rooms/create', {
-		name: result,
+		name: result.name.trim(),
+		description: result.description?.trim() ?? '',
+		joinMode: result.joinMode as 'inviteOnly' | 'open',
 	});
 
 	router.push(`/chat/room/${room.id}`);

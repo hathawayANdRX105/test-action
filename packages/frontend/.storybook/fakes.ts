@@ -74,6 +74,10 @@ export function chatRoom(id = 'somechatroomid', name = 'Some Chat Room'): entiti
 		owner,
 		name,
 		description: 'A chat room for testing',
+		joinMode: 'inviteOnly',
+		memberLimit: 500,
+		memberCount: 1,
+		isJoined: true,
 		isMuted: false,
 	};
 }

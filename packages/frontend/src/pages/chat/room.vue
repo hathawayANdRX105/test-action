@@ -11,6 +11,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkLoading/>
 			</div>
 
+			<div v-else-if="joinRequiredRoom" class="_gaps" :class="$style.joinRequired">
+				<i class="ti ti-users-group" :class="$style.joinRequiredIcon"></i>
+				<div :class="$style.joinRequiredTitle">{{ joinRequiredRoom.name }}</div>
+				<div>{{ joinRequiredRoom.description === '' ? i18n.ts.noDescription : joinRequiredRoom.description }}</div>
+				<div :class="$style.joinRequiredMeta">
+					<span>{{ i18n.ts.owner }}: <MkAcct :user="joinRequiredRoom.owner"/></span>
+					<span>{{ i18n.ts._chat.roomJoinMode }}: {{ i18n.ts._chat.openRoom }}</span>
+				</div>
+				<div>{{ i18n.ts._chat.notJoinedRoom }}</div>
+				<div :class="$style.errorActions">
+					<MkButton primary rounded :wait="joiningRoom" @click="joinRoom">{{ i18n.ts._chat.joinRoom }}</MkButton>
+					<MkButton rounded @click="router.push('/chat')">{{ i18n.ts.goBack }}</MkButton>
+				</div>
+			</div>
+
+			<div v-else-if="initializeError" class="_gaps" :class="$style.error">
+				<i class="ti ti-alert-triangle" :class="$style.errorIcon"></i>
+				<div>{{ initializeError }}</div>
+				<div :class="$style.errorActions">
+					<MkButton rounded @click="initialize">{{ i18n.ts.retry }}</MkButton>
+					<MkButton rounded @click="router.push('/chat')">{{ i18n.ts.goBack }}</MkButton>
+				</div>
+			</div>
+
 			<div v-else-if="messages.length === 0">
 				<div class="_gaps" style="text-align: center;">
 					<div>{{ i18n.ts._chat.noMessagesYet }}</div>
@@ -67,7 +91,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-else-if="tab === 'info'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XInfo v-if="room != null" :room="room"/>
+		<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated"/>
 	</div>
 
 	<template #footer>
@@ -80,7 +104,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</button>
 					</div>
 				</Transition>
-				<XForm v-if="!initializing" :user="user" :room="room" :class="$style.form"/>
+				<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" :user="user" :room="room" :class="$style.form"/>
 			</div>
 		</div>
 	</template>
@@ -110,6 +134,7 @@ import MkButton from '@/components/MkButton.vue';
 import { useRouter } from '@/router.js';
 import { useMutationObserver } from '@/use/use-mutation-observer.js';
 import MkInfo from '@/components/MkInfo.vue';
+import MkAcct from '@/components/global/MkAcct.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
 
@@ -122,13 +147,16 @@ const props = defineProps<{
 }>();
 
 export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions'> & {
-	fromUser: Misskey.entities.UserLite;
+	fromUser: Misskey.entities.UserLite | null;
 	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
-		user: Misskey.entities.UserLite;
+		user: Misskey.entities.UserLite | null;
 	})[];
 };
 
 const initializing = ref(true);
+const initializeError = ref<string | null>(null);
+const joinRequiredRoom = ref<Misskey.entities.ChatRoom | null>(null);
+const joiningRoom = ref(false);
 const moreFetching = ref(false);
 const messages = ref<NormalizedChatMessage[]>([]);
 const canFetchMore = ref(false);
@@ -161,10 +189,10 @@ useMutationObserver(timelineEl, {
 function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage): NormalizedChatMessage {
 	return {
 		...message,
-		fromUser: message.fromUser ?? (message.fromUserId === $i.id ? $i : user.value!),
+		fromUser: message.fromUser ?? (message.fromUserId === $i.id ? $i : user.value),
 		reactions: message.reactions.map(record => ({
 			...record,
-			user: record.user ?? (message.fromUserId === $i.id ? user.value! : $i),
+			user: record.user ?? null,
 		})),
 	};
 }
@@ -173,52 +201,95 @@ async function initialize() {
 	const LIMIT = 20;
 
 	initializing.value = true;
+	initializeError.value = null;
+	joinRequiredRoom.value = null;
+	canFetchMore.value = false;
+	connection.value?.dispose();
+	connection.value = null;
 
-	if (props.userId) {
-		const [u, m] = await Promise.all([
-			misskeyApi('users/show', { userId: props.userId }),
-			misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT }),
-		]);
+	try {
+		if (props.userId) {
+			const [u, m] = await Promise.all([
+				misskeyApi('users/show', { userId: props.userId }),
+				misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT }),
+			]);
 
-		user.value = u;
-		messages.value = m.map(x => normalizeMessage(x));
+			user.value = u;
+			room.value = null;
+			messages.value = m.map(x => normalizeMessage(x));
 
-		if (messages.value.length === LIMIT) {
-			canFetchMore.value = true;
+			if (messages.value.length === LIMIT) {
+				canFetchMore.value = true;
+			}
+
+			connection.value = useStream().useChannel('chatUser', {
+				otherId: user.value.id,
+			});
+			connection.value.on('message', onMessage);
+			connection.value.on('deleted', onDeleted);
+			connection.value.on('react', onReact);
+			connection.value.on('unreact', onUnreact);
+		} else {
+			const r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
+
+			user.value = null;
+			room.value = r as Misskey.entities.ChatRoomsShowResponse;
+
+			if (room.value.isJoined === false) {
+				messages.value = [];
+				if (room.value.joinMode === 'open') {
+					joinRequiredRoom.value = room.value;
+				} else {
+					initializeError.value = i18n.ts._chat.needInvitationToJoinRoom;
+				}
+				return;
+			}
+
+			const m = await misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT });
+
+			messages.value = (m as Misskey.entities.ChatMessagesRoomTimelineResponse).map(x => normalizeMessage(x));
+
+			if (messages.value.length === LIMIT) {
+				canFetchMore.value = true;
+			}
+
+			connection.value = useStream().useChannel('chatRoom', {
+				roomId: room.value.id,
+			});
+			connection.value.on('message', onMessage);
+			connection.value.on('deleted', onDeleted);
+			connection.value.on('react', onReact);
+			connection.value.on('unreact', onUnreact);
 		}
-
-		connection.value = useStream().useChannel('chatUser', {
-			otherId: user.value.id,
-		});
-		connection.value.on('message', onMessage);
-		connection.value.on('deleted', onDeleted);
-		connection.value.on('react', onReact);
-		connection.value.on('unreact', onUnreact);
-	} else {
-		const [r, m] = await Promise.all([
-			misskeyApi('chat/rooms/show', { roomId: props.roomId }),
-			misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT }),
-		]);
-
-		room.value = r as Misskey.entities.ChatRoomsShowResponse;
-		messages.value = (m as Misskey.entities.ChatMessagesRoomTimelineResponse).map(x => normalizeMessage(x));
-
-		if (messages.value.length === LIMIT) {
-			canFetchMore.value = true;
-		}
-
-		connection.value = useStream().useChannel('chatRoom', {
-			roomId: room.value.id,
-		});
-		connection.value.on('message', onMessage);
-		connection.value.on('deleted', onDeleted);
-		connection.value.on('react', onReact);
-		connection.value.on('unreact', onUnreact);
+	} catch (err) {
+		console.error('Failed to initialize chat room:', err);
+		messages.value = [];
+		initializeError.value = props.roomId ? i18n.ts._chat.noPermissionToViewRoom : i18n.ts.pageLoadError;
+	} finally {
+		initializing.value = false;
 	}
 
-	window.document.addEventListener('visibilitychange', onVisibilitychange);
+}
 
-	initializing.value = false;
+async function joinRoom() {
+	if (room.value == null) return;
+
+	joiningRoom.value = true;
+	try {
+		await os.apiWithDialog('chat/rooms/join', {
+			roomId: room.value.id,
+		}, undefined, {
+			'6bf0e3a6-0434-4be0-85d5-5d3c9b8f4f6d': {
+				text: i18n.ts._chat.needInvitationToJoinRoom,
+			},
+			'b4855d16-3863-4600-8301-2a53f2f76541': {
+				text: i18n.tsx._chat.roomIsFull({ limit: room.value?.memberLimit ?? '?' }),
+			},
+		});
+		await initialize();
+	} finally {
+		joiningRoom.value = false;
+	}
 }
 
 let isActivated = true;
@@ -296,7 +367,7 @@ function onReact(ctx: Parameters<Misskey.Channels['chatUser']['events']['react']
 function onUnreact(ctx: Parameters<Misskey.Channels['chatUser']['events']['unreact']>[0] | Parameters<Misskey.Channels['chatRoom']['events']['unreact']>[0]) {
 	const message = messages.value.find(m => m.id === ctx.messageId);
 	if (message) {
-		const index = message.reactions.findIndex(r => r.reaction === ctx.reaction && r.user.id === ctx.user!.id);
+		const index = message.reactions.findIndex(r => r.user != null && r.reaction === ctx.reaction && r.user.id === ctx.user!.id);
 		if (index !== -1) {
 			message.reactions.splice(index, 1);
 		}
@@ -317,6 +388,7 @@ function onVisibilitychange() {
 }
 
 onMounted(() => {
+	window.document.addEventListener('visibilitychange', onVisibilitychange);
 	initialize();
 });
 
@@ -350,6 +422,10 @@ async function leaveRoom() {
 	router.push('/chat');
 }
 
+function onRoomUpdated(updated: Misskey.entities.ChatRoom) {
+	room.value = updated;
+}
+
 function showMenu(ev: MouseEvent) {
 	const menuItems: MenuItem[] = [];
 
@@ -362,7 +438,7 @@ function showMenu(ev: MouseEvent) {
 					inviteUser();
 				},
 			});
-		} else {
+		} else if (room.value.isJoined) {
 			menuItems.push({
 				text: i18n.ts._chat.leave,
 				icon: 'ti ti-x',
@@ -373,12 +449,14 @@ function showMenu(ev: MouseEvent) {
 		}
 	}
 
+	if (menuItems.length === 0) return;
+
 	os.popupMenu(menuItems, ev.currentTarget ?? ev.target);
 }
 
 const tab = ref('chat');
 
-const headerTabs = computed(() => room.value ? [{
+const headerTabs = computed(() => room.value ? room.value.isJoined ? [{
 	key: 'chat',
 	title: i18n.ts.chat,
 	icon: 'ti ti-messages',
@@ -399,16 +477,28 @@ const headerTabs = computed(() => room.value ? [{
 	title: i18n.ts.chat,
 	icon: 'ti ti-messages',
 }, {
+	key: 'info',
+	title: i18n.ts.info,
+	icon: 'ti ti-info-circle',
+}] : [{
+	key: 'chat',
+	title: i18n.ts.chat,
+	icon: 'ti ti-messages',
+}, {
 	key: 'search',
 	title: i18n.ts.search,
 	icon: 'ti ti-search',
 }]);
 
-const headerActions = computed<PageHeaderItem[]>(() => [{
-	icon: 'ti ti-dots',
-	text: '',
-	handler: showMenu,
-}]);
+const headerActions = computed<PageHeaderItem[]>(() => {
+	if (room.value == null || (!room.value.isJoined && room.value.ownerId !== $i.id)) return [];
+
+	return [{
+		icon: 'ti ti-dots',
+		text: '',
+		handler: showMenu,
+	}];
+});
 
 definePage(computed(() => {
 	if (!initializing.value) {
@@ -456,6 +546,51 @@ definePage(computed(() => {
 
 .more {
 	margin: 0 auto;
+}
+
+.error {
+	align-items: center;
+	justify-content: center;
+	padding: 32px 16px;
+	text-align: center;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.errorIcon {
+	font-size: 28px;
+	color: var(--MI_THEME-warn);
+}
+
+.errorActions {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
+	flex-wrap: wrap;
+}
+
+.joinRequired {
+	align-items: center;
+	justify-content: center;
+	padding: 32px 16px;
+	text-align: center;
+}
+
+.joinRequiredIcon {
+	font-size: 32px;
+	color: var(--MI_THEME-accent);
+}
+
+.joinRequiredTitle {
+	font-weight: 700;
+	font-size: 1.2em;
+}
+
+.joinRequiredMeta {
+	display: flex;
+	gap: 8px 16px;
+	justify-content: center;
+	flex-wrap: wrap;
+	color: var(--MI_THEME-fgTransparentWeak);
 }
 
 .footer {

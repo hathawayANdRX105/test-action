@@ -22,6 +22,7 @@ import { QueryService } from '@/core/QueryService.js';
 import { RoleService } from '@/core/RoleService.js';
 import { UserFollowingService } from '@/core/UserFollowingService.js';
 import { MiChatRoomInvitation } from '@/models/ChatRoomInvitation.js';
+import { chatRoomJoinModes, type ChatRoomJoinMode } from '@/models/ChatRoom.js';
 import { Packed } from '@/misc/json-schema.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
@@ -31,8 +32,10 @@ import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { TimeService } from '@/global/TimeService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { isLocalUser } from '@/models/User.js';
+import { MiMeta } from '@/models/Meta.js';
 
-const MAX_ROOM_MEMBERS = 30;
+export const MIN_CHAT_ROOM_MEMBER_LIMIT = 1;
+export const MAX_CHAT_ROOM_MEMBER_LIMIT = 10000;
 const MAX_REACTIONS_PER_MESSAGE = 100;
 const isCustomEmojiRegexp = /^:([\w+-]+)(?:@\.)?:$/;
 
@@ -58,6 +61,9 @@ export class ChatService {
 
 		@Inject(DI.redis)
 		private redisClient: Redis.Redis,
+
+		@Inject(DI.meta)
+		private meta: MiMeta,
 
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
@@ -554,17 +560,36 @@ export class ChatService {
 	public async createRoom(owner: MiUser, params: Partial<{
 		name: string;
 		description: string;
+		joinMode: ChatRoomJoinMode;
 	}>) {
 		const room = {
 			id: this.idService.gen(),
 			name: params.name,
 			description: params.description,
+			joinMode: params.joinMode ?? 'inviteOnly',
 			ownerId: owner.id,
 		} satisfies Partial<MiChatRoom>;
 
 		const created = await this.chatRoomsRepository.insertOne(room);
 
 		return created;
+	}
+
+	@bindThis
+	public assertValidRoomMemberLimit(value: number) {
+		if (!Number.isInteger(value) || value < MIN_CHAT_ROOM_MEMBER_LIMIT || value > MAX_CHAT_ROOM_MEMBER_LIMIT) {
+			throw new Error('invalid member limit');
+		}
+	}
+
+	@bindThis
+	public getEffectiveRoomMemberLimit(room: MiChatRoom) {
+		return room.memberLimitOverride ?? this.meta.chatRoomDefaultMemberLimit;
+	}
+
+	@bindThis
+	public async getRoomMembersCount(roomId: MiChatRoom['id']) {
+		return await this.chatRoomMembershipsRepository.countBy({ roomId }) + 1;
 	}
 
 	@bindThis
@@ -640,8 +665,8 @@ export class ChatService {
 			throw new Error('already invited');
 		}
 
-		const membershipsCount = await this.chatRoomMembershipsRepository.countBy({ roomId });
-		if (membershipsCount >= MAX_ROOM_MEMBERS) {
+		const membershipsCount = await this.getRoomMembersCount(roomId);
+		if (membershipsCount >= this.getEffectiveRoomMemberLimit(room)) {
 			throw new Error('room is full');
 		}
 
@@ -695,10 +720,19 @@ export class ChatService {
 
 	@bindThis
 	public async joinToRoom(userId: MiUser['id'], roomId: MiChatRoom['id']) {
-		const invitation = await this.chatRoomInvitationsRepository.findOneByOrFail({ roomId, userId });
+		const room = await this.chatRoomsRepository.findOneByOrFail({ id: roomId });
 
-		const membershipsCount = await this.chatRoomMembershipsRepository.countBy({ roomId });
-		if (membershipsCount >= MAX_ROOM_MEMBERS) {
+		if (await this.isRoomMember(room, userId)) {
+			throw new Error('already member');
+		}
+
+		const invitation = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId });
+		if (invitation == null && room.joinMode !== 'open') {
+			throw new Error('invitation required');
+		}
+
+		const membershipsCount = await this.getRoomMembersCount(roomId);
+		if (membershipsCount >= this.getEffectiveRoomMemberLimit(room)) {
 			throw new Error('room is full');
 		}
 
@@ -710,7 +744,9 @@ export class ChatService {
 
 		// TODO: transaction
 		await this.chatRoomMembershipsRepository.insertOne(membership);
-		await this.chatRoomInvitationsRepository.delete(invitation.id);
+		if (invitation != null) {
+			await this.chatRoomInvitationsRepository.delete(invitation.id);
+		}
 	}
 
 	@bindThis
@@ -735,9 +771,30 @@ export class ChatService {
 	public async updateRoom(room: MiChatRoom, params: {
 		name?: string;
 		description?: string;
+		joinMode?: ChatRoomJoinMode;
 	}): Promise<MiChatRoom> {
+		if (params.joinMode != null && !chatRoomJoinModes.includes(params.joinMode)) {
+			throw new Error('invalid join mode');
+		}
+
 		return this.chatRoomsRepository.createQueryBuilder().update()
 			.set(params)
+			.where('id = :id', { id: room.id })
+			.returning('*')
+			.execute()
+			.then((response) => {
+				return response.raw[0];
+			});
+	}
+
+	@bindThis
+	public async updateRoomMemberLimitOverride(room: MiChatRoom, memberLimitOverride: number | null): Promise<MiChatRoom> {
+		if (memberLimitOverride != null) {
+			this.assertValidRoomMemberLimit(memberLimitOverride);
+		}
+
+		return this.chatRoomsRepository.createQueryBuilder().update()
+			.set({ memberLimitOverride })
 			.where('id = :id', { id: room.id })
 			.returning('*')
 			.execute()

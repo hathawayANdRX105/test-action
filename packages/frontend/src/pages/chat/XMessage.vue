@@ -5,7 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="[$style.root, { [$style.isMe]: isMe }]">
-	<MkAvatar :class="$style.avatar" :user="message.fromUser!" :link="!isMe" :preview="false"/>
+	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="!isMe" :preview="false"/>
+	<div v-else :class="[$style.avatar, $style.avatarFallback]"><i class="ti ti-user-question"></i></div>
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
 		<div :class="$style.header"><MkUserName v-if="!isMe && prefer.s['chat.showSenderName'] && message.fromUser != null" :user="message.fromUser"/></div>
 		<MkFukidashi :class="$style.fukidashi" :tail="isMe ? 'right' : 'left'" :accented="isMe">
@@ -23,7 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkMediaList v-if="message.file" :mediaList="[message.file]" :class="$style.file"/>
 		</MkFukidashi>
 		<div class="_gaps_s" style="margin: 8px 0;" @click.stop>
-			<SkUrlPreviewGroup :sourceNodes="parsed" :showAsQuote="!message.fromUser.rejectQuotes"/>
+			<SkUrlPreviewGroup :sourceNodes="parsed" :showAsQuote="!message.fromUser?.rejectQuotes"/>
 		</div>
 		<div :class="$style.footer">
 			<button class="_textButton" style="color: currentColor;" @click="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
@@ -39,7 +40,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:moveClass="$style.transition_reaction_move"
 			tag="div" :class="$style.reactions"
 		>
-			<div v-for="record in message.reactions" :key="record.reaction + record.user.id" :class="[$style.reaction, record.user.id === $i.id ? $style.reactionMy : null]" @click="onReactionClick(record)">
+			<div v-for="record in visibleReactions" :key="record.reaction + record.user.id" :class="[$style.reaction, record.user.id === $i.id ? $style.reactionMy : null]" @click="onReactionClick(record)">
 				<MkAvatar :user="record.user" :link="false" :class="$style.reactionAvatar"/>
 				<MkReactionIcon
 					:withTooltip="true"
@@ -84,8 +85,21 @@ const props = defineProps<{
 	isSearchResult?: boolean;
 }>();
 
+type MessageReaction = NormalizedChatMessage['reactions'][number] | Misskey.entities.ChatMessage['reactions'][number];
+type VisibleReaction = Omit<MessageReaction, 'user'> & {
+	user: Misskey.entities.UserLite;
+};
+
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
+const visibleReactions = computed<VisibleReaction[]>(() => {
+	const records: VisibleReaction[] = [];
+	for (const record of props.message.reactions) {
+		if (record.user == null) continue;
+		records.push({ ...record, user: record.user });
+	}
+	return records;
+});
 
 provide(DI.mfmEmojiReactCallback, (reaction) => {
 	if ($i.policies.chatAvailability !== 'available') return;
@@ -112,7 +126,7 @@ function react(ev: MouseEvent) {
 	});
 }
 
-function onReactionClick(record: Misskey.entities.ChatMessage['reactions'][0]) {
+function onReactionClick(record: VisibleReaction) {
 	if ($i.policies.chatAvailability !== 'available') return;
 
 	if (record.user.id === $i.id) {
@@ -121,7 +135,7 @@ function onReactionClick(record: Misskey.entities.ChatMessage['reactions'][0]) {
 			reaction: record.reaction,
 		});
 	} else {
-		if (!props.message.reactions.some(r => r.user.id === $i.id && r.reaction === record.reaction)) {
+		if (!props.message.reactions.some(r => r.user != null && r.user.id === $i.id && r.reaction === record.reaction)) {
 			sound.playMisskeySfx('reaction');
 			misskeyApi('chat/messages/react', {
 				messageId: props.message.id,
@@ -239,6 +253,14 @@ function showMenu(ev: MouseEvent, contextmenu = false) {
 	display: block;
 	width: 50px;
 	height: 50px;
+}
+
+.avatarFallback {
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: var(--MI_THEME-panel);
+	color: var(--MI_THEME-fgTransparentWeak);
 }
 
 @container (max-width: 450px) {

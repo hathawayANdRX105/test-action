@@ -9,6 +9,7 @@ import { DI } from '@/di-symbols.js';
 import { ChatService } from '@/core/ChatService.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
+import { chatRoomJoinModes } from '@/models/ChatRoom.js';
 
 export const meta = {
 	tags: ['chat'],
@@ -38,6 +39,7 @@ export const paramDef = {
 		roomId: { type: 'string', format: 'misskey:id' },
 		name: { type: 'string', maxLength: 256 },
 		description: { type: 'string', maxLength: 1024 },
+		joinMode: { type: 'string', enum: chatRoomJoinModes },
 	},
 	required: ['roomId'],
 } as const;
@@ -59,6 +61,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const updated = await this.chatService.updateRoom(room, {
 				name: ps.name,
 				description: ps.description,
+				joinMode: ps.joinMode,
 			});
 
 			return await this.chatEntityService.packRoom(updated, me);

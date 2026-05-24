@@ -10,6 +10,7 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatService } from '@/core/ChatService.js';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
+import { chatRoomJoinModes } from '@/models/ChatRoom.js';
 
 export const meta = {
 	tags: ['chat'],
@@ -40,6 +41,7 @@ export const paramDef = {
 	properties: {
 		name: { type: 'string', maxLength: 256 },
 		description: { type: 'string', maxLength: 1024 },
+		joinMode: { type: 'string', enum: chatRoomJoinModes, default: 'inviteOnly' },
 	},
 	required: ['name'],
 } as const;
@@ -56,8 +58,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const room = await this.chatService.createRoom(me, {
 				name: ps.name,
 				description: ps.description ?? '',
+				joinMode: ps.joinMode ?? 'inviteOnly',
 			});
-			return await this.chatEntityService.packRoom(room);
+			return await this.chatEntityService.packRoom(room, me);
 		});
 	}
 }

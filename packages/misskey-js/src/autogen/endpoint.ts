@@ -36,6 +36,10 @@ import type {
 	AdminAvatarDecorationsListRequest,
 	AdminAvatarDecorationsListResponse,
 	AdminAvatarDecorationsUpdateRequest,
+	AdminChatRoomsShowRequest,
+	AdminChatRoomsShowResponse,
+	AdminChatRoomsUpdateRequest,
+	AdminChatRoomsUpdateResponse,
 	AdminCaptchaCurrentResponse,
 	AdminCaptchaSaveRequest,
 	AdminCwInstanceRequest,
@@ -702,6 +706,8 @@ export type Endpoints = {
 	'admin/avatar-decorations/delete': { req: AdminAvatarDecorationsDeleteRequest; res: EmptyResponse };
 	'admin/avatar-decorations/list': { req: AdminAvatarDecorationsListRequest; res: AdminAvatarDecorationsListResponse };
 	'admin/avatar-decorations/update': { req: AdminAvatarDecorationsUpdateRequest; res: EmptyResponse };
+	'admin/chat/rooms/show': { req: AdminChatRoomsShowRequest; res: AdminChatRoomsShowResponse };
+	'admin/chat/rooms/update': { req: AdminChatRoomsUpdateRequest; res: AdminChatRoomsUpdateResponse };
 	'admin/captcha/current': { req: EmptyRequest; res: AdminCaptchaCurrentResponse };
 	'admin/captcha/save': { req: AdminCaptchaSaveRequest; res: EmptyResponse };
 	'admin/cw-instance': { req: AdminCwInstanceRequest; res: EmptyResponse };

@@ -5449,6 +5449,38 @@ export interface Locale extends ILocale {
          */
         "createRoom": string;
         /**
+         * ルームの種類
+         */
+        "roomJoinMode": string;
+        /**
+         * 招待制
+         */
+        "inviteOnlyRoom": string;
+        /**
+         * 公開参加
+         */
+        "openRoom": string;
+        /**
+         * ルームに参加
+         */
+        "joinRoom": string;
+        /**
+         * あなたはまだこのルームのメンバーではありません。参加するとメッセージの閲覧とチャットができます。
+         */
+        "notJoinedRoom": string;
+        /**
+         * このルームを表示する権限がありません。
+         */
+        "noPermissionToViewRoom": string;
+        /**
+         * このルームを表示または参加するには、ルーム所有者からの招待が必要です。
+         */
+        "needInvitationToJoinRoom": string;
+        /**
+         * このルームは満員です。
+         */
+        "roomIsFull": string;
+        /**
          * ユーザーを招待してチャットを始めましょう
          */
         "inviteUserToChat": string;

@@ -13,6 +13,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template #label>{{ i18n.ts.description }}</template>
 	</MkTextarea>
 
+	<MkSelect v-model="joinMode_" :disabled="!isOwner">
+		<template #label>{{ i18n.ts._chat.roomJoinMode }}</template>
+		<option value="inviteOnly">{{ i18n.ts._chat.inviteOnlyRoom }}</option>
+		<option value="open">{{ i18n.ts._chat.openRoom }}</option>
+	</MkSelect>
+
+	<MkInfo>
+		{{ i18n.ts.effectiveRoomMemberLimit }}: {{ room.memberLimit }}
+		<span v-if="$i.isAdmin"> {{ i18n.ts.roomMemberLimitOverride }}{{ room.memberLimitOverride == null ? `: ${i18n.ts.useDefaultLimit}` : `: ${room.memberLimitOverride}` }}</span>
+	</MkInfo>
+
+	<MkInfo v-if="$i.isAdmin">{{ i18n.ts._chat.roomMemberLimitManagedByAdmin }}</MkInfo>
+
 	<MkButton v-if="isOwner" primary @click="save">{{ i18n.ts.save }}</MkButton>
 
 	<hr>
@@ -35,6 +48,8 @@ import { ensureSignin } from '@/i.js';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
+import MkSelect from '@/components/MkSelect.vue';
+import MkInfo from '@/components/MkInfo.vue';
 import { useRouter } from '@/router.js';
 
 const router = useRouter();
@@ -44,19 +59,36 @@ const props = defineProps<{
 	room: Misskey.entities.ChatRoom;
 }>();
 
+const emit = defineEmits<{
+	(ev: 'updated', room: Misskey.entities.ChatRoom): void;
+}>();
+
 const isOwner = computed(() => {
 	return props.room.ownerId === $i.id;
 });
 
 const name_ = ref(props.room.name);
 const description_ = ref(props.room.description);
+const joinMode_ = ref(props.room.joinMode);
 
-function save() {
-	os.apiWithDialog('chat/rooms/update', {
+watch(() => props.room, () => {
+	name_.value = props.room.name;
+	description_.value = props.room.description;
+	joinMode_.value = props.room.joinMode;
+});
+
+async function save() {
+	const updated = await os.apiWithDialog('chat/rooms/update', {
 		roomId: props.room.id,
 		name: name_.value,
 		description: description_.value,
+		joinMode: joinMode_.value,
 	});
+
+	name_.value = updated.name;
+	description_.value = updated.description;
+	joinMode_.value = updated.joinMode;
+	emit('updated', updated);
 }
 
 async function del() {

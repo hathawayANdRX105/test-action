@@ -1,6 +1,10 @@
 import type { Endpoints as Gen } from './autogen/endpoint.js';
 import type { UserDetailed } from './autogen/models.js';
 import type {
+	AdminChatRoomsShowRequest,
+	AdminChatRoomsShowResponse,
+	AdminChatRoomsUpdateRequest,
+	AdminChatRoomsUpdateResponse,
 	AdminRolesCreateRequest,
 	AdminRolesCreateResponse,
 	UsersShowRequest,
@@ -111,6 +115,14 @@ export type Endpoints = Overwrite<
 		'admin/roles/create': {
 			req: Overwrite<AdminRolesCreateRequest, { policies: PartialRolePolicyOverride }>;
 			res: AdminRolesCreateResponse;
+		},
+		'admin/chat/rooms/show': {
+			req: AdminChatRoomsShowRequest;
+			res: AdminChatRoomsShowResponse;
+		},
+		'admin/chat/rooms/update': {
+			req: AdminChatRoomsUpdateRequest;
+			res: AdminChatRoomsUpdateResponse;
 		}
 	}
 >;

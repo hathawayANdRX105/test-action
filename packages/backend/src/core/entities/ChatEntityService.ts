@@ -11,6 +11,8 @@ import type { Packed } from '@/misc/json-schema.js';
 import type { } from '@/models/Blocking.js';
 import { bindThis } from '@/decorators.js';
 import { IdService } from '@/core/IdService.js';
+import { RoleService } from '@/core/RoleService.js';
+import type { MiMeta } from '@/models/Meta.js';
 import { UserEntityService } from './UserEntityService.js';
 import { DriveFileEntityService } from './DriveFileEntityService.js';
 import { In } from 'typeorm';
@@ -30,9 +32,13 @@ export class ChatEntityService {
 		@Inject(DI.chatRoomMembershipsRepository)
 		private chatRoomMembershipsRepository: ChatRoomMembershipsRepository,
 
+		@Inject(DI.meta)
+		private meta: MiMeta,
+
 		private userEntityService: UserEntityService,
 		private driveFileEntityService: DriveFileEntityService,
 		private idService: IdService,
+		private roleService: RoleService,
 	) {
 	}
 
@@ -245,12 +251,23 @@ export class ChatEntityService {
 		const room = typeof src === 'object' ? src : await this.chatRoomsRepository.findOneByOrFail({ id: src });
 
 		const membership = me && me.id !== room.ownerId ? (options?._hint_?.memberships?.get(room.id) ?? await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
+		const isJoined = me != null && (me.id === room.ownerId || membership != null);
+		const [memberCount, isAdministrator] = await Promise.all([
+			this.chatRoomMembershipsRepository.countBy({ roomId: room.id }).then(count => count + 1),
+			me != null ? this.roleService.isAdministrator(me) : false,
+		]);
+		const canSeeOverride = me != null && (me.id === room.ownerId || isAdministrator);
 
 		return {
 			id: room.id,
 			createdAt: this.idService.parse(room.id).date.toISOString(),
 			name: room.name,
 			description: room.description,
+			joinMode: room.joinMode,
+			memberLimit: room.memberLimitOverride ?? this.meta.chatRoomDefaultMemberLimit,
+			memberLimitOverride: canSeeOverride ? room.memberLimitOverride : undefined,
+			memberCount,
+			isJoined,
 			ownerId: room.ownerId,
 			owner: options?._hint_?.packedOwners.get(room.ownerId) ?? await this.userEntityService.pack(room.owner ?? room.ownerId, me),
 			isMuted: membership != null ? membership.isMuted : false,

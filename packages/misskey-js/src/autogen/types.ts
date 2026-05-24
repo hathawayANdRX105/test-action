@@ -1306,6 +1306,38 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    '/admin/chat/rooms/show': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations['admin___chat___rooms___show'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    '/admin/chat/rooms/update': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations['admin___chat___rooms___update'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     '/admin/nsfw-user': {
         parameters: {
             query?: never;
@@ -11867,6 +11899,12 @@ export type components = {
             owner: components['schemas']['UserLite'];
             name: string;
             description: string;
+            /** @enum {string} */
+            joinMode: 'inviteOnly' | 'open';
+            memberLimit: number;
+            memberLimitOverride?: number | null;
+            memberCount: number;
+            isJoined: boolean;
             isMuted?: boolean;
         };
         ChatRoomInvitation: {
@@ -16451,6 +16489,7 @@ export interface operations {
                         enableStatsForFederatedInstances: boolean;
                         enableServerMachineStats: boolean;
                         enableAchievements: boolean;
+                        chatRoomDefaultMemberLimit: number;
                         robotsTxt: string | null;
                         enableIdenticonGeneration: boolean;
                         manifestJsonOverride: string;
@@ -20524,6 +20563,145 @@ export interface operations {
             };
         };
     };
+    admin___chat___rooms___show: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        room: components['schemas']['ChatRoom'];
+                        memberCount: number;
+                        defaultMemberLimit: number;
+                        memberLimitOverride: number | null;
+                        memberLimit: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    admin___chat___rooms___update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    memberLimitOverride: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        room: components['schemas']['ChatRoom'];
+                        memberCount: number;
+                        defaultMemberLimit: number;
+                        memberLimitOverride: number | null;
+                        memberLimit: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'admin___update-meta': {
         parameters: {
             query?: never;
@@ -20640,6 +20818,7 @@ export interface operations {
                     enableStatsForFederatedInstances?: boolean;
                     enableServerMachineStats?: boolean;
                     enableAchievements?: boolean;
+                    chatRoomDefaultMemberLimit?: number;
                     robotsTxt?: string | null;
                     enableIdenticonGeneration?: boolean;
                     serverRules?: string[];
@@ -25762,6 +25941,11 @@ export interface operations {
                 'application/json': {
                     name: string;
                     description?: string;
+                    /**
+                     * @default inviteOnly
+                     * @enum {string}
+                     */
+                    joinMode?: 'inviteOnly' | 'open';
                 };
             };
         };
@@ -26735,6 +26919,8 @@ export interface operations {
                     roomId: string;
                     name?: string;
                     description?: string;
+                    /** @enum {string} */
+                    joinMode?: 'inviteOnly' | 'open';
                 };
             };
         };
@@ -49114,4 +49300,3 @@ export interface operations {
         };
     };
 }
-
