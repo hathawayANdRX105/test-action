@@ -6,10 +6,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
-import type { ChatMessagesRepository } from '@/models/_.js';
 import type { ChatEventPayload } from '@/core/GlobalEventService.js';
 import type { JsonObject } from '@/misc/json-value.js';
 import { ChatService } from '@/core/ChatService.js';
+import type { UsersRepository } from '@/models/_.js';
 import { Channel, type MiChannelService } from '../channel.js';
 
 class ChatUserChannel extends Channel {
@@ -23,7 +23,7 @@ class ChatUserChannel extends Channel {
 		id: string,
 		connection: Channel['connection'],
 
-		private chatMessagesRepository: ChatMessagesRepository,
+		private usersRepository: UsersRepository,
 		private chatService: ChatService,
 	) {
 		super(id, connection);
@@ -35,15 +35,11 @@ class ChatUserChannel extends Channel {
 		if (typeof params.otherId !== 'string') return false;
 		this.otherId = params.otherId;
 
-		const exists = (await this.chatMessagesRepository.findOne({
-			select: { id: true },
-			where: {
-				fromUserId: this.user.id,
-				toUserId: this.otherId,
-			},
-		})) != null;
+		const other = await this.usersRepository.findOneBy({ id: this.otherId });
+		if (other == null) return false;
 
-		if (!exists) return false;
+		const availability = await this.chatService.getChatAvailability(this.user.id);
+		if (!availability.read) return false;
 
 		this.subscriber.on(`chatUserStream:${this.user.id}-${this.otherId}`, this.onEvent);
 
@@ -79,8 +75,8 @@ export class ChatUserChannelService implements MiChannelService<true> {
 	public readonly kind = ChatUserChannel.kind;
 
 	constructor(
-		@Inject(DI.chatMessagesRepository)
-		private readonly chatMessagesRepository: ChatMessagesRepository,
+		@Inject(DI.usersRepository)
+		private readonly usersRepository: UsersRepository,
 
 		private chatService: ChatService,
 	) {
@@ -91,7 +87,7 @@ export class ChatUserChannelService implements MiChannelService<true> {
 		return new ChatUserChannel(
 			id,
 			connection,
-			this.chatMessagesRepository,
+			this.usersRepository,
 			this.chatService,
 		);
 	}

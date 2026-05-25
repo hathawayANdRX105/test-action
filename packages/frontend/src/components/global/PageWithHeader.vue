@@ -6,9 +6,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div ref="rootEl" :class="[$style.root, reversed ? '_pageScrollableReversed' : '_pageScrollable']">
 	<MkStickyContainer>
-		<template #header><MkPageHeader v-model:tab="tab" v-bind="pageHeaderProps" :class="{ _spacer: spacer }"/></template>
+		<template #header><MkPageHeader v-bind="pageHeaderProps" :class="{ _spacer: spacer }" @update:tab="tab = $event"/></template>
 		<div :class="[ $style.body, { _spacer: spacer } ]">
-			<MkSwiper v-if="prefer.s.enableHorizontalSwipe && swipable && (props.tabs?.length ?? 1) > 1" v-model:tab="tab" :class="$style.swiper" :tabs="props.tabs" :page="props.page">
+			<MkSwiper v-if="prefer.s.enableHorizontalSwipe && swipable && normalizedTabs.length > 1" v-model:tab="tab" :class="$style.swiper" :tabs="normalizedTabs" :page="props.page">
 				<slot></slot>
 			</MkSwiper>
 			<slot v-else></slot>
@@ -41,10 +41,13 @@ const props = withDefaults(defineProps<PageHeaderProps & {
 
 const pageHeaderProps = computed(() => {
 	const { reversed, spacer, ...rest } = props;
+	rest.tabs = normalizedTabs.value;
+	rest.tab = tab.value;
 	return rest;
 });
 
 const tab = defineModel<string>('tab');
+const normalizedTabs = computed(() => props.tabs ?? []);
 const rootEl = useTemplateRef('rootEl');
 
 useScrollPositionKeeper(rootEl);
@@ -70,6 +73,6 @@ defineExpose({
 }
 
 .body, .swiper {
-	min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px)));
+	min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px) + var(--MI-visualViewportBottom, 0px)));
 }
 </style>

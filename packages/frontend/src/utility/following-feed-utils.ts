@@ -94,7 +94,7 @@ export function createModel(storage?: Ref<StorageInterface>): FollowingFeedModel
 	// Based on timeline.saveTlFilter()
 	const saveFollowingFilter = <K extends keyof FollowingFeedState>(key: K, value: FollowingFeedState[K]) => {
 		const state = deepMerge<FollowingFeedState>(storage.value.state.value, defaultFollowingFeedState);
-		const out = deepMerge<FollowingFeedState>({ [key]: value }, state);
+		const out = deepMerge<FollowingFeedState>({ ...state, [key]: value }, defaultFollowingFeedState);
 		storage.value.save(out);
 	};
 
@@ -149,4 +149,3 @@ function createDefaultStorage(): Ref<StorageInterface> {
 		},
 	}));
 }
-

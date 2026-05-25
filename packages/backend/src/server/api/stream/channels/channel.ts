@@ -7,7 +7,6 @@ import { Injectable } from '@nestjs/common';
 import type { Packed } from '@/misc/json-schema.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { bindThis } from '@/decorators.js';
-import { isRenotePacked, isQuotePacked } from '@/misc/is-renote.js';
 import type { JsonObject } from '@/misc/json-value.js';
 import { isPackedPureRenote } from '@/misc/is-renote.js';
 import { type Channel, type MiChannelService, NoteChannel } from '../channel.js';
@@ -19,6 +18,7 @@ class ChannelChannel extends NoteChannel {
 	private channelId: string;
 	private withFiles: boolean;
 	private withRenotes: boolean;
+	private withBots: boolean;
 
 	constructor(
 		id: string,
@@ -35,6 +35,7 @@ class ChannelChannel extends NoteChannel {
 		this.channelId = params.channelId;
 		this.withFiles = !!(params.withFiles ?? false);
 		this.withRenotes = !!(params.withRenotes ?? true);
+		this.withBots = !!(params.withBots ?? true);
 
 		this.subscriber.on('notesStream', this.onNote);
 
@@ -46,6 +47,7 @@ class ChannelChannel extends NoteChannel {
 		if (note.channelId !== this.channelId) return;
 		if (this.withFiles && (note.fileIds == null || note.fileIds.length === 0)) return;
 		if (!this.withRenotes && isPackedPureRenote(note)) return;
+		if (!this.withBots && note.user.isBot) return;
 
 		const preparedNote = await this.prepareNote(note);
 		if (preparedNote) {

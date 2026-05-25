@@ -43,13 +43,42 @@ export class ChatEntityService {
 	}
 
 	@bindThis
+	private async packMessageReference(
+		src: MiChatMessage['id'] | MiChatMessage | null,
+		options?: {
+			_hint_?: {
+				packedUsers?: Map<MiUser['id'], Packed<'UserLite'>>;
+			};
+		},
+		): Promise<Packed<'ChatMessageReference'> | null> {
+		if (src == null) return null;
+
+		const packedUsers = options?._hint_?.packedUsers;
+		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneBy({ id: src });
+		if (message == null) return null;
+
+		return {
+			id: message.id,
+			createdAt: this.idService.parse(message.id).date.toISOString(),
+			text: message.text,
+			fromUserId: message.fromUserId,
+			fromUser: packedUsers?.get(message.fromUserId) ?? await this.userEntityService.pack(message.fromUser ?? message.fromUserId),
+			toUserId: message.toUserId,
+			toRoomId: message.toRoomId,
+			fileId: message.fileId,
+			file: message.fileId ? await this.driveFileEntityService.pack(message.file ?? message.fileId) : null,
+			reactions: [],
+		};
+	}
+
+	@bindThis
 	public async packMessageDetailed(
 		src: MiChatMessage['id'] | MiChatMessage,
 		me?: { id: MiUser['id'] },
 		options?: {
 			_hint_?: {
 				packedFiles?: Map<MiChatMessage['fileId'], Packed<'DriveFile'> | null>;
-				packedUsers?: Map<MiChatMessage['id'], Packed<'UserLite'>>;
+				packedUsers?: Map<MiUser['id'], Packed<'UserLite'>>;
 				packedRooms?: Map<MiChatMessage['toRoomId'], Packed<'ChatRoom'> | null>;
 			};
 		},
@@ -82,6 +111,10 @@ export class ChatEntityService {
 			toRoom: message.toRoomId ? (packedRooms?.get(message.toRoomId) ?? await this.packRoom(message.toRoom ?? message.toRoomId, me)) : undefined,
 			fileId: message.fileId,
 			file: message.fileId ? (packedFiles?.get(message.fileId) ?? await this.driveFileEntityService.pack(message.file ?? message.fileId)) : null,
+			replyId: message.replyId,
+			reply: message.replyId ? await this.packMessageReference(message.reply ?? message.replyId, { _hint_: { packedUsers } }) : null,
+			quoteId: message.quoteId,
+			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId, { _hint_: { packedUsers } }) : null,
 			reactions,
 		};
 	}
@@ -104,6 +137,8 @@ export class ChatEntityService {
 		const users = [
 			...messages.map((m) => m.fromUser ?? m.fromUserId).filter(excludeMe),
 			...messages.map((m) => m.toUser ?? m.toUserId).filter(x => x != null).filter(excludeMe),
+			...messages.map((m) => m.reply?.fromUser ?? m.reply?.fromUserId).filter(x => x != null).filter(excludeMe),
+			...messages.map((m) => m.quote?.fromUser ?? m.quote?.fromUserId).filter(x => x != null).filter(excludeMe),
 		];
 
 		const reactedUserIds = messages.flatMap(x => x.reactions.map(r => r.split('/')[0]));
@@ -156,6 +191,10 @@ export class ChatEntityService {
 			toUserId: message.toUserId!,
 			fileId: message.fileId,
 			file: message.fileId ? (packedFiles?.get(message.fileId) ?? await this.driveFileEntityService.pack(message.file ?? message.fileId)) : null,
+			replyId: message.replyId,
+			reply: message.replyId ? await this.packMessageReference(message.reply ?? message.replyId) : null,
+			quoteId: message.quoteId,
+			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId) : null,
 			reactions,
 		};
 	}
@@ -208,6 +247,10 @@ export class ChatEntityService {
 			toRoomId: message.toRoomId!,
 			fileId: message.fileId,
 			file: message.fileId ? (packedFiles?.get(message.fileId) ?? await this.driveFileEntityService.pack(message.file ?? message.fileId)) : null,
+			replyId: message.replyId,
+			reply: message.replyId ? await this.packMessageReference(message.reply ?? message.replyId) : null,
+			quoteId: message.quoteId,
+			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId) : null,
 			reactions,
 		};
 	}
@@ -218,7 +261,7 @@ export class ChatEntityService {
 	) {
 		if (messages.length === 0) return [];
 
-		const users = messages.map(x => x.fromUser ?? x.fromUserId);
+		const users = messages.flatMap(x => [x.fromUser ?? x.fromUserId, x.reply?.fromUser ?? x.reply?.fromUserId, x.quote?.fromUser ?? x.quote?.fromUserId]).filter(x => x != null);
 		const reactedUserIds = messages.flatMap(x => x.reactions.map(r => r.split('/')[0]));
 
 		for (const reactedUserId of reactedUserIds) {

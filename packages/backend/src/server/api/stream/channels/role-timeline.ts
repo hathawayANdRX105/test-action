@@ -9,6 +9,7 @@ import { bindThis } from '@/decorators.js';
 import { RoleService } from '@/core/RoleService.js';
 import type { RoleTimelineEventPayload } from '@/core/GlobalEventService.js';
 import type { JsonObject } from '@/misc/json-value.js';
+import { isPackedPureRenote } from '@/misc/is-renote.js';
 import { type Channel, NoteChannel, type MiChannelService } from '../channel.js';
 
 class RoleTimelineChannel extends NoteChannel {
@@ -16,6 +17,8 @@ class RoleTimelineChannel extends NoteChannel {
 	public static shouldShare = false;
 	public static requireCredential = false as const;
 	private roleId: string;
+	private withRenotes: boolean;
+	private withBots: boolean;
 
 	constructor(
 		id: string,
@@ -31,6 +34,8 @@ class RoleTimelineChannel extends NoteChannel {
 	public async init(params: JsonObject): Promise<boolean> {
 		if (typeof params.roleId !== 'string') return false;
 		this.roleId = params.roleId;
+		this.withRenotes = !!(params.withRenotes ?? true);
+		this.withBots = !!(params.withBots ?? true);
 
 		if (!(await this.roleservice.isExplorable({ id: this.roleId }))) return false;
 
@@ -44,6 +49,8 @@ class RoleTimelineChannel extends NoteChannel {
 		const note = data.body;
 
 		if (note.visibility !== 'public') return;
+		if (!this.withBots && note.user.isBot) return;
+		if (!this.withRenotes && isPackedPureRenote(note)) return;
 
 		const preparedNote = await this.prepareNote(note);
 		if (preparedNote) {

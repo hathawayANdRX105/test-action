@@ -21,6 +21,7 @@ class UserListChannel extends NoteChannel {
 	private listId: string;
 	private withFiles: boolean;
 	private withRenotes: boolean;
+	private withBots: boolean;
 
 	constructor(
 		id: string,
@@ -42,6 +43,7 @@ class UserListChannel extends NoteChannel {
 		this.listId = params.listId;
 		this.withFiles = !!(params.withFiles ?? false);
 		this.withRenotes = !!(params.withRenotes ?? true);
+		this.withBots = !!(params.withBots ?? true);
 
 		// Check existence and owner
 		const listExist = await this.userListService.userListsCache.fetchMaybe(this.listId);
@@ -58,6 +60,7 @@ class UserListChannel extends NoteChannel {
 		if (note.channelId) return;
 		if (this.withFiles && (note.fileIds == null || note.fileIds.length === 0)) return;
 		if (!this.withRenotes && isPackedPureRenote(note)) return;
+		if (!this.withBots && note.user.isBot) return;
 
 		const memberships = await this.cacheService.listUserMembershipsCache.fetch(this.listId);
 		if (!memberships.has(note.userId)) return;

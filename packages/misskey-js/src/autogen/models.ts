@@ -63,6 +63,7 @@ export type SystemWebhook = components['schemas']['SystemWebhook'];
 export type AbuseReportNotificationRecipient = components['schemas']['AbuseReportNotificationRecipient'];
 export type ChatMessage = components['schemas']['ChatMessage'];
 export type ChatMessageLite = components['schemas']['ChatMessageLite'];
+export type ChatMessageReference = components['schemas']['ChatMessageReference'];
 export type ChatMessageLiteFor1on1 = components['schemas']['ChatMessageLiteFor1on1'];
 export type ChatMessageLiteForRoom = components['schemas']['ChatMessageLiteForRoom'];
 export type ChatRoom = components['schemas']['ChatRoom'];

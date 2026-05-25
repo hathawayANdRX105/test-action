@@ -3,6 +3,16 @@ disableDrawer: "不显示抽屉菜单"
 forwardReport: "将该举报信息转发给远程服务器"
 forwardReportIsAnonymous: "在远程实例上显示的报告者是匿名的系统账号，而不是您的账号。"
 abuseMarkAsResolved: "处理完毕"
+mutuals: "互相关注"
+showBots: "在时间线中显示机器人"
+showQuotes: "显示引用"
+showReplies: "显示回复"
+showNonPublicNotes: "显示非公开帖子"
+remoteFollowersWarning: "远程关注者的动态可能不完整或已过时"
+selectFollowRelationship: "选择关注关系..."
+_deck:
+  _columns:
+    following: "关注中"
 _initialTutorial:
   _reaction:
     letsTryReacting: "回应可以通过点击帖子中的「{reaction}」按钮来添加。试着给这个示例帖子添加一个回应！"

@@ -49,10 +49,10 @@ overrides:
   # Overrides for vulnerable / buggy nested deps.
   # The versions here apply recursively through ALL dependencies.
   "chokidar": "5.0.0"
-  "lodash": "4.17.23"
-  "axios": "1.13.6"
+  "lodash": "4.18.0"
+  "axios": "1.15.2"
   "js-yaml": "4.1.1"
-  "systeminformation": "5.31.4"
+  "systeminformation": "5.31.6"
   "glob": "npm:fast-glob@3.3.3"
   "jws": "4.0.1"
   "body-parser": "2.2.2"
@@ -60,11 +60,24 @@ overrides:
   "multer": "2.1.1"
   "file-type": "21.3.3"
   "undici": "7.24.5"
-  "qs": "6.15.0"
+  "qs": "6.15.2"
   "minimatch": "8.0.7" # Note - this is still outdated, but we can't go further until eslint gets updated.
   "diff": "5.2.2" # Note - this is still outdated, but we can't go further until v-code-diff gets updated.
   "bn.js": "5.2.3" # Note - can remove override once web-push package is updated.
-  "fast-xml-parser": "5.5.8" # Note - can remove override once the @aws-sdk packages are updated.
+  "fast-xml-parser": "5.7.0" # Note - can remove override once the @aws-sdk packages are updated.
+  "@fastify/reply-from": "12.6.2"
+  "brace-expansion": "2.0.3"
+  "fast-uri": "3.1.2"
+  "fast-xml-builder": "1.1.7"
+  "follow-redirects": "1.16.0"
+  "ip-address": "10.1.1"
+  "path-to-regexp": "8.4.0"
+  "picomatch@<3": "2.3.2"
+  "picomatch@>=4.0.0 <4.0.4": "4.0.4"
+  "postcss": "8.5.10"
+  "uuid@<11.1.1": "11.1.1"
+  "uuid@>=13.0.0 <13.0.1": "13.0.1"
+  "ws": "8.20.1"
 
   # Stubs and disabled packages.
   # If an unused dependency is never loaded, then use version "-".

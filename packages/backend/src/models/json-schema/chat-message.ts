@@ -55,6 +55,24 @@ export const packedChatMessageSchema = {
 			optional: true, nullable: true,
 			ref: 'DriveFile',
 		},
+		replyId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		reply: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessageReference',
+		},
+		quoteId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		quote: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessageReference',
+		},
 		isRead: {
 			type: 'boolean',
 			optional: true, nullable: false,
@@ -64,7 +82,7 @@ export const packedChatMessageSchema = {
 			optional: false, nullable: false,
 			items: {
 				type: 'object',
-				optional: false, nullable: false,
+			optional: false, nullable: false,
 				properties: {
 					reaction: {
 						type: 'string',
@@ -123,12 +141,94 @@ export const packedChatMessageLiteSchema = {
 			optional: true, nullable: true,
 			ref: 'DriveFile',
 		},
+		replyId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		reply: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessageReference',
+		},
+		quoteId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		quote: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessageReference',
+		},
 		reactions: {
 			type: 'array',
 			optional: false, nullable: false,
 			items: {
 				type: 'object',
-				optional: false, nullable: false,
+			optional: false, nullable: false,
+				properties: {
+					reaction: {
+						type: 'string',
+						optional: false, nullable: false,
+					},
+					user: {
+						type: 'object',
+						optional: true, nullable: true,
+						ref: 'UserLite',
+					},
+				},
+			},
+		},
+	},
+} as const;
+
+export const packedChatMessageReferenceSchema = {
+	type: 'object',
+	properties: {
+		id: {
+			type: 'string',
+			optional: false, nullable: false,
+		},
+		createdAt: {
+			type: 'string',
+			format: 'date-time',
+			optional: false, nullable: false,
+		},
+		fromUserId: {
+			type: 'string',
+			optional: false, nullable: false,
+		},
+		fromUser: {
+			type: 'object',
+			optional: true, nullable: false,
+			ref: 'UserLite',
+		},
+		toUserId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		toRoomId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		text: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		fileId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		file: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'DriveFile',
+		},
+		reactions: {
+			type: 'array',
+			optional: false, nullable: false,
+			items: {
+				type: 'object',
+			optional: false, nullable: false,
 				properties: {
 					reaction: {
 						type: 'string',
@@ -178,12 +278,30 @@ export const packedChatMessageLiteFor1on1Schema = {
 			optional: true, nullable: true,
 			ref: 'DriveFile',
 		},
+		replyId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		reply: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessageReference',
+		},
+		quoteId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		quote: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessageReference',
+		},
 		reactions: {
 			type: 'array',
 			optional: false, nullable: false,
 			items: {
 				type: 'object',
-				optional: false, nullable: false,
+			optional: false, nullable: false,
 				properties: {
 					reaction: {
 						type: 'string',
@@ -233,12 +351,30 @@ export const packedChatMessageLiteForRoomSchema = {
 			optional: true, nullable: true,
 			ref: 'DriveFile',
 		},
+		replyId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		reply: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessageReference',
+		},
+		quoteId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		quote: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessageReference',
+		},
 		reactions: {
 			type: 'array',
 			optional: false, nullable: false,
 			items: {
 				type: 'object',
-				optional: false, nullable: false,
+			optional: false, nullable: false,
 				properties: {
 					reaction: {
 						type: 'string',

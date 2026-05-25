@@ -14,7 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<SkPatternTest :mutedWords="mutedWords"></SkPatternTest>
 
-	<MkButton primary inline :disabled="!changed" @click="save()"><i class="ti ti-device-floppy"></i> {{ i18n.ts.save }}</MkButton>
+	<MkButton primary inline :disabled="!changed" :wait="saving" @click="save()"><i class="ti ti-device-floppy"></i> {{ i18n.ts.save }}</MkButton>
 </div>
 </template>
 
@@ -28,10 +28,7 @@ import SkPatternTest from '@/components/SkPatternTest.vue';
 
 const props = defineProps<{
 	muted: (string[] | string)[];
-}>();
-
-const emit = defineEmits<{
-	(ev: 'save', value: (string[] | string)[]): void;
+	save: (value: (string[] | string)[]) => Promise<void> | void;
 }>();
 
 const render = (mutedWords: (string | string[])[]) => mutedWords.map(x => {
@@ -44,6 +41,12 @@ const render = (mutedWords: (string | string[])[]) => mutedWords.map(x => {
 
 const mutedWords = ref(render(props.muted));
 const changed = ref(false);
+const saving = ref(false);
+
+watch(() => props.muted, (muted) => {
+	mutedWords.value = render(muted);
+	changed.value = false;
+}, { deep: true });
 
 watch(mutedWords, () => {
 	changed.value = true;
@@ -53,12 +56,14 @@ async function save() {
 	try {
 		const parsed = parseMutes(mutedWords.value);
 
-		emit('save', parsed);
-
+		saving.value = true;
+		await props.save(parsed);
 		changed.value = false;
 	} catch {
 		// already displayed error message in parseMutes
 		return;
+	} finally {
+		saving.value = false;
 	}
 }
 </script>

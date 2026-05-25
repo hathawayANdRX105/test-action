@@ -11897,6 +11897,10 @@ export type components = {
             text?: string | null;
             fileId?: string | null;
             file?: components['schemas']['DriveFile'] | null;
+            replyId?: string | null;
+            reply?: components['schemas']['ChatMessageReference'] | null;
+            quoteId?: string | null;
+            quote?: components['schemas']['ChatMessageReference'] | null;
             isRead?: boolean;
             reactions: {
                 reaction: string;
@@ -11904,6 +11908,26 @@ export type components = {
             }[];
         };
         ChatMessageLite: {
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            fromUserId: string;
+            fromUser?: components['schemas']['UserLite'] | null;
+            toUserId?: string | null;
+            toRoomId?: string | null;
+            text?: string | null;
+            fileId?: string | null;
+            file?: components['schemas']['DriveFile'] | null;
+            replyId?: string | null;
+            reply?: components['schemas']['ChatMessageReference'] | null;
+            quoteId?: string | null;
+            quote?: components['schemas']['ChatMessageReference'] | null;
+            reactions: {
+                reaction: string;
+                user?: components['schemas']['UserLite'] | null;
+            }[];
+        };
+        ChatMessageReference: {
             id: string;
             /** Format: date-time */
             createdAt: string;
@@ -11928,6 +11952,10 @@ export type components = {
             text?: string | null;
             fileId?: string | null;
             file?: components['schemas']['DriveFile'] | null;
+            replyId?: string | null;
+            reply?: components['schemas']['ChatMessageReference'] | null;
+            quoteId?: string | null;
+            quote?: components['schemas']['ChatMessageReference'] | null;
             reactions: {
                 reaction: string;
             }[];
@@ -11942,6 +11970,10 @@ export type components = {
             text?: string | null;
             fileId?: string | null;
             file?: components['schemas']['DriveFile'] | null;
+            replyId?: string | null;
+            reply?: components['schemas']['ChatMessageReference'] | null;
+            quoteId?: string | null;
+            quote?: components['schemas']['ChatMessageReference'] | null;
             reactions: {
                 reaction: string;
                 user: components['schemas']['UserLite'];
@@ -21743,6 +21775,8 @@ export interface operations {
                     untilId?: string;
                     sinceDate?: number;
                     untilDate?: number;
+                    /** @default true */
+                    withBots?: boolean;
                 };
             };
         };
@@ -23909,6 +23943,8 @@ export interface operations {
                      * @default false
                      */
                     withFiles?: boolean;
+                    /** @default true */
+                    withBots?: boolean;
                 };
             };
         };
@@ -25513,6 +25549,10 @@ export interface operations {
                     fileId?: string;
                     /** Format: misskey:id */
                     toRoomId: string;
+                    /** Format: misskey:id */
+                    replyId?: string;
+                    /** Format: misskey:id */
+                    quoteId?: string;
                 };
             };
         };
@@ -25597,6 +25637,10 @@ export interface operations {
                     fileId?: string;
                     /** Format: misskey:id */
                     toUserId: string;
+                    /** Format: misskey:id */
+                    replyId?: string;
+                    /** Format: misskey:id */
+                    quoteId?: string;
                 };
             };
         };
@@ -43159,6 +43203,8 @@ export interface operations {
                      * @default false
                      */
                     withFiles?: boolean;
+                    /** @default true */
+                    withBots?: boolean;
                 };
             };
         };

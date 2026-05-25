@@ -45,6 +45,10 @@ export interface Locale extends ILocale {
      */
     "notifications": string;
     /**
+     * Mutuals
+     */
+    "mutuals": string;
+    /**
      * ユーザー名
      */
     "username": string;
@@ -170,6 +174,50 @@ export interface Locale extends ILocale {
      * ユーザー
      */
     "users": string;
+    /**
+     * Show bots in timeline
+     */
+    "showBots": string;
+    /**
+     * Show quotes
+     */
+    "showQuotes": string;
+    /**
+     * Show non-public
+     */
+    "showNonPublicNotes": string;
+    /**
+     * Select a follow relationship...
+     */
+    "selectFollowRelationship": string;
+    /**
+     * Test patterns
+     */
+    "wordMuteTestLabel": string;
+    /**
+     * Enter some text here to test your word patterns. The matched words, if any, will be displayed below.
+     */
+    "wordMuteTestDescription": string;
+    /**
+     * Test
+     */
+    "wordMuteTestTest": string;
+    /**
+     * Matched words: {words}
+     */
+    "wordMuteTestMatch": ParameterizedString<"words">;
+    /**
+     * No results yet, enter some text and click "Test" to check it.
+     */
+    "wordMuteTestNoResults": string;
+    /**
+     * Text does not match any patterns.
+     */
+    "wordMuteTestNoMatch": string;
+    /**
+     * All word mutes are *case-sensitive* and match on any substring, including part of a longer word or name. You can use regular expressions for more precise control.
+     */
+    "wordMuteWarning": string;
     /**
      * ユーザーを追加
      */
@@ -5816,6 +5864,14 @@ export interface Locale extends ILocale {
          * タイムラインとノート
          */
         "timelineAndNote": string;
+        /**
+         * ノート描画スキップを有効にする
+         */
+        "enableNoteRenderSkipping": string;
+        /**
+         * スタッキングルータービューを有効にする
+         */
+        "enableStackingRouterView": string;
         /**
          * 全てのテキスト要素を選択可能にする
          */
@@ -12211,10 +12267,6 @@ export interface Locale extends ILocale {
      */
     "trustedDomainsListDescription": string;
     /**
-     * Mutuals
-     */
-    "mutuals": string;
-    /**
      * Private account
      */
     "isLocked": string;
@@ -12620,10 +12672,6 @@ export interface Locale extends ILocale {
      */
     "clickToOpen": string;
     /**
-     * Show bots in timeline
-     */
-    "showBots": string;
-    /**
      * Donate
      */
     "donation": string;
@@ -12656,17 +12704,9 @@ export interface Locale extends ILocale {
      */
     "undoFollowRequestConfirm": string;
     /**
-     * Show quotes
-     */
-    "showQuotes": string;
-    /**
      * Show replies
      */
     "showReplies": string;
-    /**
-     * Show non-public
-     */
-    "showNonPublicNotes": string;
     /**
      * Allow clicking on pop-up notifications
      */
@@ -13132,10 +13172,6 @@ export interface Locale extends ILocale {
      */
     "remoteFollowersWarning": string;
     /**
-     * Select a follow relationship...
-     */
-    "selectFollowRelationship": string;
-    /**
      * Schedule a note
      */
     "schedulePost": string;
@@ -13371,34 +13407,6 @@ export interface Locale extends ILocale {
          */
         "text": string;
     };
-    /**
-     * Test patterns
-     */
-    "wordMuteTestLabel": string;
-    /**
-     * Enter some text here to test your word patterns. The matched words, if any, will be displayed below.
-     */
-    "wordMuteTestDescription": string;
-    /**
-     * Test
-     */
-    "wordMuteTestTest": string;
-    /**
-     * Matched words: {words}
-     */
-    "wordMuteTestMatch": ParameterizedString<"words">;
-    /**
-     * No results yet, enter some text and click "Test" to check it.
-     */
-    "wordMuteTestNoResults": string;
-    /**
-     * Text does not match any patterns.
-     */
-    "wordMuteTestNoMatch": string;
-    /**
-     * All word mutes are *case-sensitive* and match on any substring, including part of a longer word or name. You can use regular expressions for more precise control.
-     */
-    "wordMuteWarning": string;
     /**
      * Bubble timeline
      */

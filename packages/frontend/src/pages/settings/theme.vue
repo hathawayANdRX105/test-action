@@ -222,12 +222,16 @@ import { prefer } from '@/preferences.js';
 const installedThemes = getThemesRef();
 const builtinThemes = getBuiltinThemesRef();
 
+function isThemeBase(theme: Theme, base: 'dark' | 'light') {
+	return theme.base === base || (theme as Theme & { kind?: 'dark' | 'light' }).kind === base;
+}
+
 const instanceDarkTheme = computed<Theme | null>(() => instance.defaultDarkTheme ? JSON5.parse(instance.defaultDarkTheme) : null);
-const installedDarkThemes = computed(() => installedThemes.value.filter(t => t.base === 'dark' || t.kind === 'dark'));
-const builtinDarkThemes = computed(() => builtinThemes.value.filter(t => t.base === 'dark' || t.kind === 'dark'));
+const installedDarkThemes = computed(() => installedThemes.value.filter(t => isThemeBase(t, 'dark')));
+const builtinDarkThemes = computed(() => builtinThemes.value.filter(t => isThemeBase(t, 'dark')));
 const instanceLightTheme = computed<Theme | null>(() => instance.defaultLightTheme ? JSON5.parse(instance.defaultLightTheme) : null);
-const installedLightThemes = computed(() => installedThemes.value.filter(t => t.base === 'light' || t.kind === 'light'));
-const builtinLightThemes = computed(() => builtinThemes.value.filter(t => t.base === 'light' || t.kind === 'light'));
+const installedLightThemes = computed(() => installedThemes.value.filter(t => isThemeBase(t, 'light')));
+const builtinLightThemes = computed(() => builtinThemes.value.filter(t => isThemeBase(t, 'light')));
 const themes = computed(() => uniqueBy([instanceDarkTheme.value, instanceLightTheme.value, ...builtinThemes.value, ...installedThemes.value].filter(x => x != null), theme => theme.id));
 
 const darkTheme = prefer.r.darkTheme;
@@ -257,8 +261,16 @@ const lightThemeId = computed({
 	},
 });
 
-const darkMode = computed(store.makeGetterSetter('darkMode'));
 const syncDeviceDarkMode = prefer.model('syncDeviceDarkMode');
+const darkMode = computed({
+	get: () => store.r.darkMode.value,
+	set: (value) => {
+		if (syncDeviceDarkMode.value) {
+			prefer.commit('syncDeviceDarkMode', false);
+		}
+		store.set('darkMode', value);
+	},
+});
 const themesCount = installedThemes.value.length;
 
 watch(syncDeviceDarkMode, () => {

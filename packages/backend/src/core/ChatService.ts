@@ -38,6 +38,7 @@ export const MIN_CHAT_ROOM_MEMBER_LIMIT = 1;
 export const MAX_CHAT_ROOM_MEMBER_LIMIT = 10000;
 const MAX_REACTIONS_PER_MESSAGE = 100;
 const isCustomEmojiRegexp = /^:([\w+-]+)(?:@\.)?:$/;
+type ChatMessageReference = Pick<MiChatMessage, 'id' | 'toUserId' | 'toRoomId'>;
 
 // TODO: ReactionServiceのやつと共通化
 function normalizeEmojiString(x: string) {
@@ -144,6 +145,8 @@ export class ChatService {
 		text?: string | null;
 		file?: MiDriveFile | null;
 		uri?: string | null;
+		reply?: ChatMessageReference | null;
+		quote?: ChatMessageReference | null;
 	}): Promise<Packed<'ChatMessageLiteFor1on1'>> {
 		if (fromUser.id === toUser.id) {
 			throw new Error('yourself');
@@ -200,6 +203,8 @@ export class ChatService {
 			toUserId: toUser.id,
 			text: params.text ? params.text.trim() : null,
 			fileId: params.file ? params.file.id : null,
+			replyId: params.reply?.id ?? null,
+			quoteId: params.quote?.id ?? null,
 			reads: [],
 			uri: params.uri ?? null,
 		} satisfies Partial<MiChatMessage>;
@@ -255,6 +260,8 @@ export class ChatService {
 		text?: string | null;
 		file?: MiDriveFile | null;
 		uri?: string | null;
+		reply?: ChatMessageReference | null;
+		quote?: ChatMessageReference | null;
 	}): Promise<Packed<'ChatMessageLiteForRoom'>> {
 		const memberships = (await this.chatRoomMembershipsRepository.findBy({ roomId: toRoom.id })).map(m => ({
 			userId: m.userId,
@@ -276,6 +283,8 @@ export class ChatService {
 			toRoomId: toRoom.id,
 			text: params.text ? params.text.trim() : null,
 			fileId: params.file ? params.file.id : null,
+			replyId: params.reply?.id ?? null,
+			quoteId: params.quote?.id ?? null,
 			reads: [],
 			uri: params.uri ?? null,
 		} satisfies Partial<MiChatMessage>;
@@ -391,6 +400,13 @@ export class ChatService {
 	@bindThis
 	public async userTimeline(meId: MiUser['id'], otherId: MiUser['id'], limit: number, sinceId?: MiChatMessage['id'] | null, untilId?: MiChatMessage['id'] | null) {
 		const query = this.queryService.makePaginationQuery(this.chatMessagesRepository.createQueryBuilder('message'), sinceId, untilId)
+			.leftJoinAndSelect('message.file', 'file')
+			.leftJoinAndSelect('message.reply', 'reply')
+			.leftJoinAndSelect('reply.file', 'replyFile')
+			.leftJoinAndSelect('reply.fromUser', 'replyFromUser')
+			.leftJoinAndSelect('message.quote', 'quote')
+			.leftJoinAndSelect('quote.file', 'quoteFile')
+			.leftJoinAndSelect('quote.fromUser', 'quoteFromUser')
 			.andWhere(new Brackets(qb => {
 				qb
 					.where(new Brackets(qb => {
@@ -417,7 +433,13 @@ export class ChatService {
 		const query = this.queryService.makePaginationQuery(this.chatMessagesRepository.createQueryBuilder('message'), sinceId, untilId)
 			.andWhere('message.toRoomId = :roomId', { roomId })
 			.leftJoinAndSelect('message.file', 'file')
-			.leftJoinAndSelect('message.fromUser', 'fromUser');
+			.leftJoinAndSelect('message.fromUser', 'fromUser')
+			.leftJoinAndSelect('message.reply', 'reply')
+			.leftJoinAndSelect('reply.file', 'replyFile')
+			.leftJoinAndSelect('reply.fromUser', 'replyFromUser')
+			.leftJoinAndSelect('message.quote', 'quote')
+			.leftJoinAndSelect('quote.file', 'quoteFile')
+			.leftJoinAndSelect('quote.fromUser', 'quoteFromUser');
 
 		const messages = await query.take(limit).getMany();
 

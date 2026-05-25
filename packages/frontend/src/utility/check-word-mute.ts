@@ -253,6 +253,12 @@ export function *expandNote(note: Misskey.entities.Note): Generator<string> {
 			if (choice.text) yield choice.text;
 		}
 	}
+	if (note.tags) {
+		for (const tag of note.tags) {
+			yield tag;
+			yield tag.startsWith('#') ? tag : `#${tag}`;
+		}
+	}
 }
 
 function parseMutes(mutedWords: (string | string[])[]) {

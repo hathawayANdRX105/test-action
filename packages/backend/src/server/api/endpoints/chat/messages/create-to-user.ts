@@ -71,6 +71,12 @@ export const meta = {
 			code: 'MAX_LENGTH',
 			id: '3ac74a84-8fd5-4bb0-870f-01804f82ce16',
 		},
+
+		invalidReference: {
+			message: 'The referenced message is not in this chat.',
+			code: 'INVALID_REFERENCE',
+			id: '44c06f4a-84ff-4669-9a2f-abd85ca61d0f',
+		},
 	},
 } as const;
 
@@ -80,6 +86,8 @@ export const paramDef = {
 		text: { type: 'string', nullable: true, minLength: 1 },
 		fileId: { type: 'string', format: 'misskey:id' },
 		toUserId: { type: 'string', format: 'misskey:id' },
+		replyId: { type: 'string', format: 'misskey:id' },
+		quoteId: { type: 'string', format: 'misskey:id' },
 	},
 	required: ['toUserId'],
 } as const;
@@ -130,9 +138,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw err;
 			});
 
+			const [reply, quote] = await Promise.all([
+				ps.replyId != null ? this.chatService.findMessageById(ps.replyId) : null,
+				ps.quoteId != null ? this.chatService.findMessageById(ps.quoteId) : null,
+			]);
+			const isSameUserChat = (message: typeof reply) => message != null
+				&& message.toRoomId == null
+				&& ((message.fromUserId === me.id && message.toUserId === toUser.id) || (message.fromUserId === toUser.id && message.toUserId === me.id));
+
+			if ((ps.replyId != null && !isSameUserChat(reply)) || (ps.quoteId != null && !isSameUserChat(quote))) {
+				throw new ApiError(meta.errors.invalidReference);
+			}
+
 			return await this.chatService.createMessageToUser(me, toUser, {
 				text: ps.text,
 				file: file,
+				reply,
+				quote,
 			});
 		});
 	}

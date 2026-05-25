@@ -39,7 +39,8 @@ onMounted(() => {
 async function add() {
 	prefer.commit('statusbars', [...statusbars.value, {
 		id: uuid(),
-		type: null,
+		name: '',
+		type: '',
 		black: false,
 		size: 'medium',
 		props: {},

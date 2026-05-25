@@ -26,7 +26,7 @@ import * as os from '@/os.js';
 
 const $i = ensureSignin();
 
-const instanceMutes = ref($i.mutedInstances.join('\n'));
+const instanceMutes = ref(($i.mutedInstances ?? []).join('\n'));
 const domainArray = computed(() => {
 	return instanceMutes.value
 		.trim().split('\n')

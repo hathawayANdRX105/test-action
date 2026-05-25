@@ -61,6 +61,7 @@ export type Column = {
 	tl?: BasicTimelineType;
 	withRenotes?: boolean;
 	withReplies?: boolean;
+	withBots?: boolean;
 	withSensitive?: boolean;
 	onlyFiles?: boolean;
 	soundSetting?: SoundStore;

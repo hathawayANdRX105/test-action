@@ -65,6 +65,7 @@ export const paramDef = {
 			default: false,
 			description: 'Only show notes that have attached files.',
 		},
+		withBots: { type: 'boolean', default: true },
 	},
 	required: ['listId'],
 } as const;
@@ -115,6 +116,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					limit: ps.limit,
 					withFiles: ps.withFiles,
 					withRenotes: ps.withRenotes,
+					withBots: ps.withBots,
 				}, me);
 
 				return await this.noteEntityService.packMany(timeline, me);
@@ -129,6 +131,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				useDbFallback: this.serverSettings.enableFanoutTimelineDbFallback,
 				redisTimelines: ps.withFiles ? [`userListTimelineWithFiles:${list.id}`] : [`userListTimeline:${list.id}`],
 				excludePureRenotes: !ps.withRenotes,
+				excludeBots: !ps.withBots,
 				ignoreAuthorFromUserSilence: true,
 				dbFallback: async (untilId, sinceId, limit) => await this.getFromDb(list, {
 					untilId,
@@ -136,6 +139,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					limit,
 					withFiles: ps.withFiles,
 					withRenotes: ps.withRenotes,
+					withBots: ps.withBots,
 				}, me),
 			});
 
@@ -149,6 +153,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		limit: number,
 		withFiles: boolean,
 		withRenotes: boolean,
+		withBots: boolean,
 	}, me: MiLocalUser) {
 		//#region Construct query
 		const query = this.queryService.makePaginationQuery(this.notesRepository.createQueryBuilder('note'), ps.sinceId, ps.untilId)
@@ -179,6 +184,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.queryService.generateExcludedRenotesQueryForNotes(query);
 		} else {
 			this.queryService.generateMutedUserRenotesQueryForNotes(query, me);
+		}
+
+		if (!ps.withBots) {
+			query.andWhere('user.isBot = FALSE');
 		}
 
 		//#endregion

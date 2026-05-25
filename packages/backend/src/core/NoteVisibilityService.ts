@@ -574,6 +574,7 @@ export interface PopulatedNote {
 interface PopulatedUser {
 	id: string;
 	host: string | null;
+	isBot: boolean;
 	isSilenced: boolean;
 	isSuspended: boolean;
 	requireSigninToViewContents: boolean;

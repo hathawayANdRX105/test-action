@@ -102,7 +102,7 @@ export class FanoutTimelineEndpointService {
 
 			if (ps.excludeBots) {
 				const parentFilter = filter;
-				filter = (note, populated, visData) => !note.user?.isBot && parentFilter(note, populated, visData);
+				filter = (note, populated, visData) => !populated.user.isBot && parentFilter(note, populated, visData);
 			}
 
 			if (ps.excludePureRenotes) {

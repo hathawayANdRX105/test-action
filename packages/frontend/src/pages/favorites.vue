@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <PageWithHeader>
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
-		<MkPagination :pagination="pagination">
+		<MkPagination ref="paginationComponent" :pagination="pagination">
 			<template #empty><MkResult type="empty" :text="i18n.ts.noNotes"/></template>
 
 			<template #default="{ items }">
@@ -21,6 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import { onActivated, useTemplateRef } from 'vue';
 import MkPagination from '@/components/MkPagination.vue';
 import DynamicNote from '@/components/DynamicNote.vue';
 import MkDateSeparatedList from '@/components/MkDateSeparatedList.vue';
@@ -31,6 +32,17 @@ const pagination = {
 	endpoint: 'i/favorites' as const,
 	limit: 10,
 };
+
+const paginationComponent = useTemplateRef<InstanceType<typeof MkPagination>>('paginationComponent');
+let activatedOnce = false;
+
+onActivated(() => {
+	if (activatedOnce) {
+		paginationComponent.value?.reload();
+	} else {
+		activatedOnce = true;
+	}
+});
 
 definePage(() => ({
 	title: i18n.ts.favorites,

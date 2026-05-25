@@ -182,8 +182,9 @@ function onInputKeydown(evt: KeyboardEvent) {
 	position: relative;
 	margin: auto;
 	padding: 32px;
-	min-width: 320px;
-	max-width: 480px;
+	width: min(480px, calc(100dvw - 32px));
+	min-width: 0;
+	max-width: calc(100dvw - 32px);
 	box-sizing: border-box;
 	text-align: center;
 	background: var(--MI_THEME-panel);

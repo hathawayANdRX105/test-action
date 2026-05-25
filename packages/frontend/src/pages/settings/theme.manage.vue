@@ -21,11 +21,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkTextarea v-if="selectedTheme.desc" readonly :modelValue="selectedTheme.desc">
 			<template #label>{{ i18n.ts._theme.description }}</template>
 		</MkTextarea>
-		<MkTextarea readonly tall :modelValue="selectedThemeCode">
+		<MkTextarea v-if="selectedThemeCode != null" readonly tall :modelValue="selectedThemeCode">
 			<template #label>{{ i18n.ts._theme.code }}</template>
 			<template #caption><button class="_textButton" @click="copyThemeCode()">{{ i18n.ts.copy }}</button></template>
 		</MkTextarea>
-		<MkButton v-if="!builtinThemes.some(t => t.id == selectedTheme.id)" danger @click="uninstall()"><i class="ti ti-trash"></i> {{ i18n.ts.uninstall }}</MkButton>
+			<MkButton v-if="canUninstallSelectedTheme" danger @click="uninstall()"><i class="ti ti-trash"></i> {{ i18n.ts.uninstall }}</MkButton>
 	</template>
 </div>
 </template>
@@ -60,11 +60,19 @@ const selectedThemeCode = computed(() => {
 	return JSON5.stringify(selectedTheme.value, null, '\t');
 });
 
+const canUninstallSelectedTheme = computed(() => {
+	const theme = selectedTheme.value;
+	if (theme == null) return false;
+	return !builtinThemes.value.some(t => t.id === theme.id);
+});
+
 function copyThemeCode() {
+	if (selectedThemeCode.value == null) return;
 	copyToClipboard(selectedThemeCode.value);
 }
 
 function uninstall() {
+	if (selectedTheme.value == null) return;
 	removeTheme(selectedTheme.value as Theme);
 	installedThemes.value = installedThemes.value.filter(t => t.id !== selectedThemeId.value);
 	selectedThemeId.value = null;

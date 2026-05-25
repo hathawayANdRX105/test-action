@@ -52,6 +52,7 @@ const pagination: Paging<'users/notes'> = {
 		withReplies: props.withReplies,
 		withRepliesToSelf: props.withReplies,
 		withFiles: props.onlyFiles,
+		withBots: props.withBots,
 		allowPartial: true,
 	})),
 };

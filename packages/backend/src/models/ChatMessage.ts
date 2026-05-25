@@ -78,6 +78,30 @@ export class MiChatMessage {
 	@JoinColumn()
 	public file: MiDriveFile | null;
 
+	@Index()
+	@Column({
+		...id(), nullable: true,
+	})
+	public replyId: MiChatMessage['id'] | null;
+
+	@ManyToOne(type => MiChatMessage, {
+		onDelete: 'SET NULL',
+	})
+	@JoinColumn()
+	public reply: MiChatMessage | null;
+
+	@Index()
+	@Column({
+		...id(), nullable: true,
+	})
+	public quoteId: MiChatMessage['id'] | null;
+
+	@ManyToOne(type => MiChatMessage, {
+		onDelete: 'SET NULL',
+	})
+	@JoinColumn()
+	public quote: MiChatMessage | null;
+
 	@Column('varchar', {
 		length: 1024, array: true, default: '{}',
 	})

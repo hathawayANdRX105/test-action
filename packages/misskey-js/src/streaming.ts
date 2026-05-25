@@ -25,6 +25,7 @@ export type StreamEvents = {
 	_disconnected_: void;
 	_ping_: void;
 	_pong_: void;
+	_channelConnected_: { id: string; };
 } & BroadcastEvents;
 
 export interface IStream extends EventEmitter<StreamEvents> {
@@ -197,6 +198,8 @@ export default class Stream extends EventEmitter<StreamEvents> implements IStrea
 			this.pong();
 		} else if (type === 'pong') {
 			this.emit('_pong_');
+		} else if (type === 'connected' && body && typeof body === 'object' && typeof body.id === 'string') {
+			this.emit('_channelConnected_', body);
 		} else {
 			this.emit(type, body);
 		}
@@ -250,6 +253,10 @@ class Pool {
 	public users = 0;
 	private disposeTimerId: ReturnType<typeof setTimeout> | null = null;
 	private isConnected = false;
+	private connectRequested = false;
+	private connectedPromise: Promise<void> | null = null;
+	private connectedTimeoutId: ReturnType<typeof setTimeout> | null = null;
+	private onConnectedAck: ((payload: { id: string; }) => void) | null = null;
 
 	constructor(stream: Stream, channel: string, id: string) {
 		this.onStreamDisconnected = this.onStreamDisconnected.bind(this);
@@ -266,7 +273,21 @@ class Pool {
 	}
 
 	private onStreamDisconnected(): void {
+		this.clearConnectedWaiter();
 		this.isConnected = false;
+		this.connectRequested = false;
+	}
+
+	private clearConnectedWaiter(): void {
+		if (this.onConnectedAck) {
+			this.stream.off('_channelConnected_', this.onConnectedAck);
+			this.onConnectedAck = null;
+		}
+		if (this.connectedTimeoutId) {
+			clearTimeout(this.connectedTimeoutId);
+			this.connectedTimeoutId = null;
+		}
+		this.connectedPromise = null;
 	}
 
 	public inc(): void {
@@ -297,15 +318,38 @@ class Pool {
 	}
 
 	public connect(): void {
-		if (this.isConnected) return;
-		this.isConnected = true;
+		if (this.isConnected || this.connectRequested) return;
+		this.connectRequested = true;
+		this.connectedPromise = new Promise(resolve => {
+			const done = (connected: boolean) => {
+				this.clearConnectedWaiter();
+				if (connected) this.isConnected = true;
+				this.connectRequested = false;
+				resolve();
+			};
+			const onConnected = (payload: { id: string; }) => {
+				if (payload.id !== this.id) return;
+				done(true);
+			};
+			this.onConnectedAck = onConnected;
+			this.connectedTimeoutId = setTimeout(() => done(false), 5000);
+			this.stream.on('_channelConnected_', onConnected);
+		});
 		this.stream.send('connect', {
 			channel: this.channel,
 			id: this.id,
+			pong: true,
 		});
 	}
 
+	public waitConnected(): Promise<void> {
+		if (this.isConnected && this.stream.state === 'connected') return Promise.resolve();
+		this.connect();
+		return this.connectedPromise ?? Promise.resolve();
+	}
+
 	private disconnect(): void {
+		this.clearConnectedWaiter();
 		this.stream.off('_disconnected_', this.onStreamDisconnected);
 		this.stream.send('disconnect', { id: this.id });
 		this.stream.removeSharedConnectionPool(this);
@@ -320,6 +364,7 @@ export interface IChannelConnection<Channel extends AnyOf<Channels> = AnyOf<Chan
 	channel: string;
 
 	send<T extends keyof Channel['receives']>(type: T, body: Channel['receives'][T]): void;
+	waitConnected(): Promise<void>;
 	dispose(): void;
 }
 
@@ -354,6 +399,7 @@ export abstract class Connection<Channel extends AnyOf<Channels> = AnyOf<Channel
 		this.outCount++;
 	}
 
+	public abstract waitConnected(): Promise<void>;
 	public abstract dispose(): void;
 }
 
@@ -378,34 +424,89 @@ class SharedConnection<Channel extends AnyOf<Channels> = AnyOf<Channels>> extend
 		this.removeAllListeners();
 		this.stream.removeSharedConnection(this as unknown as SharedConnection);
 	}
+
+	public waitConnected(): Promise<void> {
+		return this.pool.waitConnected();
+	}
 }
 
 class NonSharedConnection<Channel extends AnyOf<Channels> = AnyOf<Channels>> extends Connection<Channel> {
 	public id: string;
 	protected params: Channel['params'];
+	private isConnected = false;
+	private connectRequested = false;
+	private connectedPromise: Promise<void> | null = null;
+	private connectedTimeoutId: ReturnType<typeof setTimeout> | null = null;
+	private onConnectedAck: ((payload: { id: string; }) => void) | null = null;
 
 	constructor(stream: Stream, channel: string, id: string, params: Channel['params']) {
 		super(stream, channel);
 
 		this.connect = this.connect.bind(this);
 		this.dispose = this.dispose.bind(this);
+		this.onStreamDisconnected = this.onStreamDisconnected.bind(this);
 
 		this.params = params;
 		this.id = id;
 
+		this.stream.on('_disconnected_', this.onStreamDisconnected);
 		this.connect();
 	}
 
+	private onStreamDisconnected(): void {
+		this.clearConnectedWaiter();
+		this.isConnected = false;
+		this.connectRequested = false;
+	}
+
+	private clearConnectedWaiter(): void {
+		if (this.onConnectedAck) {
+			this.stream.off('_channelConnected_', this.onConnectedAck);
+			this.onConnectedAck = null;
+		}
+		if (this.connectedTimeoutId) {
+			clearTimeout(this.connectedTimeoutId);
+			this.connectedTimeoutId = null;
+		}
+		this.connectedPromise = null;
+	}
+
 	public connect(): void {
+		if (this.isConnected || this.connectRequested) return;
+		this.connectRequested = true;
+		this.connectedPromise = new Promise(resolve => {
+			const done = (connected: boolean) => {
+				this.clearConnectedWaiter();
+				if (connected) this.isConnected = true;
+				this.connectRequested = false;
+				resolve();
+			};
+			const onConnected = (payload: { id: string; }) => {
+				if (payload.id !== this.id) return;
+				done(true);
+			};
+			this.onConnectedAck = onConnected;
+			this.connectedTimeoutId = setTimeout(() => done(false), 5000);
+			this.stream.on('_channelConnected_', onConnected);
+		});
 		this.stream.send('connect', {
 			channel: this.channel,
 			id: this.id,
 			params: this.params,
+			pong: true,
 		});
+	}
+
+	public waitConnected(): Promise<void> {
+		if (this.isConnected && this.stream.state === 'connected') return Promise.resolve();
+		this.connect();
+		return this.connectedPromise ?? Promise.resolve();
 	}
 
 	public dispose(): void {
 		this.removeAllListeners();
+		this.clearConnectedWaiter();
+		this.stream.off('_disconnected_', this.onStreamDisconnected);
 		this.stream.send('disconnect', { id: this.id });
 		this.stream.disconnectToChannel(this as unknown as NonSharedConnection);
 	}

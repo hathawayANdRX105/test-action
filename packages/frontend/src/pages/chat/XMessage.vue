@@ -10,6 +10,28 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
 		<div :class="$style.header"><MkUserName v-if="!isMe && prefer.s['chat.showSenderName'] && message.fromUser != null" :user="message.fromUser"/></div>
 		<MkFukidashi :class="$style.fukidashi" :tail="isMe ? 'right' : 'left'" :accented="isMe">
+			<div v-if="message.reply || message.quote || messageWithReferenceState.replyUnavailable || messageWithReferenceState.quoteUnavailable" :class="$style.references">
+				<MkA v-if="message.reply && message.reply.id !== '0'" :to="`/chat/messages/${message.reply.id}`" :class="$style.reference">
+					<i class="ti ti-arrow-back-up"></i>
+					<span>{{ i18n.ts.reply }}</span>
+					<span :class="$style.referenceText">{{ getReferenceText(message.reply) }}</span>
+				</MkA>
+				<div v-else-if="message.reply || messageWithReferenceState.replyUnavailable" :class="$style.reference">
+					<i class="ti ti-arrow-back-up"></i>
+					<span>{{ i18n.ts.reply }}</span>
+					<span :class="$style.referenceText">{{ i18n.ts.deletedNote }}</span>
+				</div>
+				<MkA v-if="message.quote && message.quote.id !== '0'" :to="`/chat/messages/${message.quote.id}`" :class="$style.reference">
+					<i class="ti ti-quote"></i>
+					<span>{{ i18n.ts.quote }}</span>
+					<span :class="$style.referenceText">{{ getReferenceText(message.quote) }}</span>
+				</MkA>
+				<div v-else-if="message.quote || messageWithReferenceState.quoteUnavailable" :class="$style.reference">
+					<i class="ti ti-quote"></i>
+					<span>{{ i18n.ts.quote }}</span>
+					<span :class="$style.referenceText">{{ i18n.ts.deletedNote }}</span>
+				</div>
+			</div>
 			<Mfm
 				v-if="message.text"
 				ref="text"
@@ -83,15 +105,26 @@ const $i = ensureSignin();
 const props = defineProps<{
 	message: NormalizedChatMessage | Misskey.entities.ChatMessage;
 	isSearchResult?: boolean;
+	enableReferenceActions?: boolean;
+}>();
+
+const emit = defineEmits<{
+	(ev: 'reply', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
+	(ev: 'quote', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
 }>();
 
 type MessageReaction = NormalizedChatMessage['reactions'][number] | Misskey.entities.ChatMessage['reactions'][number];
 type VisibleReaction = Omit<MessageReaction, 'user'> & {
 	user: Misskey.entities.UserLite;
 };
+type MessageWithReferenceState = typeof props.message & {
+	replyUnavailable?: boolean;
+	quoteUnavailable?: boolean;
+};
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
+const messageWithReferenceState = computed<MessageWithReferenceState>(() => props.message);
 const visibleReactions = computed<VisibleReaction[]>(() => {
 	const records: VisibleReaction[] = [];
 	for (const record of props.message.reactions) {
@@ -155,6 +188,24 @@ function onContextmenu(ev: MouseEvent) {
 function showMenu(ev: MouseEvent, contextmenu = false) {
 	const menu: MenuItem[] = [];
 
+	if (props.enableReferenceActions && $i.policies.chatAvailability === 'available') {
+		menu.push({
+			text: i18n.ts.reply,
+			icon: 'ti ti-arrow-back-up',
+			action: () => emit('reply', props.message),
+		});
+
+		menu.push({
+			text: i18n.ts.quote,
+			icon: 'ti ti-quote',
+			action: () => emit('quote', props.message),
+		});
+
+		menu.push({
+			type: 'divider',
+		});
+	}
+
 	if (!isMe.value && $i.policies.chatAvailability === 'available') {
 		menu.push({
 			text: i18n.ts.reaction,
@@ -215,6 +266,10 @@ function showMenu(ev: MouseEvent, contextmenu = false) {
 	} else {
 		os.popupMenu(menu, ev.currentTarget ?? ev.target);
 	}
+}
+
+function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage) {
+	return message.text ?? message.file?.name ?? i18n.ts.file;
 }
 </script>
 
@@ -296,6 +351,35 @@ function showMenu(ev: MouseEvent, contextmenu = false) {
 
 .fukidashi {
 	text-align: left;
+}
+
+.references {
+	display: grid;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+.reference {
+	display: grid;
+	grid-template-columns: auto auto minmax(0, 1fr);
+	gap: 6px;
+	align-items: center;
+	width: 100%;
+	min-width: 0;
+	padding: 7px 9px;
+	border-left: solid 3px var(--MI_THEME-accent);
+	border-radius: var(--MI-radius-xs);
+	background: color(from var(--MI_THEME-fg) srgb r g b / 0.06);
+	color: var(--MI_THEME-fg);
+	font-size: 85%;
+	text-align: left;
+}
+
+.referenceText {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--MI_THEME-fgTransparentWeak);
 }
 
 .content {

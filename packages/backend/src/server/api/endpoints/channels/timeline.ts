@@ -62,6 +62,7 @@ export const paramDef = {
 			default: false,
 			description: 'Only show notes that have attached files.',
 		},
+		withBots: { type: 'boolean', default: true },
 	},
 	required: ['channelId'],
 } as const;
@@ -102,7 +103,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			if (!this.serverSettings.enableFanoutTimeline) {
-				return await this.noteEntityService.packMany(await this.getFromDb({ untilId, sinceId, limit: ps.limit, channelId: channel.id, withFiles: ps.withFiles, withRenotes: ps.withRenotes }, me), me);
+				return await this.noteEntityService.packMany(await this.getFromDb({ untilId, sinceId, limit: ps.limit, channelId: channel.id, withFiles: ps.withFiles, withRenotes: ps.withRenotes, withBots: ps.withBots }, me), me);
 			}
 
 			return await this.fanoutTimelineEndpointService.timeline({
@@ -115,8 +116,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				redisTimelines: [`channelTimeline:${channel.id}`],
 				excludePureRenotes: !ps.withRenotes,
 				excludeNoFiles: ps.withFiles,
+				excludeBots: !ps.withBots,
 				dbFallback: async (untilId, sinceId, limit) => {
-					return await this.getFromDb({ untilId, sinceId, limit, channelId: channel.id, withFiles: ps.withFiles, withRenotes: ps.withRenotes }, me);
+					return await this.getFromDb({ untilId, sinceId, limit, channelId: channel.id, withFiles: ps.withFiles, withRenotes: ps.withRenotes, withBots: ps.withBots }, me);
 				},
 			});
 		});
@@ -129,6 +131,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		channelId: string,
 		withFiles: boolean,
 		withRenotes: boolean,
+		withBots: boolean,
 	}, me: MiLocalUser | null) {
 		//#region fallback to database
 		const query = this.queryService.makePaginationQuery(this.notesRepository.createQueryBuilder('note'), ps.sinceId, ps.untilId)
@@ -159,6 +162,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.queryService.generateExcludedRenotesQueryForNotes(query);
 		} else if (me) {
 			this.queryService.generateMutedUserRenotesQueryForNotes(query, me);
+		}
+
+		if (!ps.withBots) {
+			query.andWhere('user.isBot = FALSE');
 		}
 		//#endregion
 

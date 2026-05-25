@@ -70,7 +70,7 @@ import {
 } from '@/models/json-schema/meta.js';
 import { packedSystemWebhookSchema } from '@/models/json-schema/system-webhook.js';
 import { packedAbuseReportNotificationRecipientSchema } from '@/models/json-schema/abuse-report-notification-recipient.js';
-import { packedChatMessageSchema, packedChatMessageLiteSchema, packedChatMessageLiteForRoomSchema, packedChatMessageLiteFor1on1Schema } from '@/models/json-schema/chat-message.js';
+import { packedChatMessageSchema, packedChatMessageLiteSchema, packedChatMessageReferenceSchema, packedChatMessageLiteForRoomSchema, packedChatMessageLiteFor1on1Schema } from '@/models/json-schema/chat-message.js';
 import { packedChatRoomSchema } from '@/models/json-schema/chat-room.js';
 import { packedChatRoomInvitationSchema } from '@/models/json-schema/chat-room-invitation.js';
 import { packedChatRoomMembershipSchema } from '@/models/json-schema/chat-room-membership.js';
@@ -141,6 +141,7 @@ export const refs = {
 	AbuseReportNotificationRecipient: packedAbuseReportNotificationRecipientSchema,
 	ChatMessage: packedChatMessageSchema,
 	ChatMessageLite: packedChatMessageLiteSchema,
+	ChatMessageReference: packedChatMessageReferenceSchema,
 	ChatMessageLiteFor1on1: packedChatMessageLiteFor1on1Schema,
 	ChatMessageLiteForRoom: packedChatMessageLiteForRoomSchema,
 	ChatRoom: packedChatRoomSchema,

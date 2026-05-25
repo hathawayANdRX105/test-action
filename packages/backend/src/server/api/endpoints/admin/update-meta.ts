@@ -11,6 +11,7 @@ import { MetaService } from '@/core/MetaService.js';
 import { MAX_CHAT_ROOM_MEMBER_LIMIT, MIN_CHAT_ROOM_MEMBER_LIMIT } from '@/core/ChatService.js';
 import { instanceUnsignedFetchOptions } from '@/const.js';
 import { DI } from '@/di-symbols.js';
+import { normalizeForSearch } from '@/misc/normalize-for-search.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -255,7 +256,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			if (Array.isArray(ps.hiddenTags)) {
-				set.hiddenTags = ps.hiddenTags.filter(Boolean);
+				set.hiddenTags = Array.from(new Set(ps.hiddenTags
+					.map(x => normalizeForSearch(x.trim().replace(/^#+/, '')))
+					.filter(Boolean)));
 			}
 
 			if (Array.isArray(ps.blockedHosts)) {

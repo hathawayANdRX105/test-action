@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template #label>{{ i18n.ts.type }}</template>
 		<option value="rss">RSS</option>
 		<option v-if="instance.federation !== 'none' && policies.canViewFederation" value="federation">Federation</option>
-		<option value="userList">User list timeline</option>
+		<option value="userList">{{ i18n.ts.userList }} {{ i18n.ts.timeline }}</option>
 	</MkSelect>
 
 	<MkInput v-model="statusbar.name" manualSave>
@@ -17,7 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</MkInput>
 
 	<MkSwitch v-model="statusbar.black">
-		<template #label>Black</template>
+		<template #label>{{ i18n.ts.dark }}</template>
 	</MkSwitch>
 
 	<MkRadios v-model="statusbar.size">
@@ -36,7 +36,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkSwitch v-model="statusbar.props.shuffle">
 			<template #label>{{ i18n.ts.shuffle }}</template>
 		</MkSwitch>
-		<MkInput v-model="statusbar.props.refreshIntervalSec" manualSave type="number" min="1">
+		<MkInput v-model="statusbar.props.refreshIntervalSec" manualSave type="number" :min="1">
 			<template #label>{{ i18n.ts.refreshInterval }}</template>
 		</MkInput>
 		<MkRange v-model="statusbar.props.marqueeDuration" :min="5" :max="150" :step="1">
@@ -48,7 +48,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</MkSwitch>
 	</template>
 	<template v-else-if="statusbar.type === 'federation'">
-		<MkInput v-model="statusbar.props.refreshIntervalSec" manualSave type="number" min="1">
+		<MkInput v-model="statusbar.props.refreshIntervalSec" manualSave type="number" :min="1">
 			<template #label>{{ i18n.ts.refreshInterval }}</template>
 		</MkInput>
 		<MkRange v-model="statusbar.props.marqueeDuration" :min="5" :max="150" :step="1">
@@ -99,12 +99,21 @@ import { instance, policies } from '@/instance.js';
 import { deepClone } from '@/utility/clone.js';
 import { prefer } from '@/preferences.js';
 
+type Statusbar = typeof prefer.s.statusbars[number];
+
 const props = defineProps<{
 	_id: string;
 	userLists: Misskey.entities.UserList[] | null;
 }>();
 
-const statusbar = reactive(deepClone(prefer.s.statusbars.find(x => x.id === props._id)));
+const statusbar = reactive(deepClone(prefer.s.statusbars.find(x => x.id === props._id) ?? {
+	id: props._id,
+	name: '',
+	type: '',
+	black: false,
+	size: 'medium',
+	props: {},
+} satisfies Statusbar));
 
 watch(() => statusbar.type, () => {
 	if (statusbar.type === 'rss') {

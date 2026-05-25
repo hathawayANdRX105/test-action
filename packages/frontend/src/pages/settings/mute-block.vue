@@ -32,7 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkSwitch v-model="showSoftWordMutedWord">{{ i18n.ts.showMutedWord }}</MkSwitch>
 						</SearchMarker>
 
-						<XWordMute :muted="$i.mutedWords" @save="saveMutedWords"/>
+							<XWordMute :muted="$i.mutedWords" :save="saveMutedWords"/>
 					</div>
 				</MkFolder>
 			</SearchMarker>
@@ -51,7 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 						<MkInfo warn>{{ i18n.ts.wordMuteWarning }}</MkInfo>
 
-						<XWordMute :muted="$i.hardMutedWords" @save="saveHardMutedWords"/>
+							<XWordMute :muted="$i.hardMutedWords" :save="saveHardMutedWords"/>
 					</div>
 				</MkFolder>
 			</SearchMarker>
@@ -91,7 +91,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<button class="_button" :class="$style.remove" @click="unrenoteMute(item.mutee, $event)"><i class="ti ti-x"></i></button>
 									</div>
 									<div v-if="expandedRenoteMuteItems.includes(item.id)" :class="$style.userItemSub">
-										<div>Muted at: <MkTime :time="item.createdAt" mode="detail"/></div>
+										<div>{{ i18n.ts.createdAt }}: <MkTime :time="item.createdAt" mode="detail"/></div>
 									</div>
 								</div>
 							</div>
@@ -123,9 +123,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<button class="_button" :class="$style.remove" @click="unmute(item.mutee, $event)"><i class="ti ti-x"></i></button>
 									</div>
 									<div v-if="expandedMuteItems.includes(item.id)" :class="$style.userItemSub">
-										<div>Muted at: <MkTime :time="item.createdAt" mode="detail"/></div>
-										<div v-if="item.expiresAt">Period: {{ new Date(item.expiresAt).toLocaleString() }}</div>
-										<div v-else>Period: {{ i18n.ts.indefinitely }}</div>
+										<div>{{ i18n.ts.createdAt }}: <MkTime :time="item.createdAt" mode="detail"/></div>
+										<div>{{ i18n.ts.period }}: <MkTime v-if="item.expiresAt" :time="item.expiresAt" mode="detail"/><template v-else>{{ i18n.ts.indefinitely }}</template></div>
 									</div>
 								</div>
 							</div>
@@ -157,9 +156,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<button class="_button" :class="$style.remove" @click="unblock(item.blockee, $event)"><i class="ti ti-x"></i></button>
 									</div>
 									<div v-if="expandedBlockItems.includes(item.id)" :class="$style.userItemSub">
-										<div>Blocked at: <MkTime :time="item.createdAt" mode="detail"/></div>
-										<div v-if="item.expiresAt">Period: {{ new Date(item.expiresAt).toLocaleString() }}</div>
-										<div v-else>Period: {{ i18n.ts.indefinitely }}</div>
+										<div>{{ i18n.ts.createdAt }}: <MkTime :time="item.createdAt" mode="detail"/></div>
+										<div>{{ i18n.ts.period }}: <MkTime v-if="item.expiresAt" :time="item.expiresAt" mode="detail"/><template v-else>{{ i18n.ts.indefinitely }}</template></div>
 									</div>
 								</div>
 							</div>
@@ -174,6 +172,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { ref, computed, watch } from 'vue';
+import type * as Misskey from 'misskey-js';
 import XInstanceMute from './mute-block.instance-mute.vue';
 import XWordMute from './mute-block.word-mute.vue';
 import MkPagination from '@/components/MkPagination.vue';
@@ -190,6 +189,7 @@ import MkSwitch from '@/components/MkSwitch.vue';
 import { reloadAsk } from '@/utility/reload-ask.js';
 import { prefer } from '@/preferences.js';
 import MkFeatureBanner from '@/components/MkFeatureBanner.vue';
+import { refreshCurrentAccount } from '@/accounts.js';
 
 const $i = ensureSignin();
 
@@ -208,13 +208,13 @@ const blockingPagination = {
 	limit: 10,
 };
 
-const expandedRenoteMuteItems = ref([]);
-const expandedMuteItems = ref([]);
-const expandedBlockItems = ref([]);
+const expandedRenoteMuteItems = ref<string[]>([]);
+const expandedMuteItems = ref<string[]>([]);
+const expandedBlockItems = ref<string[]>([]);
 
 const showSoftWordMutedWord = prefer.model('showSoftWordMutedWord');
 
-async function unrenoteMute(user, ev) {
+async function unrenoteMute(user: Misskey.entities.UserLite, ev: MouseEvent) {
 	os.popupMenu([{
 		text: i18n.ts.renoteUnmute,
 		icon: 'ti ti-x',
@@ -225,7 +225,7 @@ async function unrenoteMute(user, ev) {
 	}], ev.currentTarget ?? ev.target);
 }
 
-async function unmute(user, ev) {
+async function unmute(user: Misskey.entities.UserLite, ev: MouseEvent) {
 	os.popupMenu([{
 		text: i18n.ts.unmute,
 		icon: 'ti ti-x',
@@ -236,7 +236,7 @@ async function unmute(user, ev) {
 	}], ev.currentTarget ?? ev.target);
 }
 
-async function unblock(user, ev) {
+async function unblock(user: Misskey.entities.UserLite, ev: MouseEvent) {
 	os.popupMenu([{
 		text: i18n.ts.unblock,
 		icon: 'ti ti-x',
@@ -247,7 +247,7 @@ async function unblock(user, ev) {
 	}], ev.currentTarget ?? ev.target);
 }
 
-async function toggleRenoteMuteItem(item) {
+async function toggleRenoteMuteItem(item: { id: string }) {
 	if (expandedRenoteMuteItems.value.includes(item.id)) {
 		expandedRenoteMuteItems.value = expandedRenoteMuteItems.value.filter(x => x !== item.id);
 	} else {
@@ -255,7 +255,7 @@ async function toggleRenoteMuteItem(item) {
 	}
 }
 
-async function toggleMuteItem(item) {
+async function toggleMuteItem(item: { id: string }) {
 	if (expandedMuteItems.value.includes(item.id)) {
 		expandedMuteItems.value = expandedMuteItems.value.filter(x => x !== item.id);
 	} else {
@@ -263,7 +263,7 @@ async function toggleMuteItem(item) {
 	}
 }
 
-async function toggleBlockItem(item) {
+async function toggleBlockItem(item: { id: string }) {
 	if (expandedBlockItems.value.includes(item.id)) {
 		expandedBlockItems.value = expandedBlockItems.value.filter(x => x !== item.id);
 	} else {
@@ -273,10 +273,12 @@ async function toggleBlockItem(item) {
 
 async function saveMutedWords(mutedWords: (string | string[])[]) {
 	await os.apiWithDialog('i/update', { mutedWords });
+	await refreshCurrentAccount();
 }
 
 async function saveHardMutedWords(hardMutedWords: (string | string[])[]) {
 	await os.apiWithDialog('i/update', { hardMutedWords });
+	await refreshCurrentAccount();
 }
 
 const headerActions = computed(() => []);

@@ -16,7 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.joinRequiredTitle">{{ joinRequiredRoom.name }}</div>
 				<div>{{ joinRequiredRoom.description === '' ? i18n.ts.noDescription : joinRequiredRoom.description }}</div>
 				<div :class="$style.joinRequiredMeta">
-					<span>{{ i18n.ts.owner }}: <MkAcct :user="joinRequiredRoom.owner"/></span>
+					<span><MkAcct :user="joinRequiredRoom.owner"/></span>
 					<span>{{ i18n.ts._chat.roomJoinMode }}: {{ i18n.ts._chat.openRoom }}</span>
 				</div>
 				<div>{{ i18n.ts._chat.notJoinedRoom }}</div>
@@ -64,7 +64,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					tag="div" class="_gaps"
 				>
 					<div v-for="item in timeline.toReversed()" :key="item.id">
-						<XMessage v-if="item.type === 'item'" :message="item.data"/>
+						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" @reply="replyTarget = item.data" @quote="quoteTarget = item.data"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 							<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -104,7 +104,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</button>
 					</div>
 				</Transition>
-				<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" :user="user" :room="room" :class="$style.form"/>
+				<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" :user="user" :room="room" :replyTarget="replyTarget" :quoteTarget="quoteTarget" :class="$style.form" @sent="onSentMessage" @clearReply="replyTarget = null" @clearQuote="quoteTarget = null"/>
 			</div>
 		</div>
 	</template>
@@ -146,8 +146,12 @@ const props = defineProps<{
 	roomId?: string;
 }>();
 
-export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions'> & {
+export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions' | 'reply' | 'quote'> & {
 	fromUser: Misskey.entities.UserLite | null;
+	reply: NormalizedChatMessage | null;
+	quote: NormalizedChatMessage | null;
+	replyUnavailable?: boolean;
+	quoteUnavailable?: boolean;
 	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
 		user: Misskey.entities.UserLite | null;
 	})[];
@@ -162,12 +166,16 @@ const messages = ref<NormalizedChatMessage[]>([]);
 const canFetchMore = ref(false);
 const user = ref<Misskey.entities.UserDetailed | null>(null);
 const room = ref<Misskey.entities.ChatRoom | null>(null);
+const replyTarget = ref<NormalizedChatMessage | null>(null);
+const quoteTarget = ref<NormalizedChatMessage | null>(null);
 const connection = ref<Misskey.IChannelConnection<Misskey.Channels['chatUser']> | Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null>(null);
 const showIndicator = ref(false);
 const timelineEl = useTemplateRef('timelineEl');
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
 
 const SCROLL_HEAD_THRESHOLD = 200;
+const TIMELINE_LIMIT = 20;
+const STREAM_CONNECT_TIMEOUT = 5000;
 
 // column-reverseなので本来はスクロール位置の最下部への追従は不要なはずだが、おそらくブラウザのバグにより、最下部にスクロールした状態でも追従されない場合がある(スクロール位置が少数になることがあるのが関わっていそう)
 // そのため補助としてMutationObserverを使って追従を行う
@@ -190,6 +198,10 @@ function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.en
 	return {
 		...message,
 		fromUser: message.fromUser ?? (message.fromUserId === $i.id ? $i : user.value),
+		reply: message.replyId ? (message.reply ? normalizeMessage(message.reply) : null) : null,
+		quote: message.quoteId ? (message.quote ? normalizeMessage(message.quote) : null) : null,
+		replyUnavailable: message.replyId != null && message.reply == null,
+		quoteUnavailable: message.quoteId != null && message.quote == null,
 		reactions: message.reactions.map(record => ({
 			...record,
 			user: record.user ?? null,
@@ -197,40 +209,115 @@ function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.en
 	};
 }
 
-async function initialize() {
-	const LIMIT = 20;
+function sortMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
+	return [...items].sort((a, b) => a.id > b.id ? -1 : a.id < b.id ? 1 : 0);
+}
 
+function mergeMessages(...sources: NormalizedChatMessage[][]): NormalizedChatMessage[] {
+	const map = new Map<string, NormalizedChatMessage>();
+
+	for (const source of sources) {
+		for (const message of source) {
+			map.set(message.id, message);
+		}
+	}
+
+	return sortMessages([...map.values()]);
+}
+
+function appendFetchedMessages(fetched: Misskey.entities.ChatMessageLite[]) {
+	messages.value = mergeMessages(messages.value, fetched.map(x => normalizeMessage(x)));
+}
+
+function onSentMessage(message: Misskey.entities.ChatMessageLite) {
+	messages.value = mergeMessages(messages.value, [normalizeMessage(message)]);
+	replyTarget.value = null;
+	quoteTarget.value = null;
+}
+
+async function waitChannelConnected() {
+	const channel = connection.value;
+	if (!channel) return;
+
+	const waitConnected = (channel as { waitConnected?: () => Promise<void> }).waitConnected;
+	if (waitConnected == null) return;
+
+	await Promise.race([
+		waitConnected(),
+		new Promise<void>(resolve => window.setTimeout(resolve, STREAM_CONNECT_TIMEOUT)),
+	]);
+}
+
+function connectStream() {
+	connection.value?.dispose();
+
+	if (props.userId) {
+		connection.value = useStream().useChannel('chatUser', {
+			otherId: props.userId,
+		});
+	} else if (room.value != null) {
+		connection.value = useStream().useChannel('chatRoom', {
+			roomId: room.value.id,
+		});
+	} else {
+		connection.value = null;
+		return;
+	}
+
+	connection.value.on('message', onMessage);
+	connection.value.on('deleted', onDeleted);
+	connection.value.on('react', onReact);
+	connection.value.on('unreact', onUnreact);
+}
+
+async function fetchLatestGap() {
+	const sinceId = messages.value[0]?.id;
+	const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
+		userId: user.value!.id,
+		limit: TIMELINE_LIMIT,
+		...(sinceId ? { sinceId } : {}),
+	}) : await misskeyApi('chat/messages/room-timeline', {
+		roomId: room.value!.id,
+		limit: TIMELINE_LIMIT,
+		...(sinceId ? { sinceId } : {}),
+	});
+
+	appendFetchedMessages(newMessages);
+}
+
+async function initialize() {
 	initializing.value = true;
 	initializeError.value = null;
 	joinRequiredRoom.value = null;
 	canFetchMore.value = false;
+	messages.value = [];
 	connection.value?.dispose();
 	connection.value = null;
 
 	try {
 		if (props.userId) {
-			const [u, m] = await Promise.all([
-				misskeyApi('users/show', { userId: props.userId }),
-				misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT }),
-			]);
-
+			const u = await misskeyApi('users/show', { userId: props.userId });
 			user.value = u;
 			room.value = null;
-			messages.value = m.map(x => normalizeMessage(x));
 
-			if (messages.value.length === LIMIT) {
+			connectStream();
+			await waitChannelConnected();
+
+			const m = await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: TIMELINE_LIMIT });
+			appendFetchedMessages(m);
+
+			if (m.length === TIMELINE_LIMIT) {
 				canFetchMore.value = true;
 			}
-
-			connection.value = useStream().useChannel('chatUser', {
-				otherId: user.value.id,
-			});
-			connection.value.on('message', onMessage);
-			connection.value.on('deleted', onDeleted);
-			connection.value.on('react', onReact);
-			connection.value.on('unreact', onUnreact);
+			await fetchLatestGap();
 		} else {
-			const r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
+			const roomId = props.roomId;
+			if (roomId == null) {
+				initializeError.value = i18n.ts.pageLoadError;
+				return;
+			}
+
+			const r = await misskeyApi('chat/rooms/show', { roomId });
 
 			user.value = null;
 			room.value = r as Misskey.entities.ChatRoomsShowResponse;
@@ -247,21 +334,16 @@ async function initialize() {
 				return;
 			}
 
-			const m = await misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT });
+			connectStream();
+			await waitChannelConnected();
 
-			messages.value = (m as Misskey.entities.ChatMessagesRoomTimelineResponse).map(x => normalizeMessage(x));
+			const m = await misskeyApi('chat/messages/room-timeline', { roomId, limit: TIMELINE_LIMIT });
+			appendFetchedMessages(m);
 
-			if (messages.value.length === LIMIT) {
+			if (m.length === TIMELINE_LIMIT) {
 				canFetchMore.value = true;
 			}
-
-			connection.value = useStream().useChannel('chatRoom', {
-				roomId: room.value.id,
-			});
-			connection.value.on('message', onMessage);
-			connection.value.on('deleted', onDeleted);
-			connection.value.on('react', onReact);
-			connection.value.on('unreact', onUnreact);
+			await fetchLatestGap();
 		}
 	} catch (err) {
 		console.error('Failed to initialize chat room:', err);
@@ -270,7 +352,6 @@ async function initialize() {
 	} finally {
 		initializing.value = false;
 	}
-
 }
 
 async function joinRoom() {
@@ -322,7 +403,7 @@ async function fetchMore() {
 		untilId: messages.value[messages.value.length - 1].id,
 	});
 
-	messages.value.push(...newMessages.map(x => normalizeMessage(x)));
+	appendFetchedMessages(newMessages);
 
 	canFetchMore.value = newMessages.length === LIMIT;
 	moreFetching.value = false;
@@ -331,7 +412,7 @@ async function fetchMore() {
 function onMessage(message: Misskey.entities.ChatMessageLite) {
 	sound.playMisskeySfx('chatMessage');
 
-	messages.value.unshift(normalizeMessage(message));
+	messages.value = mergeMessages(messages.value, [normalizeMessage(message)]);
 
 	// TODO: DOM的にバックグラウンドになっていないかどうかも考慮する
 	if (message.fromUserId !== $i.id && !window.document.hidden && isActivated) {

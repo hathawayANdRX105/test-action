@@ -19,6 +19,7 @@ class HomeTimelineChannel extends NoteChannel {
 	public static kind = 'read:account';
 	private withRenotes: boolean;
 	private withFiles: boolean;
+	private withBots: boolean;
 
 	constructor(
 		id: string,
@@ -34,6 +35,7 @@ class HomeTimelineChannel extends NoteChannel {
 		if (!this.user) return;
 		this.withRenotes = !!(params.withRenotes ?? true);
 		this.withFiles = !!(params.withFiles ?? false);
+		this.withBots = params.withBots !== false;
 
 		this.subscriber.on('notesStream', this.onNote);
 	}
@@ -45,6 +47,7 @@ class HomeTimelineChannel extends NoteChannel {
 		const isMe = userId === note.userId;
 		if (this.withFiles && (note.fileIds == null || note.fileIds.length === 0)) return;
 		if (!this.withRenotes && isPackedPureRenote(note)) return;
+		if (!this.withBots && note.user.isBot) return;
 		if (note.channelId) {
 			if (!this.followingChannels?.has(note.channelId)) return;
 		} else {

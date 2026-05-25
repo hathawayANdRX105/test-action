@@ -9,6 +9,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@dragover.stop="onDragover"
 	@drop.stop="onDrop"
 >
+	<div v-if="replyTarget || quoteTarget" :class="$style.references">
+		<div v-if="replyTarget" :class="$style.reference">
+			<div :class="$style.referenceLabel"><i class="ti ti-arrow-back-up"></i> {{ i18n.ts.reply }}</div>
+			<div :class="$style.referenceText">{{ getReferenceText(replyTarget) }}</div>
+			<button class="_button" :class="$style.referenceButton" :title="i18n.ts.cancel" @click="emit('clearReply')"><i class="ti ti-x"></i></button>
+		</div>
+		<div v-if="quoteTarget" :class="$style.reference">
+			<div :class="$style.referenceLabel"><i class="ti ti-quote"></i> {{ i18n.ts.quote }}</div>
+			<div :class="$style.referenceText">{{ getReferenceText(quoteTarget) }}</div>
+			<button class="_button" :class="$style.referenceButton" :title="i18n.ts.cancel" @click="emit('clearQuote')"><i class="ti ti-x"></i></button>
+		</div>
+	</div>
 	<textarea
 		ref="textareaEl"
 		v-model="text"
@@ -17,6 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:placeholder="i18n.ts.inputMessageHere"
 		:readonly="textareaReadOnly"
 		@keydown="onKeydown"
+		@focus="onFocus"
 		@paste="onPaste"
 	></textarea>
 	<footer :class="$style.footer">
@@ -38,6 +51,7 @@ import { onMounted, watch, ref, shallowRef, computed, nextTick, readonly, onBefo
 import * as Misskey from 'misskey-js';
 //import insertTextAtCursor from 'insert-text-at-cursor';
 import { formatTimeString } from '@@/js/format-time-string.js';
+import type { NormalizedChatMessage } from './room.vue';
 import { selectFile } from '@/utility/select-file.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
@@ -51,6 +65,14 @@ import { emojiPicker } from '@/utility/emoji-picker.js';
 const props = defineProps<{
 	user?: Misskey.entities.UserDetailed | null;
 	room?: Misskey.entities.ChatRoom | null;
+	replyTarget?: NormalizedChatMessage | null;
+	quoteTarget?: NormalizedChatMessage | null;
+}>();
+
+const emit = defineEmits<{
+	(ev: 'sent', message: Misskey.entities.ChatMessageLite): void;
+	(ev: 'clearReply'): void;
+	(ev: 'clearQuote'): void;
 }>();
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
@@ -61,6 +83,7 @@ const file = ref<Misskey.entities.DriveFile | null>(null);
 const sending = ref(false);
 const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
+let focusScrollTimers: number[] = [];
 
 const canSend = computed(() => (text.value != null && text.value !== '') || file.value != null);
 
@@ -153,13 +176,35 @@ function onKeydown(ev: KeyboardEvent) {
 	if (ev.key === 'Enter') {
 		if (prefer.s['chat.sendOnEnter']) {
 			if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) {
+				ev.preventDefault();
 				send();
 			}
 		} else {
 			if ((ev.ctrlKey || ev.metaKey)) {
+				ev.preventDefault();
 				send();
 			}
 		}
+	}
+}
+
+function onFocus() {
+	scrollTextareaIntoViewAfterFocus();
+}
+
+function scrollTextareaIntoViewAfterFocus() {
+	for (const timer of focusScrollTimers) {
+		window.clearTimeout(timer);
+	}
+
+	focusScrollTimers = [0, 120, 320, 640].map(delay => window.setTimeout(() => {
+		textareaEl.value?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+	}, delay));
+}
+
+function onVisualViewportChange() {
+	if (window.document.activeElement === textareaEl.value) {
+		scrollTextareaIntoViewAfterFocus();
 	}
 }
 
@@ -191,7 +236,10 @@ function send() {
 			toUserId: props.user.id,
 			text: text.value ? text.value : undefined,
 			fileId: file.value ? file.value.id : undefined,
+			replyId: props.replyTarget?.id,
+			quoteId: props.quoteTarget?.id,
 		}).then(message => {
+			emit('sent', message);
 			clear();
 		}).catch(err => {
 			console.error('Error in chat:', err);
@@ -208,7 +256,10 @@ function send() {
 			toRoomId: props.room.id,
 			text: text.value ? text.value : undefined,
 			fileId: file.value ? file.value.id : undefined,
+			replyId: props.replyTarget?.id,
+			quoteId: props.quoteTarget?.id,
 		}).then(message => {
+			emit('sent', message);
 			clear();
 		}).catch(err => {
 			console.error('Error in chat:', err);
@@ -226,7 +277,13 @@ function send() {
 function clear() {
 	text.value = '';
 	file.value = null;
+	emit('clearReply');
+	emit('clearQuote');
 	deleteDraft();
+}
+
+function getReferenceText(message: NormalizedChatMessage | Misskey.entities.ChatMessageLite) {
+	return message.text ?? message.file?.name ?? i18n.ts.file;
 }
 
 function saveDraft() {
@@ -285,6 +342,9 @@ onMounted(() => {
 		autocompleteInstance = new Autocomplete(textareaEl.value, text);
 	}
 
+	window.visualViewport?.addEventListener('resize', onVisualViewportChange);
+	window.visualViewport?.addEventListener('scroll', onVisualViewportChange);
+
 	// 書きかけの投稿を復元
 	const draft = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}')[getDraftKey()];
 	if (draft) {
@@ -294,6 +354,14 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+	window.visualViewport?.removeEventListener('resize', onVisualViewportChange);
+	window.visualViewport?.removeEventListener('scroll', onVisualViewportChange);
+
+	for (const timer of focusScrollTimers) {
+		window.clearTimeout(timer);
+	}
+	focusScrollTimers = [];
+
 	if (autocompleteInstance) {
 		autocompleteInstance.detach();
 		autocompleteInstance = null;
@@ -307,6 +375,54 @@ onBeforeUnmount(() => {
 	border-bottom: none;
 	border-radius: 14px 14px 0 0;
 	overflow: clip;
+}
+
+.references {
+	display: grid;
+	gap: 6px;
+	padding: 10px 12px 0;
+	background: var(--MI_THEME-panel);
+}
+
+.reference {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border-left: solid 3px var(--MI_THEME-accent);
+	border-radius: var(--MI-radius-xs);
+	background: var(--MI_THEME-buttonBg);
+	font-size: 90%;
+	text-align: left;
+}
+
+.referenceLabel {
+	font-weight: 700;
+	color: var(--MI_THEME-accent);
+}
+
+.referenceText {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.referenceButton {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--MI-radius-xs);
+	color: var(--MI_THEME-fg);
+	background: var(--MI_THEME-buttonBg);
+
+	&:hover,
+	&:focus-visible {
+		color: var(--MI_THEME-accent);
+		background: var(--MI_THEME-buttonHoverBg);
+	}
 }
 
 .textarea {
@@ -343,6 +459,8 @@ onBeforeUnmount(() => {
 
 .buttons {
 	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
 }
 
 .button {

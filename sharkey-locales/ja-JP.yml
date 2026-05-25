@@ -8,7 +8,7 @@ deleteAndEditConfirm: "このノートを削除してもう一度編集します
 openRemoteProfile: "リモートプロフィールを開く"
 trustedLinkUrlPatterns: "外部サイトへのリンク警告 除外リスト"
 trustedLinkUrlPatternsDescription: "スペースで区切るとAND指定になり、改行で区切るとOR指定になります。スラッシュで囲むと正規表現になります。ドメイン名だけ書くと後方一致になります。"
-mutuals: "Mutuals"
+mutuals: "相互フォロー"
 renote: "ブースト"
 unrenote: "ブースト解除"
 renoted: "ブーストしました。"
@@ -130,6 +130,10 @@ renotes: "ブースト"
 clickToOpen: "クリックしてノートを開く"
 showBots: "ボットをタイムラインに表示"
 showRenotes: "ブーストを表示"
+showQuotes: "引用を表示"
+showReplies: "返信を表示"
+showNonPublicNotes: "非公開ノートを表示"
+selectFollowRelationship: "フォロー関係を選択..."
 sourceCodeIsNotYetProvided: "ソースコードはまだ提供されていません。この問題の修正について管理者に問い合わせてください。"
 repositoryUrlDescription: "ソースコードが公開されているリポジトリがある場合、そのURLを記入します。Sharkeyを現状のまま（ソースコードにいかなる変更も加えずに）使用している場合は https://activitypub.software/TransFem-org/Sharkey/ と記入します。"
 donation: "寄付する"
@@ -154,6 +158,16 @@ _flash:
 _delivery:
   stop: "配信停止"
   resume: "配信再開"
+_deck:
+  _columns:
+    following: "フォロー中"
+wordMuteTestLabel: "パターンをテスト"
+wordMuteTestDescription: "ワードミュートのパターンをテストするテキストを入力します。一致した語句があれば下に表示されます。"
+wordMuteTestTest: "テスト"
+wordMuteTestMatch: "一致した語句: {words}"
+wordMuteTestNoResults: "まだ結果はありません。テキストを入力して「テスト」を押してください。"
+wordMuteTestNoMatch: "どのパターンにも一致しません。"
+wordMuteWarning: "ワードミュートは大文字と小文字を区別し、長い単語や名前の一部を含む任意の部分文字列に一致します。より正確に制御するには正規表現を使用できます。"
 _initialAccountSetting:
   youCanContinueTutorial: "このまま{name}(Sharkey)の使い方についてのチュートリアルに進むこともできますが、ここで中断してすぐに使い始めることもできます。"
 _initialTutorial:

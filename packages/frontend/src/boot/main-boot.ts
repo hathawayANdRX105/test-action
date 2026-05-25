@@ -377,7 +377,7 @@ export async function mainBoot() {
 
 		main.on('unreadAntenna', () => {
 			updateCurrentAccountPartial({ hasUnreadAntenna: true });
-			sound.playMisskeySfx('antenna');
+			sound.playMisskeySfx('notification');
 		});
 
 		main.on('newChatMessage', () => {
@@ -406,6 +406,9 @@ export async function mainBoot() {
 			post();
 		},
 		'd': () => {
+			if (prefer.s.syncDeviceDarkMode) {
+				prefer.commit('syncDeviceDarkMode', false);
+			}
 			store.set('darkMode', !store.s.darkMode);
 		},
 		's': () => {

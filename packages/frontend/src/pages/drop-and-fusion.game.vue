@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="_spacer" style="--MI_SPACER-w: 800px;">
+<div class="_spacer" style="--MI_SPACER-w: 1200px;">
 	<div :class="$style.root">
 		<div v-if="!gameLoaded" :class="$style.loadingScreen">
 			<div>{{ i18n.ts.loading }}<MkEllipsis/></div>
@@ -55,7 +55,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div ref="containerEl" :class="[$style.gameContainer, { [$style.gameOver]: isGameOver && !replaying }]" @contextmenu.stop.prevent @click.stop.prevent="onClick" @touchmove.stop.prevent="onTouchmove" @touchend="onTouchend" @mousemove="onMousemove">
+			<div ref="containerEl" :class="[$style.gameContainer, { [$style.gameOver]: isGameOver && !replaying && !replayRestoring }]" @contextmenu.stop.prevent @click.stop.prevent="onClick" @touchmove.stop.prevent="onTouchmove" @touchend="onTouchend" @mousemove="onMousemove">
 				<img v-if="store.s.darkMode" src="/client-assets/drop-and-fusion/frame-dark.svg" :class="$style.mainFrameImg"/>
 				<img v-else src="/client-assets/drop-and-fusion/frame-light.svg" :class="$style.mainFrameImg"/>
 				<canvas ref="canvasEl" :class="$style.canvas"/>
@@ -85,7 +85,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div :class="$style.dropGuide"/>
 					</template>
 				</div>
-				<div v-if="isGameOver && !replaying" :class="$style.gameOverLabel">
+				<div v-if="isGameOver && !replaying && !replayRestoring" :class="$style.gameOverLabel">
 					<div class="_gaps_s">
 						<img src="/client-assets/drop-and-fusion/gameover.png" style="width: 200px; max-width: 100%; display: block; margin: auto; margin-bottom: -5px;"/>
 						<div>{{ i18n.ts._bubbleGame._score.score }}: <MkNumber :value="score"/>{{ getScoreUnit(gameMode) }}</div>
@@ -123,9 +123,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div v-if="isGameOver" class="_woodenFrame">
+				<div v-if="isGameOver && !replaying && !replayRestoring" class="_woodenFrame">
 				<div class="_woodenFrameInner">
-					<div class="_buttonsCenter">
+					<div :class="$style.gameOverActions">
 						<MkButton primary rounded @click="backToTitle">{{ i18n.ts.backToTitle }}</MkButton>
 						<MkButton primary rounded @click="replay">{{ i18n.ts.showReplay }}</MkButton>
 						<MkButton primary rounded @click="share">{{ i18n.ts.share }}</MkButton>
@@ -191,7 +191,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onDeactivated, onMounted, onUnmounted, ref, shallowRef, watch, useTemplateRef } from 'vue';
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, shallowRef, watch, useTemplateRef } from 'vue';
 import * as Matter from 'matter-js';
 import * as Misskey from 'misskey-js';
 import { DropAndFusionGame } from 'misskey-bubble-game';
@@ -560,6 +560,12 @@ let renderer: Matter.Render | null = null;
 let monoTextures: Record<string, Blob> = {};
 let monoTextureUrls: Record<string, string> = {};
 let tickInterval: number | null = null;
+let resizeObserver: ResizeObserver | null = null;
+let isAlive = false;
+let shouldResumeOnActivated = false;
+let isRestoringGameOverState = false;
+let replayRestorePromise: Promise<void> | null = null;
+let replaySession = 0;
 let game = new DropAndFusionGame({
 	seed: seed,
 	gameMode: props.gameMode,
@@ -585,6 +591,7 @@ const highScore = ref<number | null>(null);
 const yenTotal = ref<number | null>(null);
 const showConfig = ref(false);
 const replaying = ref(false);
+const replayRestoring = ref(false);
 const replayPlaybackRate = ref(1);
 const currentFrame = ref(0);
 const bgmVolume = ref(prefer.s['game.dropAndFusion'].bgmVolume);
@@ -611,17 +618,17 @@ function createRendererInstance(game: DropAndFusionGame) {
 			wireframeBackground: 'transparent', // transparent to hide
 			wireframes: false,
 			showSleeping: false,
-			pixelRatio: Math.max(2, window.devicePixelRatio),
+			pixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio)),
 		},
 	});
 }
 
-function loadMonoTextures() {
+function loadMonoTextures(targetRenderer = renderer) {
 	async function loadSingleMonoTexture(mono: FrontendMonoDefinition) {
-		if (renderer == null) return;
+		if (targetRenderer == null) return;
 
 		// Matter-js内にキャッシュがある場合はスキップ
-		if (renderer.textures[mono.img]) return;
+		if (targetRenderer.textures[mono.img]) return;
 
 		let src = mono.img;
 
@@ -641,7 +648,7 @@ function loadMonoTextures() {
 
 		const image = new Image();
 		image.src = src;
-		renderer.textures[mono.img] = image;
+		targetRenderer.textures[mono.img] = image;
 	}
 
 	return Promise.all(monoDefinitions.value.map(x => loadSingleMonoTexture(x)));
@@ -683,35 +690,44 @@ function tick() {
 function tickReplay() {
 	let hasNextTick;
 	for (let i = 0; i < replayPlaybackRate.value; i++) {
-		const log = logs!.find(x => x.frame === game.frame);
-		if (log) {
-			switch (log.operation) {
-				case 'drop': {
-					game.drop(log.x);
-					break;
-				}
-				case 'hold': {
-					game.hold();
-					break;
-				}
-				case 'surrender': {
-					game.surrender();
-					break;
-				}
-				default:
-					break;
-			}
-		}
+		applyReplayOperation();
+		if (!replaying.value) return;
 
 		hasNextTick = game.tick();
 		currentFrame.value = game.frame;
+		if (!replaying.value) return;
 		if (!hasNextTick) break;
 	}
 
 	if (!hasNextTick) stopTicking();
 }
 
+function applyReplayOperation() {
+	const log = logs?.find(x => x.frame === game.frame);
+	if (!log) return;
+
+	switch (log.operation) {
+		case 'drop': {
+			game.drop(log.x);
+			break;
+		}
+		case 'hold': {
+			game.hold();
+			break;
+		}
+		case 'surrender': {
+			game.surrender();
+			break;
+		}
+		default:
+			break;
+	}
+}
+
 async function start() {
+	isAlive = true;
+	gameLoaded.value = false;
+	readyGo.value = 'ready';
 	renderer = createRendererInstance(game);
 	await loadMonoTextures();
 	Matter.Render.lookAt(renderer, {
@@ -723,6 +739,8 @@ async function start() {
 	startTicking(tick);
 
 	gameLoaded.value = true;
+	await nextTick();
+	updateContainerMetrics();
 
 	window.setTimeout(() => {
 		readyGo.value = 'go';
@@ -732,7 +750,21 @@ async function start() {
 	}, 1500);
 }
 
+async function startBgm() {
+	if (bgmNodes) return;
+
+	const bgmBuffer = await sound.loadAudio('/client-assets/drop-and-fusion/bgm_1.mp3');
+	if (!bgmBuffer) return;
+	bgmNodes = sound.createSourceNode(bgmBuffer, {
+		volume: props.mute ? 0 : bgmVolume.value,
+	});
+	if (!bgmNodes) return;
+	bgmNodes.soundSource.loop = true;
+	bgmNodes.soundSource.start();
+}
+
 function onClick(ev: MouseEvent) {
+	updateContainerMetrics();
 	if (!containerElRect) return;
 	if (replaying.value) return;
 	const x = (ev.clientX - containerElRect.left) / viewScale;
@@ -740,6 +772,7 @@ function onClick(ev: MouseEvent) {
 }
 
 function onTouchend(ev: TouchEvent) {
+	updateContainerMetrics();
 	if (!containerElRect) return;
 	if (replaying.value) return;
 	const x = (ev.changedTouches[0].clientX - containerElRect.left) / viewScale;
@@ -760,6 +793,14 @@ function onTouchmove(ev: TouchEvent) {
 
 function moveDropper(rect: DOMRect, x: number) {
 	dropperX.value = Math.min(rect.width * ((game.GAME_WIDTH - game.PLAYAREA_MARGIN) / game.GAME_WIDTH), Math.max(rect.width * (game.PLAYAREA_MARGIN / game.GAME_WIDTH), x));
+}
+
+function updateContainerMetrics() {
+	if (!canvasEl.value) return;
+	const actualCanvasWidth = canvasEl.value.getBoundingClientRect().width;
+	if (actualCanvasWidth === 0) return;
+	viewScale = actualCanvasWidth / game.GAME_WIDTH;
+	containerElRect = containerEl.value?.getBoundingClientRect() ?? null;
 }
 
 function hold() {
@@ -786,11 +827,94 @@ async function restart() {
 	await start();
 }
 
+async function restoreGameOverState(restoreRun: number) {
+	dispose();
+	game = new DropAndFusionGame({
+		seed: seed,
+		gameMode: props.gameMode,
+		getMonoRenderOptions,
+	});
+	attachGameEvents();
+	const restoreRenderer = renderer = createRendererInstance(game);
+	await loadMonoTextures(restoreRenderer);
+	if (restoreRun !== replaySession || renderer !== restoreRenderer) return;
+	Matter.Render.lookAt(restoreRenderer, {
+		min: { x: 0, y: 0 },
+		max: { x: game.GAME_WIDTH, y: game.GAME_HEIGHT },
+	});
+	Matter.Render.run(restoreRenderer);
+	game.start();
+	isRestoringGameOverState = true;
+	try {
+		for (let frame = 0; frame < endedAtFrame; frame++) {
+			applyReplayOperation();
+			if (!game.tick()) break;
+		}
+	} finally {
+		isRestoringGameOverState = false;
+	}
+
+	if (restoreRun !== replaySession || renderer !== restoreRenderer) return;
+	currentFrame.value = game.frame;
+	isAlive = false;
+	Matter.Render.world(restoreRenderer);
+	Matter.Render.stop(restoreRenderer);
+	gameLoaded.value = true;
+	readyGo.value = null;
+	isGameOver.value = true;
+	currentPick.value = null;
+	dropReady.value = false;
+	await nextTick();
+	if (restoreRun !== replaySession || renderer !== restoreRenderer) return;
+	updateContainerMetrics();
+}
+
+function restoreReplayState(deferUntilNextTick: boolean) {
+	if (replayRestorePromise) return replayRestorePromise;
+
+	const restoreRun = ++replaySession;
+	replaying.value = false;
+	replayRestoring.value = true;
+	stopTicking();
+	const delay = deferUntilNextTick ? new Promise<void>(resolve => window.setTimeout(resolve, 0)) : Promise.resolve();
+	const promise = delay
+		.then(() => {
+			if (restoreRun !== replaySession) return;
+			return restoreGameOverState(restoreRun);
+		})
+		.finally(() => {
+			if (replayRestorePromise === promise) {
+				replayRestorePromise = null;
+			}
+			if (restoreRun === replaySession) {
+				replayRestoring.value = false;
+			}
+		});
+	replayRestorePromise = promise;
+	return promise;
+}
+
+async function restoreReplay() {
+	return restoreReplayState(false);
+}
+
+function restoreReplayAfterCurrentTick() {
+	restoreReplayState(true);
+}
+
+function cancelReplayRestore() {
+	replaySession++;
+	replayRestorePromise = null;
+	replayRestoring.value = false;
+}
+
 function reset() {
+	cancelReplayRestore();
 	dispose();
 	seed = Date.now().toString();
 	isGameOver.value = false;
 	replaying.value = false;
+	replayRestoring.value = false;
 	replayPlaybackRate.value = 1;
 	currentPick.value = null;
 	dropReady.value = true;
@@ -807,7 +931,39 @@ function reset() {
 function dispose() {
 	game.dispose();
 	if (renderer) Matter.Render.stop(renderer);
+	renderer = null;
 	stopTicking();
+	isAlive = false;
+}
+
+function pauseActiveGame() {
+	if (renderer) Matter.Render.stop(renderer);
+	stopTicking();
+	isAlive = false;
+}
+
+async function resumeActiveGame() {
+	if (isAlive || isGameOver.value || replayRestoring.value) return;
+
+	await nextTick();
+	updateContainerMetrics();
+	if (containerEl.value && resizeObserver == null) {
+		resizeObserver = new ResizeObserver(updateContainerMetrics);
+		resizeObserver.observe(containerEl.value);
+	}
+
+	if (!renderer) {
+		renderer = createRendererInstance(game);
+		await loadMonoTextures();
+		Matter.Render.lookAt(renderer, {
+			min: { x: 0, y: 0 },
+			max: { x: game.GAME_WIDTH, y: game.GAME_HEIGHT },
+		});
+	}
+
+	Matter.Render.run(renderer);
+	startTicking(replaying.value ? tickReplay : tick);
+	isAlive = true;
 }
 
 function backToTitle() {
@@ -815,7 +971,14 @@ function backToTitle() {
 }
 
 function replay() {
+	cancelReplayRestore();
+	const replayRun = ++replaySession;
 	replaying.value = true;
+	replayRestoring.value = false;
+	isGameOver.value = false;
+	currentFrame.value = 0;
+	currentPick.value = null;
+	dropReady.value = false;
 	dispose();
 	game = new DropAndFusionGame({
 		seed: seed,
@@ -823,21 +986,22 @@ function replay() {
 		getMonoRenderOptions,
 	});
 	attachGameEvents();
-	os.promiseDialog(loadMonoTextures(), async () => {
-		renderer = createRendererInstance(game);
-		Matter.Render.lookAt(renderer, {
+	const replayRenderer = renderer = createRendererInstance(game);
+	os.promiseDialog(loadMonoTextures(replayRenderer), async () => {
+		if (replayRun !== replaySession || !replaying.value || renderer !== replayRenderer) return;
+
+		Matter.Render.lookAt(replayRenderer, {
 			min: { x: 0, y: 0 },
 			max: { x: game.GAME_WIDTH, y: game.GAME_HEIGHT },
 		});
-		Matter.Render.run(renderer);
+		Matter.Render.run(replayRenderer);
 		game.start();
 		startTicking(tickReplay);
 	});
 }
 
-function endReplay() {
-	replaying.value = false;
-	dispose();
+async function endReplay() {
+	await restoreReplay();
 }
 
 function exportLog() {
@@ -966,7 +1130,7 @@ function attachGameEvents() {
 	game.addListener('changeHolding', value => {
 		holdingStock.value = value;
 
-		if (!props.mute) {
+		if (!props.mute && !isRestoringGameOverState) {
 			sound.playUrl('/client-assets/drop-and-fusion/hold.mp3', {
 				volume: 0.5 * sfxVolume.value,
 				playbackRate: replayPlaybackRate.value,
@@ -975,7 +1139,7 @@ function attachGameEvents() {
 	});
 
 	game.addListener('dropped', (x) => {
-		if (!props.mute) {
+		if (!props.mute && !isRestoringGameOverState) {
 			const panV = x - game.PLAYAREA_MARGIN;
 			const panW = game.GAME_WIDTH - game.PLAYAREA_MARGIN - game.PLAYAREA_MARGIN;
 			const pan = ((panV / panW) - 0.5) * 2;
@@ -994,6 +1158,7 @@ function attachGameEvents() {
 			}
 		}
 
+		if (isRestoringGameOverState) return;
 		if (replaying.value) return;
 
 		dropReady.value = false;
@@ -1006,6 +1171,7 @@ function attachGameEvents() {
 
 	game.addListener('fusioned', (x, y, nextMono, scoreDelta) => {
 		if (!canvasEl.value) return;
+		if (isRestoringGameOverState) return;
 
 		const rect = canvasEl.value.getBoundingClientRect();
 		const domX = rect.left + (x * viewScale);
@@ -1058,7 +1224,7 @@ function attachGameEvents() {
 	const soundPitchMin = 0.5;
 
 	game.addListener('collision', (energy, bodyA, bodyB) => {
-		if (!props.mute && (energy > minCollisionEnergyForSound)) {
+		if (!props.mute && !isRestoringGameOverState && (energy > minCollisionEnergyForSound)) {
 			const volume = (Math.min(maxCollisionEnergyForSound, energy - minCollisionEnergyForSound) / maxCollisionEnergyForSound) / 4;
 			const panV =
 				bodyA.label === '_wall_' ? bodyB.position.x - game.PLAYAREA_MARGIN :
@@ -1086,6 +1252,7 @@ function attachGameEvents() {
 
 	game.addListener('monoAdded', (mono) => {
 		if (replaying.value) return;
+		if (isRestoringGameOverState) return;
 
 		// 実績関連
 		if (mono.level === 10) {
@@ -1099,7 +1266,7 @@ function attachGameEvents() {
 	});
 
 	game.addListener('gameOver', () => {
-		if (!props.mute) {
+		if (!props.mute && !isRestoringGameOverState) {
 			if (props.gameMode === 'yen') {
 				sound.playUrl('/client-assets/drop-and-fusion/gameover_yen.mp3', {
 					volume: 0.5 * sfxVolume.value,
@@ -1111,8 +1278,15 @@ function attachGameEvents() {
 			}
 		}
 
+		if (isRestoringGameOverState) {
+			currentPick.value = null;
+			dropReady.value = false;
+			isGameOver.value = true;
+			return;
+		}
+
 		if (replaying.value) {
-			endReplay();
+			restoreReplayAfterCurrentTick();
 			return;
 		}
 
@@ -1152,14 +1326,17 @@ function attachGameEvents() {
 }
 
 useInterval(() => {
-	if (!canvasEl.value) return;
-	const actualCanvasWidth = canvasEl.value.getBoundingClientRect().width;
-	if (actualCanvasWidth === 0) return;
-	viewScale = actualCanvasWidth / game.GAME_WIDTH;
-	containerElRect = containerEl.value?.getBoundingClientRect() ?? null;
+	updateContainerMetrics();
 }, 1000, { immediate: false, afterMounted: true });
 
 onMounted(async () => {
+	await nextTick();
+	updateContainerMetrics();
+	if (containerEl.value) {
+		resizeObserver = new ResizeObserver(updateContainerMetrics);
+		resizeObserver.observe(containerEl.value);
+	}
+
 	try {
 		highScore.value = await misskeyApi('i/registry/get', {
 			scope: ['dropAndFusionGame'],
@@ -1211,24 +1388,32 @@ onMounted(async () => {
 
 	await start();
 
-	const bgmBuffer = await sound.loadAudio('/client-assets/drop-and-fusion/bgm_1.mp3');
-	if (!bgmBuffer) return;
-	bgmNodes = sound.createSourceNode(bgmBuffer, {
-		volume: props.mute ? 0 : bgmVolume.value,
-	});
-	if (!bgmNodes) return;
-	bgmNodes.soundSource.loop = true;
-	bgmNodes.soundSource.start();
+	await startBgm();
 });
 
 onUnmounted(() => {
+	resizeObserver?.disconnect();
+	resizeObserver = null;
+	cancelReplayRestore();
 	dispose();
 	bgmNodes?.soundSource.stop();
+	bgmNodes = null;
 });
 
 onDeactivated(() => {
-	dispose();
+	resizeObserver?.disconnect();
+	resizeObserver = null;
+	pauseActiveGame();
 	bgmNodes?.soundSource.stop();
+	bgmNodes = null;
+	shouldResumeOnActivated = true;
+});
+
+onActivated(() => {
+	if (!shouldResumeOnActivated) return;
+	shouldResumeOnActivated = false;
+	resumeActiveGame();
+	startBgm();
 });
 
 definePage(() => ({
@@ -1297,8 +1482,14 @@ definePage(() => ({
 
 .root {
 	margin: 0 auto;
+	width: min(100%, 600px);
 	max-width: 600px;
 	user-select: none;
+
+	@media (min-width: 1600px) {
+		width: min(100%, 720px);
+		max-width: 720px;
+	}
 
 	* {
 		user-select: none;
@@ -1386,6 +1577,14 @@ definePage(() => ({
 .gameContainer {
 	position: relative;
 	margin-top: -20px;
+	touch-action: none;
+}
+
+.gameOverActions {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+	gap: 8px;
+	align-items: stretch;
 }
 
 .stock {

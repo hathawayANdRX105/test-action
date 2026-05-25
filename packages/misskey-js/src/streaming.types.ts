@@ -129,6 +129,7 @@ export type Channels = {
 			listId: string;
 			withFiles?: boolean;
 			withRenotes?: boolean;
+			withBots?: boolean;
 		};
 		events: {
 			note: (payload: Note) => void;
@@ -147,6 +148,8 @@ export type Channels = {
 	roleTimeline: {
 		params: {
 			roleId: string;
+			withRenotes?: boolean;
+			withBots?: boolean;
 		};
 		events: {
 			note: (payload: Note) => void;
@@ -165,6 +168,9 @@ export type Channels = {
 	channel: {
 		params: {
 			channelId: string;
+			withFiles?: boolean;
+			withRenotes?: boolean;
+			withBots?: boolean;
 		};
 		events: {
 			note: (payload: Note) => void;

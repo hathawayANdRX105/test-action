@@ -11,11 +11,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkHeatmap :user="user" :src="'notes'"/>
 		</MkFoldableSection>
 		<MkFoldableSection class="item">
-			<template #header><i class="ti ti-pencil"></i> Notes</template>
+			<template #header><i class="ti ti-pencil"></i> {{ i18n.ts.notes }}</template>
 			<XNotes :user="user"/>
 		</MkFoldableSection>
 		<MkFoldableSection class="item">
-			<template #header><i class="ti ti-users"></i> Following</template>
+			<template #header><i class="ti ti-users"></i> {{ i18n.ts.following }}</template>
 			<XFollowing :user="user"/>
 		</MkFoldableSection>
 		<MkFoldableSection class="item">
@@ -33,6 +33,7 @@ import XNotes from './activity.notes.vue';
 import XFollowing from './activity.following.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkHeatmap from '@/components/MkHeatmap.vue';
+import { i18n } from '@/i18n.js';
 
 const props = defineProps<{
 	user: Misskey.entities.User;

@@ -33,6 +33,7 @@ import { computed, watch, onUnmounted, provide, useTemplateRef, TransitionGroup 
 import * as Misskey from 'misskey-js';
 import type { BasicTimelineType } from '@/timelines.js';
 import type { Paging } from '@/components/MkPagination.vue';
+import type { MisskeyEntity } from '@/types/date-separated-list.js';
 import MkPullToRefresh from '@/components/MkPullToRefresh.vue';
 import { useStream } from '@/stream.js';
 import * as sound from '@/utility/sound.js';
@@ -84,13 +85,15 @@ type TimelineQueryType = {
 	channelId?: string,
 	roleId?: string
 };
+type TimelineNote = Misskey.entities.Note & MisskeyEntity;
 
 const pagingComponent = useTemplateRef('pagingComponent');
 
 let tlNotesCount = 0;
 
-function prepend(note: Misskey.entities.Note) {
+function prepend(note: TimelineNote) {
 	if (pagingComponent.value == null) return;
+	if (!props.withBots && note.user.isBot) return;
 
 	tlNotesCount++;
 
@@ -107,14 +110,16 @@ function prepend(note: Misskey.entities.Note) {
 	}
 }
 
-let connection: Misskey.ChannelConnection | null = null;
-let connection2: Misskey.ChannelConnection | null = null;
+let connection: Misskey.IChannelConnection<any> | null = null;
+let connection2: Misskey.IChannelConnection<any> | null = null;
 let paginationQuery: Paging | null = null;
 const noGap = !prefer.s.showGapBetweenNotesInTimeline;
 
 const stream = useStream();
 
 function connectChannel() {
+	const onNote = (note: TimelineNote) => prepend(note);
+
 	if (props.src === 'antenna') {
 		if (props.antenna == null) return;
 		connection = stream.useChannel('antenna', {
@@ -124,6 +129,7 @@ function connectChannel() {
 		connection = stream.useChannel('homeTimeline', {
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
+			withBots: props.withBots,
 		});
 		connection2 = stream.useChannel('main');
 	} else if (props.src === 'local') {
@@ -153,21 +159,24 @@ function connectChannel() {
 			withBots: props.withBots,
 		});
 	} else if (props.src === 'mentions') {
-		connection = stream.useChannel('main');
-		connection.on('mention', prepend);
+		const mainConnection = stream.useChannel('main');
+		mainConnection.on('mention', onNote);
+		connection = mainConnection;
 	} else if (props.src === 'directs') {
-		const onNote = note => {
+		const onDirectNote = (note: TimelineNote) => {
 			if (note.visibility === 'specified') {
 				prepend(note);
 			}
 		};
-		connection = stream.useChannel('main');
-		connection.on('mention', onNote);
+		const mainConnection = stream.useChannel('main');
+		mainConnection.on('mention', onDirectNote);
+		connection = mainConnection;
 	} else if (props.src === 'list') {
 		if (props.list == null) return;
 		connection = stream.useChannel('userList', {
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
+			withBots: props.withBots,
 			listId: props.list,
 		});
 	} else if (props.src === 'channel') {
@@ -175,15 +184,17 @@ function connectChannel() {
 		connection = stream.useChannel('channel', {
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
+			withBots: props.withBots,
 			channelId: props.channel,
 		});
 	} else if (props.src === 'role') {
 		if (props.role == null) return;
 		connection = stream.useChannel('roleTimeline', {
 			roleId: props.role,
+			withBots: props.withBots,
 		});
 	}
-	if (props.src !== 'directs' && props.src !== 'mentions') connection?.on('note', prepend);
+	if (props.src !== 'directs' && props.src !== 'mentions') connection?.on('note', onNote);
 }
 
 function disconnectChannel() {
@@ -250,6 +261,7 @@ function updatePaginationQuery() {
 		query = {
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
+			withBots: props.withBots,
 			listId: props.list,
 		};
 	} else if (props.src === 'channel') {
@@ -257,12 +269,14 @@ function updatePaginationQuery() {
 		query = {
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
+			withBots: props.withBots,
 			channelId: props.channel,
 		};
 	} else if (props.src === 'role') {
 		endpoint = 'roles/notes';
 		query = {
 			roleId: props.role,
+			withBots: props.withBots,
 		};
 	} else {
 		endpoint = null;
@@ -291,7 +305,7 @@ function refreshEndpointAndChannel() {
 
 // デッキのリストカラムでwithRenotesを変更した場合に自動的に更新されるようにさせる
 // IDが切り替わったら切り替え先のTLを表示させたい
-watch(() => [props.list, props.antenna, props.channel, props.role, props.withRenotes], refreshEndpointAndChannel);
+watch(() => [props.list, props.antenna, props.channel, props.role, props.withRenotes, props.withBots, props.withReplies, props.onlyFiles], refreshEndpointAndChannel);
 
 // withSensitiveはクライアントで完結する処理のため、単にリロードするだけでOK
 watch(() => props.withSensitive, reloadTimeline);

@@ -59,6 +59,12 @@ export const meta = {
 			code: 'MAX_LENGTH',
 			id: '3ac74a84-8fd5-4bb0-870f-01804f82ce16',
 		},
+
+		invalidReference: {
+			message: 'The referenced message is not in this room.',
+			code: 'INVALID_REFERENCE',
+			id: 'ccf98f9e-94fd-451f-b099-fef25fd55bd9',
+		},
 	},
 } as const;
 
@@ -68,6 +74,8 @@ export const paramDef = {
 		text: { type: 'string', nullable: true, minLength: 1 },
 		fileId: { type: 'string', format: 'misskey:id' },
 		toRoomId: { type: 'string', format: 'misskey:id' },
+		replyId: { type: 'string', format: 'misskey:id' },
+		quoteId: { type: 'string', format: 'misskey:id' },
 	},
 	required: ['toRoomId'],
 } as const;
@@ -96,6 +104,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
+			if (!(await this.chatService.isRoomMember(room, me.id))) {
+				throw new ApiError(meta.errors.noSuchRoom);
+			}
+
 			let file: MiDriveFile | null = null;
 			if (ps.fileId != null) {
 				file = await this.driveFilesRepository.findOneBy({
@@ -113,9 +125,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.contentRequired);
 			}
 
+			const [reply, quote] = await Promise.all([
+				ps.replyId != null ? this.chatService.findMessageById(ps.replyId) : null,
+				ps.quoteId != null ? this.chatService.findMessageById(ps.quoteId) : null,
+			]);
+
+			if ((ps.replyId != null && reply?.toRoomId !== room.id) || (ps.quoteId != null && quote?.toRoomId !== room.id)) {
+				throw new ApiError(meta.errors.invalidReference);
+			}
+
 			return await this.chatService.createMessageToRoom(me, room, {
 				text: ps.text,
 				file: file,
+				reply,
+				quote,
 			});
 		});
 	}

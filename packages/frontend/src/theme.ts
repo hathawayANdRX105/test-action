@@ -247,4 +247,10 @@ export async function installTheme(code: string): Promise<void> {
 	const theme = parseThemeCode(code);
 	if (!theme) return;
 	await addTheme(theme);
+	if (theme.base === 'dark') {
+		prefer.commit('darkTheme', theme);
+	} else {
+		prefer.commit('lightTheme', theme);
+	}
+	applyTheme(theme);
 }

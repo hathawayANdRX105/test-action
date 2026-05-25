@@ -54,7 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #icon><SearchIcon><i class="ti ti-badges"></i></SearchIcon></template>
 					<template #label><SearchLabel>{{ i18n.ts.rolesAssignedToMe }}</SearchLabel></template>
 
-					<MkRolePreview v-for="role in $i.roles" :key="role.id" :role="role" :forModeration="false"/>
+					<MkRolePreview v-for="role in $i.roles" :key="role.id" :role="role as any" :forModeration="false" :detailed="false"/>
 				</MkFolder>
 			</SearchMarker>
 
@@ -88,10 +88,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 					<div class="_gaps_m">
 						<MkSwitch v-model="skipNoteRender">
-							<template #label>Enable note render skipping</template>
+							<template #label>{{ i18n.ts._settings.enableNoteRenderSkipping }}</template>
 						</MkSwitch>
 						<MkSwitch v-model="stackingRouterView">
-							<template #label>Enable stacking router view</template>
+							<template #label>{{ i18n.ts._settings.enableStackingRouterView }}</template>
 						</MkSwitch>
 					</div>
 				</MkFolder>

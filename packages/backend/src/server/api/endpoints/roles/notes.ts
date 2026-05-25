@@ -55,6 +55,7 @@ export const paramDef = {
 		untilId: { type: 'string', format: 'misskey:id' },
 		sinceDate: { type: 'integer' },
 		untilDate: { type: 'integer' },
+		withBots: { type: 'boolean', default: true },
 	},
 	required: ['roleId'],
 } as const;
@@ -112,6 +113,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				.leftJoinAndSelect('note.renote', 'renote')
 				.leftJoinAndSelect('reply.user', 'replyUser')
 				.leftJoinAndSelect('renote.user', 'renoteUser');
+
+			if (!ps.withBots) {
+				query.andWhere('user.isBot = FALSE');
+			}
 
 			this.queryService.generateExcludedRepliesQueryForNotes(query, me);
 			this.queryService.generateBlockedHostQueryForNote(query);

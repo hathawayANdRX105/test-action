@@ -115,6 +115,48 @@ export async function common(createVue: () => Promise<App<Element>>) {
 			`${viewport.getAttribute('content')}, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover`);
 	}
 
+	function updateVisualViewportVars() {
+		if (!window.visualViewport) return;
+
+		const viewport = window.visualViewport;
+		const bottomInset = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+
+		window.document.documentElement.style.setProperty('--MI-visualViewportBottom', `${bottomInset}px`);
+		window.document.documentElement.style.setProperty('--MI-visualViewportHeight', `${Math.round(viewport.height)}px`);
+	}
+
+	if (window.visualViewport) {
+		updateVisualViewportVars();
+		window.visualViewport.addEventListener('resize', updateVisualViewportVars, { passive: true });
+		window.visualViewport.addEventListener('scroll', updateVisualViewportVars, { passive: true });
+		window.addEventListener('resize', updateVisualViewportVars, { passive: true });
+	}
+
+	function applyDisplayPreferenceVars() {
+		const html = window.document.documentElement;
+		const fontSize = prefer.s.fontSize;
+
+		html.classList.toggle('f-1', fontSize === '1');
+		html.classList.toggle('f-2', fontSize === '2');
+		html.classList.toggle('f-3', fontSize === '3');
+		html.classList.toggle('useSystemFont', prefer.s.useSystemFont);
+		html.classList.toggle('radius-misskey', prefer.s.cornerRadius === 'misskey');
+
+		if (fontSize === 'custom') {
+			html.style.fontSize = `${prefer.s.customFontSize}px`;
+		} else {
+			html.style.removeProperty('font-size');
+		}
+	}
+
+	applyDisplayPreferenceVars();
+	watch([
+		prefer.r.fontSize,
+		prefer.r.customFontSize,
+		prefer.r.useSystemFont,
+		prefer.r.cornerRadius,
+	], applyDisplayPreferenceVars);
+
 	//#region Set lang attr
 	const html = window.document.documentElement;
 	html.setAttribute('lang', lang);
@@ -153,7 +195,8 @@ export async function common(createVue: () => Promise<App<Element>>) {
 			? (prefer.s.darkTheme ?? defaultDarkTheme)
 			: (prefer.s.lightTheme ?? defaultLightTheme),
 		);
-	}, { immediate: miLocalStorage.getItem('theme') == null });
+		window.document.documentElement.dataset.colorScheme = darkMode ? 'dark' : 'light';
+	}, { immediate: true });
 
 	window.document.documentElement.dataset.colorScheme = store.s.darkMode ? 'dark' : 'light';
 

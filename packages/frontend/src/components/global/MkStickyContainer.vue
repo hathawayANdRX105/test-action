@@ -104,7 +104,7 @@ defineExpose({
 
 .footer {
 	position: sticky;
-	bottom: var(--MI-stickyBottom, 0);
+	bottom: calc(var(--MI-stickyBottom, 0px) + var(--MI-visualViewportBottom, 0px));
 	z-index: 1;
 }
 </style>

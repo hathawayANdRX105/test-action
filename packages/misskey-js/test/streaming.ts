@@ -77,6 +77,78 @@ describe('Streaming', () => {
 		server.close();
 	});
 
+	test('Connection#waitConnected waits for channel acknowledgement', async () => {
+		const server = new WS('wss://misskey.test/streaming');
+		const stream = new Stream('https://misskey.test', { token: 'TOKEN' });
+		const chat = stream.useChannel('chatUser', { otherId: 'aaa' });
+
+		const ws = await server.connected;
+		expect(new URLSearchParams(new URL(ws.url).search).get('i')).toEqual('TOKEN');
+
+		const msg = JSON.parse(await server.nextMessage as string);
+		const chatChannelId = msg.body.id;
+		expect(msg.type).toEqual('connect');
+		expect(msg.body.channel).toEqual('chatUser');
+		expect(msg.body.pong).toEqual(true);
+
+		let resolved = false;
+		const connected = chat.waitConnected().then(() => {
+			resolved = true;
+		});
+		await Promise.resolve();
+		expect(resolved).toEqual(false);
+
+		server.send(JSON.stringify({
+			type: 'connected',
+			body: {
+				id: chatChannelId,
+			},
+		}));
+
+		await connected;
+		expect(resolved).toEqual(true);
+
+		stream.close();
+		server.close();
+	});
+
+	test('Connection#waitConnected ignores malformed channel acknowledgements', async () => {
+		const server = new WS('wss://misskey.test/streaming');
+		const stream = new Stream('https://misskey.test', { token: 'TOKEN' });
+		const chat = stream.useChannel('chatUser', { otherId: 'aaa' });
+
+		const ws = await server.connected;
+		expect(new URLSearchParams(new URL(ws.url).search).get('i')).toEqual('TOKEN');
+
+		const msg = JSON.parse(await server.nextMessage as string);
+		const chatChannelId = msg.body.id;
+		expect(msg.type).toEqual('connect');
+		expect(msg.body.channel).toEqual('chatUser');
+		expect(msg.body.pong).toEqual(true);
+
+		let resolved = false;
+		const connected = chat.waitConnected().then(() => {
+			resolved = true;
+		});
+
+		server.send(JSON.stringify({
+			type: 'connected',
+			body: {},
+		}));
+		server.send(JSON.stringify({
+			type: 'connected',
+			body: {
+				id: chatChannelId,
+			},
+		}));
+
+		await connected;
+		expect(resolved).toEqual(true);
+
+		stream.close();
+		server.close();
+	});
+
 	test('ちゃんとチャンネルごとにidが異なる', async () => {
 		const server = new WS('wss://misskey.test/streaming');
 		const stream = new Stream('https://misskey.test', { token: 'TOKEN' });

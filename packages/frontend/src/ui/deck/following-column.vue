@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <XColumn :menu="menu" :column="column" :isStacked="isStacked" :refresher="reload">
 	<template #header>
-		<i :class="columnIcon" aria-hidden="true"/><span style="margin-left: 8px;">{{ (column.name || column.userList) ?? i18n.ts._deck._columns.following }}</span>
+		<i :class="columnIcon" aria-hidden="true"/><span style="margin-left: 8px;">{{ column.name || followingTabName(column.userList) }}</span>
 	</template>
 
 	<SkRemoteFollowersWarning :class="$style.followersWarning" :model="model"/>
@@ -64,7 +64,7 @@ async function selectList(): Promise<void> {
 function getNewColumnName(newList: FollowingFeedTab) {
 	// If the user has renamed the column, then we need to keep that name.
 	// If no list is specified, then the column is newly created and the user *can't* have renamed it.
-	if (props.column.userList && props.column.name === followingTabName(props.column.userList)) {
+	if (props.column.userList && props.column.name && props.column.name !== followingTabName(props.column.userList)) {
 		return props.column.name;
 	}
 

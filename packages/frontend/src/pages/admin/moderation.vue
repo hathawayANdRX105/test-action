@@ -31,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #label>{{ i18n.ts.bubbleTimeline }}</template>
 
 					<div class="_gaps">
-						<div v-if="!$i.policies.btlAvailable">
+							<div v-if="$i && !$i.policies.btlAvailable">
 							<i class="ti ti-alert-triangle"></i> {{ i18n.ts.bubbleTimelineMustBeEnabled }}
 						</div>
 
@@ -163,7 +163,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</MkFolder>
 
-				<MkFolder v-if="$i.isRoot">
+					<MkFolder v-if="$i?.isRoot">
 					<template #icon><i class="ph-lightning ph-bold ph-lg"></i></template>
 					<template #label>{{ i18n.ts.setRootUser }}</template>
 					<template #header><div :class="$style.folderHeader" v-html="i18n.ts.setRootUserWarning"></div></template>
@@ -320,9 +320,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 	}
 
 	function save_hiddenTags() {
+		const normalizedHiddenTags = Array.from(new Set(hiddenTags.value
+			.split('\n')
+			.map(x => x.trim().replace(/^#+/, ''))
+			.map(x => x.normalize('NFKC').toLowerCase())
+			.filter(Boolean)));
+
 		os.apiWithDialog('admin/update-meta', {
-			hiddenTags: hiddenTags.value.split('\n'),
+			hiddenTags: normalizedHiddenTags,
 		}).then(() => {
+			hiddenTags.value = normalizedHiddenTags.join('\n');
 			fetchInstance(true);
 		});
 	}
@@ -360,10 +367,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		});
 	}
 
-	function save_setRoot() {
-		os.apiWithDialog('admin/set-root', {
-			userId: newRootUser.value.id,
-		}).then(() => {
+		function save_setRoot() {
+			if (newRootUser.value == null) return;
+
+			os.apiWithDialog('admin/set-root', {
+				userId: newRootUser.value.id,
+			}).then(() => {
 			refreshCurrentAccount();
 		});
 	}

@@ -20,10 +20,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkTimeline
 		v-else-if="column.tl"
 		ref="timeline"
-		:key="column.tl + withRenotes + withReplies + onlyFiles"
+		:key="column.tl + withRenotes + withBots + withReplies + onlyFiles"
 		:src="column.tl"
 		:withRenotes="withRenotes"
 		:withReplies="withReplies"
+		:withBots="withBots"
 		:withSensitive="withSensitive"
 		:onlyFiles="onlyFiles"
 		@note="onNote"
@@ -55,6 +56,7 @@ const timeline = useTemplateRef('timeline');
 const soundSetting = ref<SoundStore>(props.column.soundSetting ?? { type: null, volume: 1 });
 const withRenotes = ref(props.column.withRenotes ?? true);
 const withReplies = ref(props.column.withReplies ?? false);
+const withBots = ref(props.column.withBots ?? true);
 const withSensitive = ref(props.column.withSensitive ?? true);
 const onlyFiles = ref(props.column.onlyFiles ?? false);
 
@@ -67,6 +69,12 @@ watch(withRenotes, v => {
 watch(withReplies, v => {
 	updateColumn(props.column.id, {
 		withReplies: v,
+	});
+});
+
+watch(withBots, v => {
+	updateColumn(props.column.id, {
+		withBots: v,
 	});
 });
 
@@ -138,6 +146,10 @@ const menu = computed<MenuItem[]>(() => {
 		type: 'switch',
 		text: i18n.ts.showRenotes,
 		ref: withRenotes,
+	}, {
+		type: 'switch',
+		text: i18n.ts.showBots,
+		ref: withBots,
 	});
 
 	if (hasWithReplies(props.column.tl)) {

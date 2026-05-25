@@ -124,7 +124,8 @@ function onMousedown(evt: MouseEvent): void {
 	z-index: 1; // 他コンポーネントのbox-shadowに隠されないようにするため
 	display: block;
 	min-width: 100px;
-	width: max-content;
+	width: fit-content;
+	max-width: 100%;
 	padding: 7px 14px;
 	text-align: center;
 	font-weight: normal;
@@ -287,6 +288,7 @@ function onMousedown(evt: MouseEvent): void {
 		display: inline-block;
 		width: auto;
 		min-width: 100px;
+		max-width: 100%;
 	}
 
 	&.primary > .ripples > .ripple {
@@ -321,5 +323,6 @@ function onMousedown(evt: MouseEvent): void {
 	position: relative;
 	z-index: 1;
 	pointer-events: none;
+	overflow-wrap: anywhere;
 }
 </style>
