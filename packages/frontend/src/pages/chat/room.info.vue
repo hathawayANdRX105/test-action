@@ -112,6 +112,10 @@ watch(isMuted, async () => {
 		roomId: props.room.id,
 		mute: isMuted.value,
 	});
+	emit('updated', {
+		...props.room,
+		isMuted: isMuted.value,
+	});
 });
 </script>
 

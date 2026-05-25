@@ -23,6 +23,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div v-for="message in searchResults" :key="message.id" :class="$style.searchResultItem">
 				<XMessage :message="message" :user="message.fromUser" :isSearchResult="true"/>
 			</div>
+			<div v-if="canFetchMore || moreFetching" v-appear="canFetchMore ? fetchMore : null" :class="$style.more">
+				<MkLoading v-if="moreFetching" :mini="true"/>
+				<MkButton v-else rounded @click="fetchMore">{{ i18n.ts.loadMore }}</MkButton>
+			</div>
 		</div>
 		<MkResult v-else type="notFound"/>
 	</MkFoldableSection>
@@ -47,16 +51,41 @@ const props = defineProps<{
 const searchQuery = ref('');
 const searched = ref(false);
 const searchResults = ref<Misskey.entities.ChatMessage[]>([]);
+const moreFetching = ref(false);
+const canFetchMore = ref(false);
+const SEARCH_LIMIT = 30;
 
 async function search() {
 	const res = await misskeyApi('chat/messages/search', {
 		query: searchQuery.value,
+		limit: SEARCH_LIMIT,
 		roomId: props.roomId,
 		userId: props.userId,
 	});
 
 	searchResults.value = res;
+	canFetchMore.value = res.length === SEARCH_LIMIT;
 	searched.value = true;
+}
+
+async function fetchMore() {
+	if (!canFetchMore.value || moreFetching.value || searchResults.value.length === 0) return;
+
+	moreFetching.value = true;
+	try {
+		const res = await misskeyApi('chat/messages/search', {
+			query: searchQuery.value,
+			limit: SEARCH_LIMIT,
+			untilId: searchResults.value[searchResults.value.length - 1].id,
+			roomId: props.roomId,
+			userId: props.userId,
+		});
+
+		searchResults.value = [...searchResults.value, ...res];
+		canFetchMore.value = res.length === SEARCH_LIMIT;
+	} finally {
+		moreFetching.value = false;
+	}
 }
 </script>
 
@@ -65,5 +94,11 @@ async function search() {
 	padding: 12px;
 	border: solid 1px var(--MI_THEME-divider);
 	border-radius: 12px;
+}
+
+.more {
+	min-height: 44px;
+	display: grid;
+	place-items: center;
 }
 </style>

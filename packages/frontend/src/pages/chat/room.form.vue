@@ -21,27 +21,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button class="_button" :class="$style.referenceButton" :title="i18n.ts.cancel" @click="emit('clearQuote')"><i class="ti ti-x"></i></button>
 		</div>
 	</div>
-	<textarea
-		ref="textareaEl"
-		v-model="text"
-		:class="$style.textarea"
-		class="_acrylic"
-		:placeholder="i18n.ts.inputMessageHere"
-		:readonly="textareaReadOnly"
-		@keydown="onKeydown"
-		@focus="onFocus"
-		@paste="onPaste"
-	></textarea>
-	<footer :class="$style.footer">
-		<div v-if="file" :class="$style.file" @click="file = null">{{ file.name }}</div>
-		<div :class="$style.buttons">
-			<button class="_button" :class="$style.button" @click="chooseFile"><i class="ti ti-photo-plus"></i></button>
-			<button class="_button" :class="$style.button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
-			<button class="_button" :class="[$style.button, $style.send]" :disabled="!canSend || sending" :title="i18n.ts.send" @click="send">
-				<template v-if="!sending"><i class="ti ti-send"></i></template><template v-if="sending"><MkLoading :em="true"/></template>
-			</button>
-		</div>
-	</footer>
+	<div v-if="file" :class="$style.file" @click="file = null"><i class="ti ti-paperclip"></i>{{ file.name }}</div>
+	<div :class="$style.composer">
+		<button class="_button" :class="$style.button" :title="i18n.ts.attachFile" @click="chooseFile"><i class="ti ti-paperclip"></i></button>
+		<textarea
+			ref="textareaEl"
+			v-model="text"
+			:class="$style.textarea"
+			:placeholder="i18n.ts.inputMessageHere"
+			:readonly="textareaReadOnly"
+			@keydown="onKeydown"
+			@focus="onFocus"
+			@paste="onPaste"
+		></textarea>
+		<button class="_button" :class="$style.button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
+		<button class="_button" :class="[$style.button, $style.send]" :disabled="!canSend || sending" :title="i18n.ts.send" @click="send">
+			<template v-if="!sending"><i class="ti ti-send"></i></template><template v-if="sending"><MkLoading :em="true"/></template>
+		</button>
+	</div>
 	<input ref="fileEl" style="display: none;" type="file" @change="onChangeFile"/>
 </div>
 </template>
@@ -192,6 +189,10 @@ function onFocus() {
 	scrollTextareaIntoViewAfterFocus();
 }
 
+function focus() {
+	textareaEl.value?.focus();
+}
+
 function scrollTextareaIntoViewAfterFocus() {
 	for (const timer of focusScrollTimers) {
 		window.clearTimeout(timer);
@@ -334,8 +335,13 @@ async function insertEmoji(ev: MouseEvent) {
 			textareaReadOnly.value = false;
 			nextTick(() => focus());
 		},
+		true,
 	);
 }
+
+defineExpose({
+	focus,
+});
 
 onMounted(() => {
 	if (textareaEl.value != null) {
@@ -373,15 +379,17 @@ onBeforeUnmount(() => {
 .root {
 	position: relative;
 	border-bottom: none;
-	border-radius: 14px 14px 0 0;
-	overflow: clip;
+	display: grid;
+	gap: 6px;
+	border-radius: 0;
+	background: transparent;
 }
 
 .references {
 	display: grid;
-	gap: 6px;
-	padding: 10px 12px 0;
-	background: var(--MI_THEME-panel);
+	gap: 4px;
+	padding: 4px 8px 0;
+	background: transparent;
 }
 
 .reference {
@@ -389,17 +397,17 @@ onBeforeUnmount(() => {
 	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
 	gap: 8px;
-	padding: 8px 10px;
-	border-left: solid 3px var(--MI_THEME-accent);
-	border-radius: var(--MI-radius-xs);
-	background: var(--MI_THEME-buttonBg);
+	padding: 6px 9px;
+	border-left: solid 3px light-dark(#2aabee, #6ab7f5);
+	border-radius: 12px;
+	background: light-dark(rgb(237 248 255), rgb(34 49 62));
 	font-size: 90%;
 	text-align: left;
 }
 
 .referenceLabel {
 	font-weight: 700;
-	color: var(--MI_THEME-accent);
+	color: light-dark(#168acd, #6ab7f5);
 }
 
 .referenceText {
@@ -431,11 +439,13 @@ onBeforeUnmount(() => {
 	width: 100%;
 	min-width: 100%;
 	max-width: 100%;
-	min-height: 80px;
+	min-height: 20px;
+	max-height: 96px;
 	margin: 0;
-	padding: 16px 16px 0 16px;
+	padding: 7px 2px;
 	resize: none;
-	font-size: 1em;
+	font-size: 0.98em;
+	line-height: 1.35;
 	font-family: inherit;
 	outline: none;
 	border: none;
@@ -443,36 +453,79 @@ onBeforeUnmount(() => {
 	box-shadow: none;
 	box-sizing: border-box;
 	color: var(--MI_THEME-fg);
+	background: transparent;
 	field-sizing: content;
 }
 
-.footer {
-	position: sticky;
-	bottom: 0;
-	background: var(--MI_THEME-panel);
+.composer {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto auto;
+	align-items: end;
+	gap: 4px;
+	padding: 4px;
+	border-radius: 21px;
+	background: light-dark(#ffffff, #17212b);
+	border: solid 1px light-dark(rgb(206 221 230), rgb(35 48 60));
+	box-shadow: 0 2px 10px rgb(0 0 0 / 0.14);
 }
 
 .file {
-	padding: 8px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: fit-content;
+	max-width: min(420px, 100%);
+	margin-left: 8px;
+	padding: 5px 10px;
 	cursor: pointer;
-}
-
-.buttons {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
+	border-radius: 999px;
+	background: light-dark(rgb(225 244 255), rgb(34 49 62));
+	color: light-dark(#168acd, #6ab7f5);
+	font-size: 90%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .button {
-	height: 50px;
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
 	aspect-ratio: 1;
+	border-radius: 999px;
+	color: light-dark(#7b8b96, #8fa4b8);
 
 	&:hover {
-		color: var(--MI_THEME-accent);
+		color: light-dark(#168acd, #6ab7f5);
+		background: light-dark(rgb(225 244 255), rgb(34 49 62));
 	}
 }
 .send {
 	margin-left: auto;
-	color: var(--MI_THEME-accent);
+	color: #fff;
+	background: light-dark(#2aabee, #5288c1);
+
+	&:hover {
+		color: #fff;
+		background: light-dark(#229ed9, #63a1dd);
+	}
+
+	&:disabled {
+		opacity: 0.45;
+		background: var(--MI_THEME-buttonBg);
+		color: var(--MI_THEME-fgTransparentWeak);
+	}
+}
+
+@container (max-width: 500px) {
+	.textarea {
+		max-height: 72px;
+	}
+
+	.button {
+		width: 32px;
+		height: 32px;
+	}
 }
 </style>

@@ -847,6 +847,7 @@ export class ChatService {
 	public async searchMessages(meId: MiUser['id'], query: string, limit: number, params: {
 		userId?: MiUser['id'] | null;
 		roomId?: MiChatRoom['id'] | null;
+		untilId?: MiChatMessage['id'] | null;
 	}) {
 		const q = this.chatMessagesRepository.createQueryBuilder('message');
 
@@ -887,6 +888,10 @@ export class ChatService {
 
 			q.setParameters(membershipsQuery.getParameters());
 			q.setParameters(ownedRoomsQuery.getParameters());
+		}
+
+		if (params.untilId) {
+			q.andWhere('message.id < :untilId', { untilId: params.untilId });
 		}
 
 		q.andWhere('LOWER(message.text) LIKE :q', { q: `%${ sqlLikeEscape(query.toLowerCase()) }%` });

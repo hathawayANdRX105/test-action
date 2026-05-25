@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:hasInteractionWithOtherFocusTrappedEls="true"
 	:transparentBg="true"
 	:manualShowing="manualShowing"
-	:src="src"
+	:src="srcEl"
 	@click="modal?.close()"
 	@esc="modal?.close()"
 	@opening="opening"
@@ -37,14 +37,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import * as Misskey from 'misskey-js';
-import { useTemplateRef } from 'vue';
+import { computed, isRef, useTemplateRef } from 'vue';
+import type { Ref } from 'vue';
 import MkModal from '@/components/MkModal.vue';
 import MkEmojiPicker from '@/components/MkEmojiPicker.vue';
 import { prefer } from '@/preferences.js';
 
 const props = withDefaults(defineProps<{
 	manualShowing?: boolean | null;
-	src?: HTMLElement;
+	src?: HTMLElement | Ref<HTMLElement | null>;
 	showPinned?: boolean;
 	pinnedEmojis?: string[],
 	asReactionPicker?: boolean;
@@ -66,6 +67,7 @@ const emit = defineEmits<{
 
 const modal = useTemplateRef('modal');
 const picker = useTemplateRef('picker');
+const srcEl = computed(() => isRef(props.src) ? props.src.value : props.src);
 
 function chosen(emoji: string) {
 	emit('done', emoji);

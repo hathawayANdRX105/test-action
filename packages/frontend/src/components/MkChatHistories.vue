@@ -108,7 +108,18 @@ onMounted(() => {
 .message {
 	position: relative;
 	display: flex;
-	padding: 16px 24px;
+	align-items: center;
+	padding: 12px 14px;
+	border-radius: 12px;
+	background: transparent;
+	border: solid 1px transparent;
+	box-shadow: none;
+
+	&:hover {
+		background: var(--MI_THEME-buttonHoverBg);
+		border-color: var(--MI_THEME-divider);
+		text-decoration: none;
+	}
 
 	&.isRead,
 	&.isMe {
@@ -144,9 +155,9 @@ onMounted(() => {
 }
 
 .messageAvatar {
-	width: 50px;
-	height: 50px;
-	margin: 0 16px 0 0;
+	width: 48px;
+	height: 48px;
+	margin: 0 12px 0 0;
 }
 
 @container (max-width: 500px) {
@@ -191,12 +202,17 @@ onMounted(() => {
 
 .messageHeaderTime {
 	margin-left: auto;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 90%;
 }
 
 .messageBodyText {
 	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 	overflow-wrap: break-word;
-	font-size: 1.1em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.95em;
 }
 
 .youSaid {

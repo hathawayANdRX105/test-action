@@ -4,8 +4,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :actions="headerActions">
-	<div v-if="tab === 'chat'" class="_spacer" style="--MI_SPACER-w: 700px;">
+<div ref="rootEl" :class="$style.root">
+	<div :class="$style.localHeader" data-chat-room-tabs>
+		<div :class="$style.localTitle">
+			<i v-if="room" class="ti ti-users"></i>
+			<MkAvatar v-else-if="user" :user="user" :class="$style.localTitleAvatar" indicator/>
+			<span>{{ room?.name ?? user?.name ?? user?.username ?? i18n.ts.chat }}</span>
+		</div>
+		<div :class="$style.localTabs">
+			<button v-for="t in headerTabs" :key="t.key" class="_button" :class="[$style.localTab, { [$style.localTabActive]: tab === t.key }]" @click="tab = t.key">
+				<i :class="t.icon"></i>
+				<span>{{ t.title }}</span>
+			</button>
+		</div>
+		<button v-if="headerActions.length > 0" class="_button" :class="$style.localMenu" @click="headerActions[0].handler">
+			<i :class="headerActions[0].icon"></i>
+		</button>
+	</div>
+	<div v-if="tab === 'chat'" :class="$style.chatPane">
 		<div class="_gaps">
 			<div v-if="initializing">
 				<MkLoading/>
@@ -50,9 +66,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div v-else ref="timelineEl" class="_gaps">
-				<div v-if="canFetchMore">
-					<MkButton :class="$style.more" :wait="moreFetching" primary rounded @click="fetchMore">{{ i18n.ts.loadMore }}</MkButton>
+			<div v-else ref="timelineEl" :class="$style.timeline">
+				<div v-if="canFetchMore || moreFetching" v-appear="canFetchMore ? fetchMore : null" :class="$style.more">
+					<MkLoading v-if="moreFetching" :mini="true"/>
 				</div>
 
 				<SkTransitionGroup
@@ -61,10 +77,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:enterFromClass="$style.transition_x_enterFrom"
 					:leaveToClass="$style.transition_x_leaveTo"
 					:moveClass="$style.transition_x_move"
-					tag="div" class="_gaps"
+					tag="div" :class="$style.messageList"
 				>
 					<div v-for="item in timeline.toReversed()" :key="item.id" :data-scroll-anchor="item.type === 'item' ? item.id : undefined">
-						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" @reply="replyTarget = item.data" @quote="quoteTarget = item.data"/>
+						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 							<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -94,25 +110,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated"/>
 	</div>
 
-	<template #footer>
-		<div v-if="tab === 'chat'" :class="$style.footer">
-			<div class="_gaps">
-				<Transition name="fade">
-					<div v-show="showIndicator" :class="$style.new">
-						<button class="_buttonPrimary" :class="$style.newButton" @click="onIndicatorClick">
-							<i class="fas ti-fw fa-arrow-circle-down" :class="$style.newIcon"></i>{{ i18n.ts._chat.newMessage }}
-						</button>
-					</div>
-				</Transition>
-				<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" :user="user" :room="room" :replyTarget="replyTarget" :quoteTarget="quoteTarget" :class="$style.form" @sent="onSentMessage" @clearReply="replyTarget = null" @clearQuote="quoteTarget = null"/>
-			</div>
+	<div v-if="tab === 'chat'" :class="$style.footer">
+		<div class="_gaps">
+			<Transition name="fade">
+				<div v-show="showIndicator" :class="$style.new">
+					<button class="_buttonPrimary" :class="$style.newButton" @click="onIndicatorClick">
+						<i class="ti ti-arrow-down" :class="$style.newIcon"></i>{{ i18n.ts._chat.newMessage }}<span v-if="newMessageCount > 0"> ({{ newMessageCount }})</span>
+					</button>
+				</div>
+			</Transition>
+			<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" ref="formEl" :user="user" :room="room" :replyTarget="replyTarget" :quoteTarget="quoteTarget" :class="$style.form" @sent="onSentMessage" @clearReply="replyTarget = null" @clearQuote="quoteTarget = null"/>
 		</div>
-	</template>
-</PageWithHeader>
+	</div>
+</div>
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated, nextTick, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import { getScrollContainer } from '@@/js/scroll.js';
 import XMessage from './XMessage.vue';
@@ -170,12 +184,57 @@ const replyTarget = ref<NormalizedChatMessage | null>(null);
 const quoteTarget = ref<NormalizedChatMessage | null>(null);
 const connection = ref<Misskey.IChannelConnection<Misskey.Channels['chatUser']> | Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null>(null);
 const showIndicator = ref(false);
-const timelineEl = useTemplateRef('timelineEl');
+const newMessageCount = ref(0);
+const rootEl = ref<HTMLElement | null>(null);
+const timelineEl = ref<HTMLElement | null>(null);
+const formEl = ref<InstanceType<typeof XForm> | null>(null);
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
 
 const SCROLL_HEAD_THRESHOLD = 200;
+const SCROLL_HISTORY_THRESHOLD = 480;
 const TIMELINE_LIMIT = 20;
 const STREAM_CONNECT_TIMEOUT = 5000;
+let removeTimelineScrollListener: (() => void) | null = null;
+
+function isAtLatest() {
+	if (timelineEl.value == null) return true;
+
+	const scrollContainer = getScrollContainer(timelineEl.value);
+	if (scrollContainer == null) return true;
+
+	return Math.abs(scrollContainer.scrollTop) < SCROLL_HEAD_THRESHOLD;
+}
+
+function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
+	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+	scrollContainer?.scrollTo({
+		top: 0,
+		behavior,
+	});
+	showIndicator.value = false;
+	newMessageCount.value = 0;
+}
+
+function setupTimelineScrollListener() {
+	removeTimelineScrollListener?.();
+	removeTimelineScrollListener = null;
+
+	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+	if (scrollContainer == null) return;
+
+	const onScroll = () => {
+		if (!canFetchMore.value || moreFetching.value || messages.value.length === 0) return;
+
+		const historyDistance = scrollContainer.scrollHeight - scrollContainer.clientHeight - Math.abs(scrollContainer.scrollTop);
+		if (historyDistance < SCROLL_HISTORY_THRESHOLD) {
+			fetchMore();
+		}
+	};
+
+	scrollContainer.addEventListener('scroll', onScroll, { passive: true });
+	removeTimelineScrollListener = () => scrollContainer.removeEventListener('scroll', onScroll);
+	onScroll();
+}
 
 // column-reverseなので本来はスクロール位置の最下部への追従は不要なはずだが、おそらくブラウザのバグにより、最下部にスクロールした状態でも追従されない場合がある(スクロール位置が少数になることがあるのが関わっていそう)
 // そのため補助としてMutationObserverを使って追従を行う
@@ -233,6 +292,7 @@ function onSentMessage(message: Misskey.entities.ChatMessageLite) {
 	messages.value = mergeMessages(messages.value, [normalizeMessage(message)]);
 	replyTarget.value = null;
 	quoteTarget.value = null;
+	nextTick(() => scrollToLatest('instant'));
 }
 
 async function waitChannelConnected() {
@@ -297,6 +357,8 @@ async function initialize() {
 	messages.value = [];
 	connection.value?.dispose();
 	connection.value = null;
+	showIndicator.value = false;
+	newMessageCount.value = 0;
 
 	try {
 		if (props.userId) {
@@ -394,27 +456,34 @@ onDeactivated(() => {
 
 async function fetchMore() {
 	const LIMIT = 30;
+	if (!canFetchMore.value || moreFetching.value || messages.value.length === 0) return;
 
 	moreFetching.value = true;
 
-	const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
-		userId: user.value!.id,
-		limit: LIMIT,
-		untilId: messages.value[messages.value.length - 1].id,
-	}) : await misskeyApi('chat/messages/room-timeline', {
-		roomId: room.value!.id,
-		limit: LIMIT,
-		untilId: messages.value[messages.value.length - 1].id,
-	});
+	try {
+		const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
+			userId: user.value!.id,
+			limit: LIMIT,
+			untilId: messages.value[messages.value.length - 1].id,
+		}) : await misskeyApi('chat/messages/room-timeline', {
+			roomId: room.value!.id,
+			limit: LIMIT,
+			untilId: messages.value[messages.value.length - 1].id,
+		});
 
-	appendFetchedMessages(newMessages);
+		appendFetchedMessages(newMessages);
 
-	canFetchMore.value = newMessages.length === LIMIT;
-	moreFetching.value = false;
+		canFetchMore.value = newMessages.length === LIMIT;
+	} finally {
+		moreFetching.value = false;
+		nextTick(setupTimelineScrollListener);
+	}
 }
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {
-	sound.playMisskeySfx('chatMessage');
+	if (room.value?.isMuted !== true) {
+		sound.playMisskeySfx('chatMessage');
+	}
 
 	messages.value = mergeMessages(messages.value, [normalizeMessage(message)]);
 
@@ -426,7 +495,11 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 	}
 
 	if (message.fromUserId !== $i.id) {
-		//notifyNewMessage();
+		if (isAtLatest()) {
+			nextTick(() => scrollToLatest('instant'));
+		} else {
+			notifyNewMessage();
+		}
 	}
 }
 
@@ -465,11 +538,24 @@ function onUnreact(ctx: Parameters<Misskey.Channels['chatUser']['events']['unrea
 }
 
 function onIndicatorClick() {
-	showIndicator.value = false;
+	scrollToLatest();
 }
 
 function notifyNewMessage() {
 	showIndicator.value = true;
+	newMessageCount.value += 1;
+}
+
+function setReplyTarget(message: NormalizedChatMessage) {
+	replyTarget.value = message;
+	quoteTarget.value = null;
+	nextTick(() => formEl.value?.focus());
+}
+
+function setQuoteTarget(message: NormalizedChatMessage) {
+	quoteTarget.value = message;
+	replyTarget.value = null;
+	nextTick(() => formEl.value?.focus());
 }
 
 function onVisibilitychange() {
@@ -479,11 +565,13 @@ function onVisibilitychange() {
 
 onMounted(() => {
 	window.document.addEventListener('visibilitychange', onVisibilitychange);
+	watch(timelineEl, () => nextTick(setupTimelineScrollListener), { immediate: true });
 	initialize();
 });
 
 onBeforeUnmount(() => {
 	connection.value?.dispose();
+	removeTimelineScrollListener?.();
 	window.document.removeEventListener('visibilitychange', onVisibilitychange);
 });
 
@@ -632,10 +720,165 @@ definePage(computed(() => {
 }
 
 .root {
+	position: relative;
+	height: 100%;
+	min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px) + var(--MI-visualViewportBottom, 0px)));
+	overflow: hidden;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	background: var(--MI_THEME-bg);
+}
+
+.header {
+	position: relative;
+	z-index: 1000;
+}
+
+.localHeader {
+	position: relative;
+	z-index: 1000;
+	display: grid;
+	grid-template-columns: minmax(130px, auto) minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+	min-height: 52px;
+	padding: 0 18px;
+	box-sizing: border-box;
+	background: color(from var(--MI_THEME-pageHeaderBg) srgb r g b / 0.92);
+	border-bottom: solid 1px var(--MI_THEME-divider);
+	color: var(--MI_THEME-pageHeaderFg);
+}
+
+.localTitle {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	font-weight: 700;
+
+	> span {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+}
+
+.localTitleAvatar {
+	width: 24px;
+	height: 24px;
+}
+
+.localTabs {
+	display: flex;
+	align-items: stretch;
+	min-width: 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+.localTab {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 52px;
+	padding: 0 12px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	white-space: nowrap;
+	border-bottom: solid 3px transparent;
+
+	&:hover {
+		color: var(--MI_THEME-accent);
+		background: var(--MI_THEME-buttonHoverBg);
+	}
+}
+
+.localTabActive {
+	color: var(--MI_THEME-accent);
+	border-bottom-color: var(--MI_THEME-accent);
+}
+
+.localMenu {
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 999px;
+
+	&:hover {
+		background: var(--MI_THEME-buttonHoverBg);
+	}
+}
+
+@container (max-width: 520px) {
+	.localHeader {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			"title menu"
+			"tabs tabs";
+		padding: 0 12px;
+	}
+
+	.localTitle {
+		grid-area: title;
+		min-height: 40px;
+	}
+
+	.localTabs {
+		grid-area: tabs;
+	}
+
+	.localTab {
+		min-height: 40px;
+		padding: 0 10px;
+	}
+
+	.localMenu {
+		grid-area: menu;
+	}
+}
+
+.timeline {
+	display: grid;
+	gap: 8px;
+}
+
+.messageList {
+	display: grid;
+	gap: 6px;
 }
 
 .more {
+	min-height: 44px;
+	display: grid;
+	place-items: center;
+}
+
+.chatPane {
+	height: 100%;
+	min-height: 0;
+	width: min(100%, 920px);
 	margin: 0 auto;
+	padding: 14px 18px;
+	box-sizing: border-box;
+	overflow: clip;
+	overflow-y: scroll;
+	overscroll-behavior: contain;
+	display: flex;
+	flex-direction: column-reverse;
+	background:
+		radial-gradient(circle at 20px 20px, light-dark(rgb(0 0 0 / 0.035), rgb(255 255 255 / 0.035)) 1px, transparent 1px),
+		light-dark(#d8e6ee, #0e1621);
+	background-size: 22px 22px, auto;
+	border-inline: solid 1px light-dark(rgb(198 213 222), rgb(31 43 55));
+}
+
+.chatPane > :global(._gaps) {
+	width: 100%;
 }
 
 .error {
@@ -685,27 +928,31 @@ definePage(computed(() => {
 
 .footer {
 	width: 100%;
-	padding-top: 8px;
+	padding: 6px 12px max(8px, env(safe-area-inset-bottom));
+	box-sizing: border-box;
+	background: light-dark(#d8e6ee, #0e1621);
+	border-top: solid 1px light-dark(rgb(198 213 222), rgb(31 43 55));
 }
 
 .new {
 	width: 100%;
-	padding-bottom: 8px;
+	padding-bottom: 6px;
 	text-align: center;
 }
 
 .newButton {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	margin: 0;
 	padding: 0 12px;
-	line-height: 32px;
+	line-height: 28px;
 	font-size: 12px;
 	border-radius: 16px;
 }
 
 .newIcon {
 	display: inline-block;
-	margin-right: 8px;
 }
 
 .footer {
@@ -715,7 +962,7 @@ definePage(computed(() => {
 .form {
 	margin: 0 auto;
 	width: 100%;
-	max-width: 700px;
+	max-width: 920px;
 }
 
 .fade-enter-active, .fade-leave-active {
@@ -734,10 +981,12 @@ definePage(computed(() => {
 	justify-content: center;
 	gap: 0.5em;
 	opacity: 0.75;
-	border: solid 0.5px var(--MI_THEME-divider);
+	border: none;
 	border-radius: 999px;
 	width: fit-content;
-	padding: 0.5em 1em;
+	padding: 0.45em 0.9em;
 	margin: 0 auto;
+	background: light-dark(rgb(255 255 255 / 0.72), rgb(31 45 58 / 0.82));
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
 }
 </style>

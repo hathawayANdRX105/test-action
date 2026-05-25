@@ -41,6 +41,7 @@ export const paramDef = {
 	properties: {
 		query: { type: 'string', minLength: 1, maxLength: 256 },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+		untilId: { type: 'string', format: 'misskey:id' },
 		userId: { type: 'string', format: 'misskey:id', nullable: true },
 		roomId: { type: 'string', format: 'misskey:id', nullable: true },
 	},
@@ -70,6 +71,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const messages = await this.chatService.searchMessages(me.id, ps.query, ps.limit, {
 				userId: ps.userId,
 				roomId: ps.roomId,
+				untilId: ps.untilId,
 			});
 
 			return await this.chatEntityService.packMessagesDetailed(messages, me);

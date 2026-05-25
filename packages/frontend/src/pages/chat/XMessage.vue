@@ -8,8 +8,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="!isMe" :preview="false"/>
 	<div v-else :class="[$style.avatar, $style.avatarFallback]"><i class="ti ti-user-question"></i></div>
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
-		<div :class="$style.header"><MkUserName v-if="!isMe && prefer.s['chat.showSenderName'] && message.fromUser != null" :user="message.fromUser"/></div>
-		<MkFukidashi :class="$style.fukidashi" :tail="isMe ? 'right' : 'left'" :accented="isMe">
+		<div :class="$style.header"><MkUserName v-if="!isMe && message.fromUser != null" :user="message.fromUser"/></div>
+		<div :class="$style.bubble">
 			<div v-if="message.reply || message.quote || messageWithReferenceState.replyUnavailable || messageWithReferenceState.quoteUnavailable" :class="$style.references">
 				<MkA v-if="message.reply && message.reply.id !== '0'" :to="`/chat/messages/${message.reply.id}`" :class="$style.reference">
 					<i class="ti ti-arrow-back-up"></i>
@@ -44,13 +44,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:enableEmojiMenuReaction="true"
 			/>
 			<MkMediaList v-if="message.file" :mediaList="[message.file]" :class="$style.file"/>
-		</MkFukidashi>
+			<div :class="$style.bubbleMeta">
+				<MkTime :class="$style.time" :time="message.createdAt"/>
+				<i v-if="isMe" class="ti ti-checks"></i>
+			</div>
+		</div>
 		<div class="_gaps_s" style="margin: 8px 0;" @click.stop>
 			<SkUrlPreviewGroup :sourceNodes="parsed" :showAsQuote="!message.fromUser?.rejectQuotes"/>
 		</div>
 		<div :class="$style.footer">
 			<button class="_textButton" style="color: currentColor;" @click="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
-			<MkTime :class="$style.time" :time="message.createdAt"/>
 			<MkA v-if="isSearchResult && 'toRoom' in message && message.toRoom != null" :to="`/chat/room/${message.toRoomId}`">{{ message.toRoom.name }}</MkA>
 			<MkA v-if="isSearchResult && 'toUser' in message && message.toUser != null && isMe" :to="`/chat/user/${message.toUserId}`">@{{ message.toUser.username }}</MkA>
 		</div>
@@ -87,14 +90,12 @@ import type { NormalizedChatMessage } from './room.vue';
 import { ensureSignin } from '@/i.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
-import MkFukidashi from '@/components/MkFukidashi.vue';
 import * as os from '@/os.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import MkMediaList from '@/components/MkMediaList.vue';
 import { reactionPicker } from '@/utility/reaction-picker.js';
 import * as sound from '@/utility/sound.js';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
-import { prefer } from '@/preferences.js';
 import { DI } from '@/di.js';
 import { getHTMLElementOrNull } from '@/utility/get-dom-node-or-null.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
@@ -291,10 +292,15 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 .root {
 	position: relative;
 	display: flex;
+	align-items: flex-end;
 
 	&.isMe {
 		flex-direction: row-reverse;
 		text-align: right;
+
+		.avatar {
+			display: none;
+		}
 
 		.footer {
 			flex-direction: row-reverse;
@@ -303,11 +309,10 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 }
 
 .avatar {
-	position: sticky;
-	top: calc(16px + var(--MI-stickyTop, 0px));
 	display: block;
-	width: 50px;
-	height: 50px;
+	width: 36px;
+	height: 36px;
+	margin-bottom: 4px;
 }
 
 .avatarFallback {
@@ -332,25 +337,58 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 		height: 42px;
 	}
 
-	.fukidashi {
-		font-size: 90%;
+	.body {
+		max-width: calc(100% - 52px);
 	}
 }
 
 .body {
-	margin: 0 12px;
+	margin: 0 8px;
+	max-width: min(76%, 640px);
 
 	// https://stackoverflow.com/questions/36230944/prevent-flex-items-from-overflowing-a-container
 	min-width: 0;
 }
 
 .header {
-	min-height: 4px; // fukidashiの位置調整も兼ねるため
+	min-height: 4px;
 	font-size: 80%;
+	color: light-dark(#168acd, #6ab7f5);
 }
 
-.fukidashi {
+.bubble {
+	position: relative;
+	display: inline-block;
+	min-width: 72px;
+	max-width: 100%;
+	padding: 8px 12px 18px;
+	border-radius: 18px 18px 18px 6px;
 	text-align: left;
+	background: light-dark(#ffffff, #182533);
+	color: var(--MI_THEME-fg);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+
+	&::before {
+		content: "";
+		position: absolute;
+		left: -5px;
+		bottom: 0;
+		width: 10px;
+		height: 12px;
+		background: inherit;
+		clip-path: polygon(100% 0, 100% 100%, 0 100%);
+	}
+}
+
+.isMe .bubble {
+	border-radius: 18px 18px 6px 18px;
+	background: light-dark(#effdde, #2b5278);
+
+	&::before {
+		left: auto;
+		right: -5px;
+		clip-path: polygon(0 0, 100% 100%, 0 100%);
+	}
 }
 
 .references {
@@ -375,6 +413,18 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	text-align: left;
 }
 
+.bubbleMeta {
+	position: absolute;
+	right: 10px;
+	bottom: 4px;
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 72%;
+	color: light-dark(#7e8b94, #abc4d8);
+	user-select: none;
+}
+
 .referenceText {
 	overflow: hidden;
 	white-space: nowrap;
@@ -392,12 +442,13 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	display: flex;
 	flex-direction: row;
 	gap: 0.5em;
-	margin-top: 4px;
+	margin: 4px 6px 0;
 	font-size: 75%;
+	color: var(--MI_THEME-fgTransparentWeak);
 }
 
 .time {
-	opacity: 0.5;
+	opacity: 1;
 }
 
 .reactions {
@@ -417,7 +468,8 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	align-items: center;
 	border: solid 1px var(--MI_THEME-divider);
 	border-radius: 999px;
-	padding: 8px;
+	padding: 4px 8px;
+	background: light-dark(#ffffff, #182533);
 
 	&.reactionMy {
 		border-color: var(--MI_THEME-accent);

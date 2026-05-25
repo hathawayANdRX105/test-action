@@ -18,6 +18,7 @@ import { fetchCustomEmojis } from '@/custom-emojis.js';
 class EmojiPicker {
 	private src: Ref<HTMLElement | null> = ref(null);
 	private manualShowing = ref(false);
+	private choseAndClose = ref(false);
 	private onChosen?: (emoji: string) => void;
 	private onClosed?: () => void;
 
@@ -39,7 +40,7 @@ class EmojiPicker {
 			pinnedEmojis: emojisRef,
 			asReactionPicker: false,
 			manualShowing: this.manualShowing,
-			choseAndClose: false,
+			choseAndClose: this.choseAndClose,
 		}, {
 			done: emoji => {
 				if (this.onChosen) this.onChosen(emoji);
@@ -58,9 +59,11 @@ class EmojiPicker {
 		src: HTMLElement,
 		onChosen?: EmojiPicker['onChosen'],
 		onClosed?: EmojiPicker['onClosed'],
+		choseAndClose = false,
 	) {
 		this.src.value = src;
 		this.manualShowing.value = true;
+		this.choseAndClose.value = choseAndClose;
 		this.onChosen = onChosen;
 		this.onClosed = onClosed;
 

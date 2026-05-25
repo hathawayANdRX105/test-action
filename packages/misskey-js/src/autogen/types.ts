@@ -25943,6 +25943,8 @@ export interface operations {
                     /** @default 10 */
                     limit?: number;
                     /** Format: misskey:id */
+                    untilId?: string;
+                    /** Format: misskey:id */
                     userId?: string | null;
                     /** Format: misskey:id */
                     roomId?: string | null;
