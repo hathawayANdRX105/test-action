@@ -54,9 +54,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkButton rounded @click="reloadRooms"><i class="ti ti-refresh"></i> {{ i18n.ts.reload }}</MkButton>
 					</div>
 
-					<MkPagination v-slot="{ items }" ref="roomsPaginationComponent" :pagination="roomsPagination" :displayLimit="50" :disableAutoLoad="true">
+					<MkLoading v-if="roomsLoading"/>
+					<MkError v-else-if="roomsError" @retry="reloadRooms"/>
+					<MkResult v-else-if="rooms.length === 0" type="empty"/>
+					<div v-else class="_gaps_s">
 						<div :class="$style.roomList">
-							<div v-for="item in adminRoomItems(items)" :key="item.id" :class="$style.roomRow">
+							<div v-for="item in rooms" :key="item.id" :class="$style.roomRow">
 								<div :class="$style.roomTop">
 									<div :class="$style.roomTitleLine">
 										<div :class="$style.roomName">{{ item.room.name }}</div>
@@ -81,7 +84,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 							</div>
 						</div>
-					</MkPagination>
+						<MkButton v-if="roomsCanFetchMore" rounded primary :wait="roomsMoreFetching" @click="loadMoreRooms"><i class="ti ti-chevron-down"></i> {{ i18n.ts.loadMore }}</MkButton>
+					</div>
 				</div>
 			</MkFolder>
 
@@ -154,7 +158,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<Mfm v-if="message.text" :text="message.text" :class="$style.messageText" :nyaize="'respect'"/>
 							<MkMediaList v-if="message.file" :mediaList="[message.file]" :class="$style.messageMedia"/>
 						</div>
-						<MkButton rounded primary :disabled="messages.length === 0" @click="loadMoreMessages"><i class="ti ti-chevron-down"></i> {{ i18n.ts.loadMore }}</MkButton>
+						<MkButton v-if="messagesCanFetchMore" rounded primary :wait="messagesMoreFetching" @click="loadMoreMessages"><i class="ti ti-chevron-down"></i> {{ i18n.ts.loadMore }}</MkButton>
 					</div>
 				</div>
 			</MkFolder>
@@ -165,7 +169,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkFolder from '@/components/MkFolder.vue';
@@ -173,7 +177,6 @@ import MkFormFooter from '@/components/MkFormFooter.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
-import MkPagination from '@/components/MkPagination.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -231,24 +234,26 @@ const roomLimitOverride = ref<string | number>('');
 const roomJoinMode = ref<ChatRoomJoinMode>('inviteOnly');
 const roomQuery = ref('');
 const joinModeFilter = ref<'all' | ChatRoomJoinMode>('all');
-const roomsPaginationComponent = useTemplateRef<InstanceType<typeof MkPagination>>('roomsPaginationComponent');
 const roomDetailsEl = useTemplateRef<HTMLElement>('roomDetailsEl');
 const messagesEl = useTemplateRef<HTMLElement>('messagesEl');
+const rooms = ref<AdminChatRoomListItem[]>([]);
+const roomsLoading = ref(false);
+const roomsMoreFetching = ref(false);
+const roomsError = ref(false);
+const roomsCanFetchMore = ref(false);
 const messageRoom = ref<AdminChatRoomListItem | null>(null);
 const messages = ref<Misskey.entities.AdminChatRoomsMessagesResponse>([]);
 const messagesLoading = ref(false);
+const messagesMoreFetching = ref(false);
 const messagesError = ref(false);
+const messagesCanFetchMore = ref(false);
 const selectingRoomId = ref<string | null>(null);
 const loadingMessagesRoomId = ref<string | null>(null);
 
-const roomsPagination = {
-	endpoint: 'admin/chat/rooms/list' as const,
-	limit: 20,
-	params: computed(() => ({
-		query: roomQuery.value.trim() === '' ? null : roomQuery.value.trim(),
-		joinMode: joinModeFilter.value,
-	})),
-};
+const ROOMS_LIMIT = 20;
+const MESSAGES_LIMIT = 30;
+let roomsLoadRequestId = 0;
+let messagesLoadRequestId = 0;
 
 const roomLimitCanSave = computed(() => {
 	if (roomLimitOverride.value === '') return false;
@@ -325,22 +330,18 @@ async function saveRoomJoinMode() {
 }
 
 function updateRoomListItem(updated: AdminChatRoomInfo) {
-	roomsPaginationComponent.value?.updateItem(updated.room.id, old => ({
-		...(old as unknown as AdminChatRoomListItem),
+	rooms.value = rooms.value.map(item => item.room.id === updated.room.id ? {
+		...item,
 		room: updated.room,
 		memberCount: updated.memberCount,
 		defaultMemberLimit: updated.defaultMemberLimit,
 		memberLimitOverride: updated.memberLimitOverride,
 		memberLimit: updated.memberLimit,
-	}));
-}
-
-function adminRoomItems(items: unknown[]): AdminChatRoomListItem[] {
-	return items as AdminChatRoomListItem[];
+	} : item);
 }
 
 function reloadRooms() {
-	roomsPaginationComponent.value?.reload();
+	loadRooms(true);
 }
 
 function joinModeText(joinMode: Misskey.entities.ChatRoom['joinMode']) {
@@ -352,6 +353,9 @@ function joinModeText(joinMode: Misskey.entities.ChatRoom['joinMode']) {
 async function openMessages(item: AdminChatRoomListItem) {
 	loadingMessagesRoomId.value = item.room.id;
 	messageRoom.value = item;
+	messages.value = [];
+	messagesCanFetchMore.value = false;
+	messagesError.value = false;
 	try {
 		await loadMessages(true);
 		await scrollToMessages();
@@ -360,24 +364,81 @@ async function openMessages(item: AdminChatRoomListItem) {
 	}
 }
 
+async function loadRooms(reset = false) {
+	if (!reset && (!roomsCanFetchMore.value || roomsMoreFetching.value || roomsLoading.value)) return;
+
+	const loading = reset ? roomsLoading : roomsMoreFetching;
+	const requestId = ++roomsLoadRequestId;
+	loading.value = true;
+	if (reset) roomsError.value = false;
+
+	try {
+		const loaded = await misskeyApi('admin/chat/rooms/list', {
+			limit: ROOMS_LIMIT + 1,
+			query: roomQuery.value.trim() === '' ? null : roomQuery.value.trim(),
+			joinMode: joinModeFilter.value,
+			...(reset || rooms.value.length === 0 ? {} : {
+				untilId: rooms.value.at(-1)?.id,
+			}),
+		});
+
+		if (requestId !== roomsLoadRequestId) return;
+
+		const page = loaded.slice(0, ROOMS_LIMIT);
+		rooms.value = reset ? page : [...rooms.value, ...page];
+		roomsCanFetchMore.value = loaded.length > ROOMS_LIMIT;
+	} catch (err) {
+		if (reset) {
+			roomsError.value = true;
+		} else {
+			await os.alert({
+				type: 'error',
+				text: err instanceof Error ? err.message : String(err),
+			});
+		}
+	} finally {
+		if (requestId === roomsLoadRequestId) loading.value = false;
+	}
+}
+
+async function loadMoreRooms() {
+	await loadRooms(false);
+}
+
 async function loadMessages(reset = false) {
 	if (!messageRoom.value) return;
+	if (!reset && (!messagesCanFetchMore.value || messagesMoreFetching.value || messagesLoading.value)) return;
 
-	messagesLoading.value = true;
-	messagesError.value = false;
+	const roomId = messageRoom.value.room.id;
+	const loading = reset ? messagesLoading : messagesMoreFetching;
+	const requestId = ++messagesLoadRequestId;
+	loading.value = true;
+	if (reset) messagesError.value = false;
 	try {
 		const loaded = await misskeyApi('admin/chat/rooms/messages', {
-			roomId: messageRoom.value.room.id,
-			limit: 30,
+			roomId,
+			limit: MESSAGES_LIMIT + 1,
 			...(reset || messages.value.length === 0 ? {} : {
 				untilId: messages.value.at(-1)?.id,
 			}),
 		});
-		messages.value = reset ? loaded : [...messages.value, ...loaded];
+
+		if (requestId !== messagesLoadRequestId || messageRoom.value?.room.id !== roomId) return;
+
+		const page = loaded.slice(0, MESSAGES_LIMIT);
+		messages.value = reset ? page : [...messages.value, ...page];
+		messagesCanFetchMore.value = loaded.length > MESSAGES_LIMIT;
 	} catch (err) {
-		messagesError.value = true;
+		if (reset) {
+			messagesError.value = true;
+		} else {
+			await os.alert({
+				type: 'error',
+				text: err instanceof Error ? err.message : String(err),
+			});
+		}
 	} finally {
-		messagesLoading.value = false;
+		if (requestId === messagesLoadRequestId) loading.value = false;
 	}
 }
 
@@ -398,6 +459,10 @@ async function scrollToMessages() {
 const headerActions = computed(() => []);
 
 const headerTabs = computed(() => []);
+
+watch([roomQuery, joinModeFilter], () => {
+	loadRooms(true);
+}, { immediate: true });
 
 definePage({
 	title: i18n.ts.chatSettings,
