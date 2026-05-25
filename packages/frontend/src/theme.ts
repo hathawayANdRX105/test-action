@@ -153,10 +153,10 @@ export function applyTheme(theme: Theme, persist = true) {
 
 	for (const [k, v] of Object.entries(props)) {
 		if (k.startsWith('font')) continue;
-		window.document.documentElement.style.setProperty(`--MI_THEME-${k}`, v.toString());
+		window.document.documentElement.style.setProperty(`--MI_THEME-${k}`, v.toString(), 'important');
 	}
 
-	window.document.documentElement.style.setProperty('color-scheme', colorScheme);
+	window.document.documentElement.style.setProperty('color-scheme', colorScheme, 'important');
 
 	if (persist) {
 		miLocalStorage.setItem('theme', JSON.stringify(props));

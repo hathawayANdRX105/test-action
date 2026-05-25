@@ -205,6 +205,7 @@ import JSON5 from 'json5';
 import defaultLightTheme from '@@/themes/l-light.json5';
 import defaultDarkTheme from '@@/themes/d-green-lime.json5';
 import type { Theme } from '@/theme.js';
+import { applyTheme } from '@/theme.js';
 import MkSwitch from '@/components/MkSwitch.vue';
 import FormSection from '@/components/form/section.vue';
 import FormLink from '@/components/form/link.vue';
@@ -268,6 +269,10 @@ const darkMode = computed({
 		if (syncDeviceDarkMode.value) {
 			prefer.commit('syncDeviceDarkMode', false);
 		}
+		applyTheme(value
+			? (prefer.s.darkTheme ?? defaultDarkTheme)
+			: (prefer.s.lightTheme ?? defaultLightTheme),
+		);
 		store.set('darkMode', value);
 	},
 });

@@ -345,6 +345,10 @@ export class NoteVisibilityService {
 			}
 		}
 
+		if (note.reply && note.reply.userId !== note.userId && !this.isAccessible(note.reply, me, data, filters)) {
+			return false;
+		}
+
 		if (note.visibility === 'specified') {
 			return this.isAccessibleDM(note, me);
 		} else if (note.visibility === 'followers') {

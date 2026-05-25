@@ -23,7 +23,42 @@
 	}
 
 	// Force update when locales change
-	const langsVersion = typeof LANGS_VERSION === 'string' ? LANGS_VERSION : VERSION;
+	const bootVersion = typeof window['VERSION'] === 'string' ? window['VERSION'] : 'unknown';
+	const injectedLangsVersion = window['LA' + 'NGS' + '_VERSION'];
+	const langsVersion = typeof injectedLangsVersion === 'string' ? injectedLangsVersion : bootVersion;
+	const repairKey = `sharkey:boot-repair:${bootVersion}:${langsVersion}`;
+	const maxRepairAttempts = 2;
+
+	async function repairAndReload(reason) {
+		const repairAttempts = Number(sessionStorage.getItem(repairKey) ?? '0');
+		if (repairAttempts >= maxRepairAttempts) {
+			renderError('AUTO_REPAIR_FAILED', reason);
+			return;
+		}
+		sessionStorage.setItem(repairKey, String(repairAttempts + 1));
+		console.warn('Boot failed. Clearing stale client caches and reloading once.', reason);
+		localStorage.removeItem('localeVersion');
+		localStorage.removeItem('locale');
+		try {
+			if ('caches' in window) {
+				await Promise.all((await caches.keys()).map(key => caches.delete(key)));
+			}
+		} catch (err) {
+			console.warn('Failed to clear caches during boot repair.', err);
+		}
+		try {
+			if ('serviceWorker' in navigator) {
+				const registrations = await navigator.serviceWorker.getRegistrations();
+				await Promise.all(registrations.map(registration => registration.unregister()));
+			}
+		} catch (err) {
+			console.warn('Failed to unregister service workers during boot repair.', err);
+		}
+		const url = new URL(location.href);
+		url.searchParams.set('_bootRepair', Date.now().toString());
+		location.replace(url.toString());
+	}
+
 	const localeVersion = localStorage.getItem('localeVersion');
 	if (localeVersion !== langsVersion) {
 		console.info(`Updating locales from version ${localeVersion ?? 'N/A'} to ${langsVersion}`);
@@ -60,7 +95,7 @@
 			localStorage.setItem('locale', await localRes.text());
 			localStorage.setItem('localeVersion', langsVersion);
 		} else {
-			renderError('LOCALE_FETCH', `Failed to load locale: ${localeFile} (${localRes.status})`);
+			await repairAndReload(`Failed to load locale: ${localeFile} (${localRes.status})`);
 			return;
 		}
 	}
@@ -71,9 +106,15 @@
 		await import(`/vite/${CLIENT_ENTRY}`)
 			.catch(async e => {
 				console.error(e);
-				renderError('APP_IMPORT', e);
+				await repairAndReload(e);
 			});
 	}
+
+	window.setTimeout(() => {
+		if (window.__sharkeyBootMounted === true) return;
+		if (!document.getElementById('splash')) return;
+		repairAndReload('The client did not finish mounting before the startup timeout.');
+	}, 15000);
 
 	// タイミングによっては、この時点でDOMの構築が済んでいる場合とそうでない場合とがある
 	if (document.readyState !== 'loading') {
@@ -110,7 +151,7 @@
 		}
 		for (const [k, v] of Object.entries(themeProps)) {
 			if (k.startsWith('font')) continue;
-			document.documentElement.style.setProperty(`--MI_THEME-${k}`, v.toString());
+			document.documentElement.style.setProperty(`--MI_THEME-${k}`, v.toString(), 'important');
 
 			// HTMLの theme-color 適用
 			if (k === 'htmlThemeColor') {
@@ -125,7 +166,7 @@
 	}
 	const colorScheme = localStorage.getItem('colorScheme');
 	if (colorScheme) {
-		document.documentElement.style.setProperty('color-scheme', colorScheme);
+		document.documentElement.style.setProperty('color-scheme', colorScheme, 'important');
 	}
 	//#endregion
 
@@ -180,7 +221,7 @@
 		const locale = JSON.parse(localStorage.getItem('locale') || '{}');
 
 		const messages = Object.assign({
-			title: 'Failed to initialize Sharkey',
+			title: 'Failed to initialize hhhl',
 			solution: 'The following actions may solve the problem.',
 			solution1: 'Update your os and browser',
 			solution2: 'Disable an adblocker',
@@ -197,7 +238,7 @@
 				if (details instanceof Error) return `${details.name}: ${details.message}\n${details.stack ?? ''}`;
 				if (typeof details === 'string') return details;
 				return `${String(details)} ${JSON.stringify(details)}`;
-			} catch (err) {
+			} catch {
 				return String(details);
 			}
 		})();

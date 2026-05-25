@@ -10,8 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.shape1"></div>
 	<div :class="$style.shape2"></div>
 	<div :class="$style.logoWrapper">
-		<div :class="$style.poweredBy">Powered by</div>
-		<img :src="misskeysvg" :class="$style.misskey"/>
+		<div :class="$style.brand">hhhl</div>
 	</div>
 	<div :class="$style.contents">
 		<MkVisitorDashboard/>
@@ -34,7 +33,6 @@ import * as Misskey from 'misskey-js';
 import XTimeline from './welcome.timeline.vue';
 import MarqueeText from '@/components/MkMarquee.vue';
 import MkFeaturedPhotos from '@/components/MkFeaturedPhotos.vue';
-import misskeysvg from '/client-assets/sharkey.svg';
 import { misskeyApiGet } from '@/utility/misskey-api.js';
 import MkVisitorDashboard from '@/components/MkVisitorDashboard.vue';
 import { getProxiedImageUrl } from '@/utility/media-proxy.js';
@@ -139,16 +137,14 @@ misskeyApiGet('federation/instances', {
 	}
 }
 
-.poweredBy {
+.brand {
 	color: var(--MI_THEME-fgOnAccent);
-	margin-bottom: 2px;
-}
-
-.misskey {
-	width: 120px;
+	font-size: 34px;
+	font-weight: 800;
+	line-height: 1;
 
 	@media (max-width: 450px) {
-		width: 100px;
+		font-size: 30px;
 	}
 }
 

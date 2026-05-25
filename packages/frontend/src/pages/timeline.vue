@@ -13,15 +13,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="queue > 0" :class="$style.new"><button class="_buttonPrimary" :class="$style.newButton" @click="top()">{{ i18n.ts.newNoteRecived }}</button></div>
 		<MkTimeline
 			ref="tlComponent"
-			:key="src + withRenotes + withBots + withReplies + onlyFiles + withSensitive"
+			:key="src + withRenotes + withBots + withReplies + onlyFiles + withSensitive + localTimelineMode"
 			:class="$style.tl"
-			:src="src.split(':')[0]"
-			:list="src.split(':')[1]"
+			:src="timelineSrc"
+			:list="timelineListId"
 			:withRenotes="withRenotes"
 			:withReplies="withReplies"
 			:withSensitive="withSensitive"
 			:onlyFiles="onlyFiles"
 			:withBots="withBots"
+			:localTimelineMode="localTimelineMode"
 			:sound="true"
 			@queue="queueUpdated"
 		/>
@@ -63,6 +64,8 @@ const src = computed<TimelinePageSrc>({
 	get: () => ($i ? store.r.tl.value.src : srcWhenNotSignin.value),
 	set: (x) => saveSrc(x),
 });
+const timelineSrc = computed<BasicTimelineType | 'list'>(() => src.value.split(':')[0] as BasicTimelineType | 'list');
+const timelineListId = computed<string | undefined>(() => src.value.split(':')[1]);
 const withRenotes = computed<boolean>({
 	get: () => store.r.tl.value.filter.withRenotes,
 	set: (x) => saveTlFilter('withRenotes', x),
@@ -115,6 +118,10 @@ watch([withReplies, onlyFiles], ([withRepliesTo, onlyFilesTo]) => {
 const withSensitive = computed<boolean>({
 	get: () => store.r.tl.value.filter.withSensitive,
 	set: (x) => saveTlFilter('withSensitive', x),
+});
+const localTimelineMode = computed<'chronological' | 'replies' | 'recommended'>({
+	get: () => store.r.tl.value.filter.localTimelineMode ?? 'chronological',
+	set: (x) => saveTlFilter('localTimelineMode', x),
 });
 
 watch(src, () => {
@@ -234,7 +241,7 @@ function saveSrc(newSrc: TimelinePageSrc): void {
 	}
 }
 
-function saveTlFilter(key: keyof typeof store.s.tl.filter, newValue: boolean) {
+function saveTlFilter<K extends keyof typeof store.s.tl.filter>(key: K, newValue: typeof store.s.tl.filter[K]) {
 	if (key !== 'withReplies' || $i) {
 		const out = deepMerge({ filter: { [key]: newValue } }, store.s.tl);
 		store.set('tl', out);
@@ -302,6 +309,40 @@ const headerActions = computed(() => {
 						text: i18n.ts.showRepliesToOthersInTimeline,
 						ref: withReplies,
 						disabled: onlyFiles,
+					});
+				}
+
+				if (src.value === 'local') {
+					menuItems.push({
+						type: 'parent',
+						icon: 'ti ti-adjustments',
+						text: i18n.ts.sort,
+						caption:
+							localTimelineMode.value === 'replies' ? i18n.ts.repliesCount
+							: localTimelineMode.value === 'recommended' ? i18n.ts.recommended
+							: i18n.ts.createdAt,
+						children: [{
+							type: 'radioOption',
+							text: i18n.ts.createdAt,
+							active: computed(() => localTimelineMode.value === 'chronological'),
+							action: () => {
+								localTimelineMode.value = 'chronological';
+							},
+						}, {
+							type: 'radioOption',
+							text: i18n.ts.repliesCount,
+							active: computed(() => localTimelineMode.value === 'replies'),
+							action: () => {
+								localTimelineMode.value = 'replies';
+							},
+						}, {
+							type: 'radioOption',
+							text: i18n.ts.recommended,
+							active: computed(() => localTimelineMode.value === 'recommended'),
+							action: () => {
+								localTimelineMode.value = 'recommended';
+							},
+						}],
 					});
 				}
 

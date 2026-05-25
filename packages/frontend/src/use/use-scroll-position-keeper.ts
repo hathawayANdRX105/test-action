@@ -11,7 +11,9 @@ import type { Ref } from 'vue';
 
 // TODO: data-scroll-anchor がひとつも存在しない場合、または手動で useAnchor みたいなフラグをfalseで呼ばれた場合、単純にスクロール位置を使用する処理にフォールバックするようにする
 
-export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | null | undefined>): void {
+export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | null | undefined>, options?: {
+	reversed?: boolean;
+}): void {
 	let anchorId: string | null = null;
 	let ready = true;
 
@@ -23,7 +25,7 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 			if (!ready) return;
 
 			const scrollContainerRect = el.getBoundingClientRect();
-			const viewPosition = scrollContainerRect.height / 2;
+			const viewPosition = scrollContainerRect.top + (scrollContainerRect.height / 2);
 
 			const anchorEls = el.querySelectorAll('[data-scroll-anchor]');
 			for (let i = anchorEls.length - 1; i > -1; i--) { // 下から見た方が速い
@@ -41,7 +43,13 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		// ほんとはscrollイベントじゃなくてonBeforeDeactivatedでやりたい
 		// https://github.com/vuejs/vue/issues/9454
 		// https://github.com/vuejs/rfcs/pull/284
-		el.addEventListener('scroll', throttle(1000, onScroll), { passive: true });
+		const throttledOnScroll = throttle(1000, onScroll);
+		el.addEventListener('scroll', throttledOnScroll, { passive: true });
+		onScroll();
+
+		onUnmounted(() => {
+			el.removeEventListener('scroll', throttledOnScroll);
+		});
 	}, {
 		immediate: true,
 	});
@@ -52,9 +60,10 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		if (!scrollContainer) return;
 		const scrollAnchorEl = scrollContainer.querySelector(`[data-scroll-anchor="${anchorId}"]`);
 		if (!scrollAnchorEl) return;
+		const isReversed = options?.reversed || scrollContainer.classList.contains('_pageScrollableReversed');
 		scrollAnchorEl.scrollIntoView({
 			behavior: 'instant',
-			block: 'center',
+			block: isReversed ? 'nearest' : 'center',
 			inline: 'center',
 		});
 	};

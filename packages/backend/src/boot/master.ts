@@ -40,15 +40,14 @@ function greet(bootLogger: Logger) {
 		bootLogger.info(themeColor('                                 |___/ '));
 		//#endregion
 
-		bootLogger.info(' Sharkey is an open-source decentralized microblogging platform.');
-		bootLogger.info(chalk.rgb(255, 136, 0)(' If you like Sharkey, please donate to support development. https://opencollective.com/sharkey'));
+		bootLogger.info(' hhhl is an open-source decentralized microblogging platform.');
 
 		bootLogger.info('');
 		bootLogger.info(`--- ${os.hostname()} ${chalk.grey(`(PID: ${process.pid.toString()})`)} ---`);
 	}
 
-	bootLogger.info('Welcome to Sharkey!');
-	bootLogger.info(`Sharkey v${meta.gitVersion ?? meta.version}`, null, true);
+	bootLogger.info('Welcome to hhhl!');
+	bootLogger.info(`hhhl v${meta.gitVersion ?? meta.version}`, null, true);
 }
 
 /**
@@ -74,7 +73,7 @@ export async function masterMain(bootLogger?: Logger) {
 		process.exit(1);
 	}
 
-	bootLogger.info('Sharkey initialized');
+	bootLogger.info('hhhl initialized');
 
 	if (config.sentryForBackend) {
 		Sentry.init({
@@ -91,7 +90,7 @@ export async function masterMain(bootLogger?: Logger) {
 			maxBreadcrumbs: 0,
 
 			// Set release version
-			release: 'Sharkey@' + (meta.gitVersion ?? meta.version),
+			release: 'hhhl@' + (meta.gitVersion ?? meta.version),
 
 			...config.sentryForBackend.options,
 		});

@@ -252,8 +252,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkPreferenceContainer k="noteDesign">
 									<MkRadios v-model="noteDesign">
 										<template #label><SearchLabel>Note Design</SearchLabel></template>
-										<option value="sharkey"><i class="sk-icons sk-shark sk-icons-lg" style="top: 2px;position: relative;"></i> Sharkey</option>
-										<option value="misskey"><i class="sk-icons sk-misskey sk-icons-lg" style="top: 2px;position: relative;"></i> Misskey</option>
+											<option value="sharkey"><i class="sk-icons sk-shark sk-icons-lg" style="top: 2px;position: relative;"></i> hhhl</option>
+											<option value="misskey"><i class="sk-icons sk-misskey sk-icons-lg" style="top: 2px;position: relative;"></i> Classic</option>
 									</MkRadios>
 								</MkPreferenceContainer>
 							</SearchMarker>
@@ -815,8 +815,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<SearchMarker :keywords="['corner', 'radius']">
 								<MkRadios v-model="cornerRadius">
 									<template #label><SearchLabel>{{ i18n.ts.cornerRadius }}</SearchLabel></template>
-									<option value="sharkey"><i class="sk-icons sk-shark sk-icons-lg" style="top: 2px;position: relative;"></i> Sharkey</option>
-									<option value="misskey"><i class="sk-icons sk-misskey sk-icons-lg" style="top: 2px;position: relative;"></i> Misskey</option>
+										<option value="sharkey"><i class="sk-icons sk-shark sk-icons-lg" style="top: 2px;position: relative;"></i> hhhl</option>
+										<option value="misskey"><i class="sk-icons sk-misskey sk-icons-lg" style="top: 2px;position: relative;"></i> Classic</option>
 								</MkRadios>
 							</SearchMarker>
 

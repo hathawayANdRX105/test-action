@@ -57,12 +57,14 @@ const props = withDefaults(defineProps<{
 	withBots?: boolean;
 	withSensitive?: boolean;
 	onlyFiles?: boolean;
+	localTimelineMode?: 'chronological' | 'replies' | 'recommended';
 }>(), {
 	withRenotes: true,
 	withReplies: false,
 	withSensitive: true,
 	onlyFiles: false,
 	withBots: true,
+	localTimelineMode: 'chronological',
 });
 
 const emit = defineEmits<{
@@ -81,6 +83,7 @@ type TimelineQueryType = {
 	withFiles?: boolean,
 	withBots?: boolean,
 	visibility?: string,
+	timelineMode?: 'chronological' | 'replies' | 'recommended',
 	listId?: string,
 	channelId?: string,
 	roleId?: string
@@ -225,6 +228,7 @@ function updatePaginationQuery() {
 			withReplies: props.withReplies,
 			withFiles: props.onlyFiles ? true : undefined,
 			withBots: props.withBots,
+			timelineMode: props.localTimelineMode,
 		};
 	} else if (props.src === 'social') {
 		endpoint = 'notes/hybrid-timeline';
@@ -288,6 +292,7 @@ function updatePaginationQuery() {
 			endpoint: endpoint,
 			limit: 10,
 			params: query,
+			offsetMode: props.src === 'local' && props.localTimelineMode !== 'chronological',
 		};
 	} else {
 		paginationQuery = null;
@@ -295,9 +300,12 @@ function updatePaginationQuery() {
 }
 
 function refreshEndpointAndChannel() {
-	if (!prefer.s.disableStreamingTimeline) {
+	const shouldUseStreaming = !prefer.s.disableStreamingTimeline && !(props.src === 'local' && props.localTimelineMode !== 'chronological');
+	if (shouldUseStreaming) {
 		disconnectChannel();
 		connectChannel();
+	} else {
+		disconnectChannel();
 	}
 
 	updatePaginationQuery();
@@ -305,7 +313,7 @@ function refreshEndpointAndChannel() {
 
 // デッキのリストカラムでwithRenotesを変更した場合に自動的に更新されるようにさせる
 // IDが切り替わったら切り替え先のTLを表示させたい
-watch(() => [props.list, props.antenna, props.channel, props.role, props.withRenotes, props.withBots, props.withReplies, props.onlyFiles], refreshEndpointAndChannel);
+watch(() => [props.list, props.antenna, props.channel, props.role, props.withRenotes, props.withBots, props.withReplies, props.onlyFiles, props.localTimelineMode], refreshEndpointAndChannel);
 
 // withSensitiveはクライアントで完結する処理のため、単にリロードするだけでOK
 watch(() => props.withSensitive, reloadTimeline);

@@ -42,10 +42,10 @@ export class ApiInstanceMastodon {
 			const instance = data.data;
 			const response: MastodonEntity.Instance = {
 				uri: this.config.host,
-				title: this.meta.name || 'Sharkey',
-				description: this.meta.description || this.meta.about || 'This is a vanilla Sharkey Instance.',
+					title: this.meta.name || 'hhhl',
+					description: this.meta.description || this.meta.about || 'This is a hhhl instance.',
 				email: instance.email || '',
-				version: `3.0.0 (compatible; Sharkey ${this.config.version}; like Akkoma)`,
+					version: `3.0.0 (compatible; hhhl ${this.config.version}; like Akkoma)`,
 				urls: instance.urls,
 				stats: {
 					user_count: instance.stats.user_count,
@@ -106,10 +106,10 @@ export class ApiInstanceMastodon {
 			const instance = data.data;
 			const response: MastodonEntity.InstanceV2 = {
 				domain: this.config.host,
-				title: this.meta.name || 'Sharkey',
-				version: `3.0.0 (compatible; Sharkey ${this.config.version}; like Akkoma)`,
+					title: this.meta.name || 'hhhl',
+					version: `3.0.0 (compatible; hhhl ${this.config.version}; like Akkoma)`,
 				source_url: this.meta.repositoryUrl,
-				description: this.meta.description || this.meta.about || 'This is a vanilla Sharkey Instance.',
+					description: this.meta.description || this.meta.about || 'This is a hhhl instance.',
 				usage: {
 					users: {
 						active_month: instanceStats.localUsersSixMonths,

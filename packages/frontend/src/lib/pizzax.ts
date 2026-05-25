@@ -174,7 +174,11 @@ export class Pizzax<T extends StateDef> {
 
 							return set(this.registryCacheKeyName, cache);
 						})
-						.then(() => resolve());
+						.then(() => resolve())
+						.catch(err => {
+							console.warn(`Failed to load Pizzax registry for ${this.key}. Continuing with cached/default settings.`, err);
+							resolve();
+						});
 				}, 1);
 			} else {
 				resolve();

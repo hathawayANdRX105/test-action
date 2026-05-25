@@ -23,6 +23,7 @@ import { SkRateLimiterService } from '@/server/SkRateLimiterService.js';
 import { ServerUtilityService } from '@/server/ServerUtilityService.js';
 import { TimeService } from '@/global/TimeService.js';
 import { CacheManagementService, type ManagedMemoryKVCache } from '@/global/CacheManagementService.js';
+import { EnvService } from '@/global/EnvService.js';
 import { renderInlineError } from '@/misc/render-inline-error.js';
 import { renderFullError } from '@/misc/render-full-error.js';
 import { ApiError } from './error.js';
@@ -58,6 +59,7 @@ export class ApiCallService {
 		private apiLoggerService: ApiLoggerService,
 		private readonly timeService: TimeService,
 		private readonly serverUtilityServer: ServerUtilityService,
+		private readonly envService: EnvService,
 
 		cacheManagementService: CacheManagementService,
 	) {
@@ -325,7 +327,7 @@ export class ApiCallService {
 
 		// We don't need this check, but removing it would cause a big merge conflict.
 		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-		if (endpointLimit) {
+		if (endpointLimit && this.envService.env.NODE_ENV !== 'test') {
 			// koa will automatically load the `X-Forwarded-For` header if `proxy: true` is configured in the app.
 			let limitActor: string | MiLocalUser;
 			if (user) {

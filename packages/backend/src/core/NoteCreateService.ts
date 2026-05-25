@@ -51,6 +51,7 @@ import { FanoutTimelineService } from '@/core/FanoutTimelineService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { UserBlockingService } from '@/core/UserBlockingService.js';
 import { isReply } from '@/misc/is-reply.js';
+import { getReplyTargetVisibleUserIds } from '@/misc/reply-target-visibility.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { LatestNoteService } from '@/core/LatestNoteService.js';
 import { CollapsedQueue } from '@/misc/collapsed-queue.js';
@@ -997,6 +998,8 @@ export class NoteCreateService implements OnApplicationShutdown {
 				userListMemberships = userListMemberships.filter(x => x.userListUserId === user.id || followings.some(f => f.followerId === x.userListUserId));
 			}
 
+			const replyTargetVisibleUserIds = await getReplyTargetVisibleUserIds(note, this.notesRepository, this.followingsRepository);
+
 			// TODO: あまりにも数が多いと redisPipeline.exec に失敗する(理由は不明)ため、3万件程度を目安に分割して実行するようにする
 			for (const following of followings) {
 				// 基本的にvisibleUserIdsには自身のidが含まれている前提であること
@@ -1005,6 +1008,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 				// 「自分自身への返信 or そのフォロワーへの返信」のどちらでもない場合
 				if (isReply(note, following.followerId)) {
 					if (!following.withReplies) continue;
+					if (replyTargetVisibleUserIds != null && !replyTargetVisibleUserIds.has(following.followerId)) continue;
 				}
 
 				await this.fanoutTimelineService.push(`homeTimeline:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
@@ -1024,6 +1028,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 				// 「自分自身への返信 or そのリストの作成者への返信」のどちらでもない場合
 				if (isReply(note, userListMembership.userListUserId)) {
 					if (!userListMembership.withReplies) continue;
+					if (replyTargetVisibleUserIds != null && !replyTargetVisibleUserIds.has(userListMembership.userListUserId)) continue;
 				}
 
 				await this.fanoutTimelineService.push(`userListTimeline:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax, r);

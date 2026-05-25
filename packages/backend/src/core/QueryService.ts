@@ -250,6 +250,31 @@ export class QueryService {
 	}
 
 	@bindThis
+	public generateReplyTargetVisibilityQuery<E extends ObjectLiteral>(q: SelectQueryBuilder<E>, me?: { id: MiUser['id'] } | null): SelectQueryBuilder<E> {
+		return q.andWhere(new Brackets(qb => {
+			qb
+				.orWhere('note.replyId IS NULL')
+				.orWhere('note.userId = note.replyUserId')
+				.orWhere('reply.visibility = \'public\'')
+				.orWhere('reply.visibility = \'home\'');
+
+			if (me != null) {
+				qb
+					.orWhere(':meId = reply.userId')
+					.orWhere(':meIdAsList <@ reply.visibleUserIds')
+					.orWhere(new Brackets(qb => qb
+						.andWhere(new Brackets(qbb => this
+							.orFollowingUser(qbb, ':meId', 'reply.userId')
+							.orWhere(':meIdAsList <@ reply.mentions')
+							.orWhere(':meId = reply.replyUserId')))
+						.andWhere('reply.visibility = \'followers\'')));
+
+				q.setParameters({ meId: me.id, meIdAsList: [me.id] });
+			}
+		}));
+	}
+
+	@bindThis
 	public generateMutedUserRenotesQueryForNotes<E extends ObjectLiteral>(q: SelectQueryBuilder<E>, me: { id: MiUser['id'] }): SelectQueryBuilder<E> {
 		return q
 			.andWhere(new Brackets(qb => this

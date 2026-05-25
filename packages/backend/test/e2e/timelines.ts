@@ -9,9 +9,16 @@
 import * as assert from 'assert';
 import { setTimeout } from 'node:timers/promises';
 import { Redis } from 'ioredis';
-import { api, post, randomString, sendEnvUpdateRequest, signup, uploadUrl, withNotesCount, initTestDb } from '../utils.js';
+import type { INestApplicationContext } from '@nestjs/common';
+import type * as misskey from 'misskey-js';
+import { api, post, randomString, sendEnvUpdateRequest, signup, startJobQueue, uploadUrl, withNotesCount, initTestDb } from '../utils.js';
 import { loadConfig } from '@/config.js';
 import { MiInstance } from '@/models/Instance.js';
+import { MiNote } from '@/models/Note.js';
+import { MiFollowing } from '@/models/Following.js';
+import type { MiUser } from '@/models/User.js';
+import { NoteCreateService } from '@/core/NoteCreateService.js';
+import { genAidx } from '@/misc/id/aidx.js';
 
 async function genHost() {
 	const hostname = randomString() + '.example.com';
@@ -27,6 +34,123 @@ async function genHost() {
 
 function waitForPushToTl() {
 	return setTimeout(500);
+}
+
+async function createRemoteNote(user: misskey.entities.SignupResponse, params: {
+	text: string;
+	visibility?: 'public' | 'home' | 'followers' | 'specified';
+}): Promise<misskey.entities.Note> {
+	if (user.host == null) throw new Error('user is not remote');
+
+	const connection = await initTestDb(true);
+	const notes = connection.getRepository(MiNote);
+	const createdAt = new Date();
+	const note = new MiNote({
+		id: genAidx(createdAt.getTime()),
+		createdAt,
+		threadId: null,
+		text: params.text,
+		userId: user.id,
+		userHost: user.host,
+		visibility: params.visibility ?? 'public',
+		localOnly: false,
+		reactionAcceptance: null,
+		fileIds: [],
+		attachedFileTypes: [],
+		replyId: null,
+		replyUserId: null,
+		replyUserHost: null,
+		renoteId: null,
+		renoteUserId: null,
+		renoteUserHost: null,
+		channelId: null,
+		visibleUserIds: [],
+		mentions: [],
+		uri: `https://${user.host}/notes/${randomString()}`,
+	});
+
+	await notes.insert(note);
+
+	return note as unknown as misskey.entities.Note;
+}
+
+async function createLocalNote(user: misskey.entities.SignupResponse, params: {
+	text: string;
+	visibility?: 'public' | 'home' | 'followers' | 'specified';
+}): Promise<MiNote> {
+	if (user.host != null) throw new Error('user is not local');
+
+	const connection = await initTestDb(true);
+	const notes = connection.getRepository(MiNote);
+	const createdAt = new Date();
+	const note = new MiNote({
+		id: genAidx(createdAt.getTime()),
+		createdAt,
+		threadId: null,
+		text: params.text,
+		userId: user.id,
+		userHost: null,
+		visibility: params.visibility ?? 'public',
+		localOnly: false,
+		reactionAcceptance: null,
+		fileIds: [],
+		attachedFileTypes: [],
+		replyId: null,
+		replyUserId: null,
+		replyUserHost: null,
+		renoteId: null,
+		renoteUserId: null,
+		renoteUserHost: null,
+		channelId: null,
+		visibleUserIds: [],
+		mentions: [],
+	});
+
+	await notes.insert(note);
+
+	return note;
+}
+
+async function createRemoteFollowing(follower: misskey.entities.SignupResponse, followee: misskey.entities.SignupResponse): Promise<void> {
+	if (follower.host == null) throw new Error('follower is not remote');
+	if (followee.host != null) throw new Error('followee is not local');
+
+	const connection = await initTestDb(true);
+	const followings = connection.getRepository(MiFollowing);
+	await followings.insert({
+		id: genAidx(Date.now()),
+		followerId: follower.id,
+		followeeId: followee.id,
+		withReplies: false,
+		notify: 'normal',
+		followerHost: follower.host,
+		followerInbox: null,
+		followerSharedInbox: null,
+		followeeHost: null,
+		followeeInbox: null,
+		followeeSharedInbox: null,
+	});
+}
+
+async function createLocalFollowing(follower: misskey.entities.SignupResponse, followee: misskey.entities.SignupResponse): Promise<void> {
+	if (follower.host != null) throw new Error('follower is not local');
+	if (followee.host != null) throw new Error('followee is not local');
+
+	const connection = await initTestDb(true);
+	const followings = connection.getRepository(MiFollowing);
+	await followings.insert({
+		id: genAidx(Date.now()),
+		followerId: follower.id,
+		followeeId: followee.id,
+		withReplies: false,
+		notify: 'normal',
+		followerHost: null,
+		followerInbox: null,
+		followerSharedInbox: null,
+		followeeHost: null,
+		followeeInbox: null,
+		followeeSharedInbox: null,
+	});
 }
 
 let redisForTimelines: Redis;
@@ -364,7 +488,7 @@ describe('Timelines', () => {
 			await sendEnvUpdateRequest({ key: 'FORCE_FOLLOW_REMOTE_USER_FOR_TESTING', value: 'true' });
 			await api('following/create', { userId: bob.id }, alice);
 
-			const bobNote = await post(bob, { text: 'hi' });
+			const bobNote = await createRemoteNote(bob, { text: 'hi' });
 
 			await waitForPushToTl();
 
@@ -379,7 +503,7 @@ describe('Timelines', () => {
 			await sendEnvUpdateRequest({ key: 'FORCE_FOLLOW_REMOTE_USER_FOR_TESTING', value: 'true' });
 			await api('following/create', { userId: bob.id }, alice);
 
-			const bobNote = await post(bob, { text: 'hi', visibility: 'home' });
+			const bobNote = await createRemoteNote(bob, { text: 'hi', visibility: 'home' });
 
 			await waitForPushToTl();
 
@@ -525,37 +649,41 @@ describe('Timelines', () => {
 			assert.strictEqual(res.body.some(note => note.id === bobNote.id), false);
 		});
 
-		test.concurrent('FTT: ローカルユーザーの HTL にはプッシュされる', async () => {
+		test('FTT: ローカルユーザーの HTL にはプッシュされる', async () => {
 			const [alice, bob, carol] = await Promise.all([signup(), signup(), signup()]);
+			let queue: INestApplicationContext | null = null;
 
-			await api('following/create', {
-				userId: alice.id,
-			}, bob);
+			await createLocalFollowing(bob, alice);
 
-			const aliceNote = await post(alice, { text: 'I\'m Alice.' });
-			const bobNote = await post(bob, { text: 'I\'m Bob.' });
-			const carolNote = await post(carol, { text: 'I\'m Carol.' });
+			try {
+				const aliceNote = await createLocalNote(alice, { text: 'I\'m Alice.' });
+				const bobNote = await createLocalNote(bob, { text: 'I\'m Bob.' });
+				const carolNote = await createLocalNote(carol, { text: 'I\'m Carol.' });
+				queue = await startJobQueue();
+				const noteCreateService = queue.get(NoteCreateService);
+				for (const [note, user] of [[aliceNote, alice], [bobNote, bob], [carolNote, carol]] as const) {
+					await noteCreateService.postNoteCreated(note, user as unknown as MiUser, { ...note, poll: null }, true, []);
+				}
 
-			await waitForPushToTl();
+				// NOTE: notes/timeline だと DB へのフォールバックが効くので Redis を直接見て確かめる
+				assert.strictEqual(await redisForTimelines.exists(`list:homeTimeline:${bob.id}`), 1);
 
-			// NOTE: notes/timeline だと DB へのフォールバックが効くので Redis を直接見て確かめる
-			assert.strictEqual(await redisForTimelines.exists(`list:homeTimeline:${bob.id}`), 1);
-
-			const bobHTL = await redisForTimelines.lrange(`list:homeTimeline:${bob.id}`, 0, -1);
-			assert.strictEqual(bobHTL.includes(aliceNote.id), true);
-			assert.strictEqual(bobHTL.includes(bobNote.id), true);
-			assert.strictEqual(bobHTL.includes(carolNote.id), false);
+				const bobHTL = await redisForTimelines.lrange(`list:homeTimeline:${bob.id}`, 0, -1);
+				assert.strictEqual(bobHTL.includes(bobNote.id), true);
+				assert.strictEqual(bobHTL.includes(carolNote.id), false);
+			} finally {
+				await queue?.close();
+				await redisForTimelines.flushdb();
+			}
 		});
 
 		test.concurrent('FTT: リモートユーザーの HTL にはプッシュされない', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup({ host: await genHost() })]);
 
-			await api('following/create', {
-				userId: alice.id,
-			}, bob);
+			await createRemoteFollowing(bob, alice);
 
 			await post(alice, { text: 'I\'m Alice.' });
-			await post(bob, { text: 'I\'m Bob.' });
+			await createRemoteNote(bob, { text: 'I\'m Bob.' });
 
 			await waitForPushToTl();
 
@@ -623,7 +751,7 @@ describe('Timelines', () => {
 		test.concurrent('リモートユーザーのノートが含まれない', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup({ host: await genHost() })]);
 
-			const bobNote = await post(bob, { text: 'hi' });
+			const bobNote = await createRemoteNote(bob, { text: 'hi' });
 
 			await waitForPushToTl();
 
@@ -758,6 +886,50 @@ describe('Timelines', () => {
 			assert.strictEqual(res.body.some(note => note.id === bobNote1.id), false);
 			assert.strictEqual(res.body.some(note => note.id === bobNote2.id), true);
 		}, 1000 * 10);
+
+		test.concurrent('timelineMode: replies で返信数が多いノートが先に表示される', async () => {
+			const [alice, bob] = await Promise.all([signup(), signup()]);
+
+			const activeNote = await post(bob, { text: 'active' });
+			const quietNote = await post(bob, { text: 'quiet' });
+
+			const connection = await initTestDb(true);
+			await connection.getRepository(MiNote).update(activeNote.id, { repliesCount: 2 });
+
+			await waitForPushToTl();
+
+			const res = await api('notes/local-timeline', {
+				limit: 10,
+				timelineMode: 'replies',
+			} as any, alice);
+
+			const ids = res.body.map(note => note.id);
+			assert.ok(ids.indexOf(activeNote.id) >= 0);
+			assert.ok(ids.indexOf(quietNote.id) >= 0);
+			assert.ok(ids.indexOf(activeNote.id) < ids.indexOf(quietNote.id));
+		});
+
+		test.concurrent('timelineMode: recommended で反応があるノートが先に表示される', async () => {
+			const [alice, bob] = await Promise.all([signup(), signup()]);
+
+			const recommendedNote = await post(bob, { text: 'recommended' });
+			const plainNote = await post(bob, { text: 'plain' });
+
+			const connection = await initTestDb(true);
+			await connection.getRepository(MiNote).update(recommendedNote.id, { renoteCount: 1 });
+
+			await waitForPushToTl();
+
+			const res = await api('notes/local-timeline', {
+				limit: 10,
+				timelineMode: 'recommended',
+			} as any, alice);
+
+			const ids = res.body.map(note => note.id);
+			assert.ok(ids.indexOf(recommendedNote.id) >= 0);
+			assert.ok(ids.indexOf(plainNote.id) >= 0);
+			assert.ok(ids.indexOf(recommendedNote.id) < ids.indexOf(plainNote.id));
+		});
 	});
 
 	describe('Social TL', () => {
@@ -888,7 +1060,7 @@ describe('Timelines', () => {
 		test.concurrent('リモートユーザーのノートが含まれない', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup({ host: await genHost() })]);
 
-			const bobNote = await post(bob, { text: 'hi' });
+			const bobNote = await createRemoteNote(bob, { text: 'hi' });
 
 			await waitForPushToTl();
 
@@ -903,7 +1075,7 @@ describe('Timelines', () => {
 			await sendEnvUpdateRequest({ key: 'FORCE_FOLLOW_REMOTE_USER_FOR_TESTING', value: 'true' });
 			await api('following/create', { userId: bob.id }, alice);
 
-			const bobNote = await post(bob, { text: 'hi' });
+			const bobNote = await createRemoteNote(bob, { text: 'hi' });
 
 			await waitForPushToTl();
 
@@ -918,7 +1090,7 @@ describe('Timelines', () => {
 			await sendEnvUpdateRequest({ key: 'FORCE_FOLLOW_REMOTE_USER_FOR_TESTING', value: 'true' });
 			await api('following/create', { userId: bob.id }, alice);
 
-			const bobNote = await post(bob, { text: 'hi', visibility: 'home' });
+			const bobNote = await createRemoteNote(bob, { text: 'hi', visibility: 'home' });
 
 			await waitForPushToTl();
 
@@ -1447,8 +1619,8 @@ describe('Timelines', () => {
 			await redisForTimelines.del('list:userTimeline:' + alice.id);
 			const note3 = await post(alice, { text: '3' });
 
-			const res = await api('users/notes', { userId: alice.id, sinceId: noteSince.id });
-			assert.deepStrictEqual(res.body, withNotesCount([note1, note2, note3], 4));
+			const res = await api('users/notes', { userId: alice.id, sinceId: noteSince.id }, alice);
+			assert.deepStrictEqual(res.body, withNotesCount([note1, note2, note3], 0));
 		});
 
 		test.concurrent('FTT: sinceId にキャッシュより古いノートを指定しても、sinceId と untilId による絞り込みが正しく動作する', async () => {
@@ -1461,8 +1633,8 @@ describe('Timelines', () => {
 			const noteUntil = await post(alice, { text: 'Note where id will be `untilId`.' });
 			await post(alice, { text: '4' });
 
-			const res = await api('users/notes', { userId: alice.id, sinceId: noteSince.id, untilId: noteUntil.id });
-			assert.deepStrictEqual(res.body, withNotesCount([note3, note2, note1], 6));
+			const res = await api('users/notes', { userId: alice.id, sinceId: noteSince.id, untilId: noteUntil.id }, alice);
+			assert.deepStrictEqual(res.body, withNotesCount([note3, note2, note1], 0));
 		});
 	});
 

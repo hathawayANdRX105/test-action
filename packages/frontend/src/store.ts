@@ -77,6 +77,7 @@ export const store = markRaw(new Pizzax('base', {
 				withSensitive: true,
 				onlyFiles: false,
 				withBots: true,
+				localTimelineMode: 'chronological' as 'chronological' | 'replies' | 'recommended',
 			},
 		},
 	},

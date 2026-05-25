@@ -183,9 +183,10 @@ function menuEdit() {
 }
 
 .body {
-	position: relative;
+	position: sticky;
+	top: 0;
 	width: var(--nav-icon-only-width);
-	height: 100%;
+	height: 100dvh;
 	box-sizing: border-box;
 	overflow: auto;
 	overflow-x: clip;

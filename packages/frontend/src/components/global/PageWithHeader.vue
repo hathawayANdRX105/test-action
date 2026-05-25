@@ -50,7 +50,7 @@ const tab = defineModel<string>('tab');
 const normalizedTabs = computed(() => props.tabs ?? []);
 const rootEl = useTemplateRef('rootEl');
 
-useScrollPositionKeeper(rootEl);
+useScrollPositionKeeper(rootEl, { reversed: props.reversed });
 
 const router = useRouter();
 

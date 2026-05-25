@@ -22,8 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<FormSection>
 		<div class="_gaps_m">
 			<MkKeyValue :copy="version">
-				<!-- TODO translate -->
-				<template #key>Sharkey</template>
+					<template #key>hhhl</template>
 				<template #value>{{ version }}</template>
 			</MkKeyValue>
 			<FormLink v-if="instance.repositoryUrl || instance.providesTarball" :to="instance.repositoryUrl || `/tarball/sharkey-${version}.tar.gz`" external>

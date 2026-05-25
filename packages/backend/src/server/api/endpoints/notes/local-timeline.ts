@@ -16,7 +16,12 @@ import { QueryService } from '@/core/QueryService.js';
 import { UserService } from '@/core/UserService.js';
 import { MiLocalUser } from '@/models/User.js';
 import { FanoutTimelineEndpointService } from '@/core/FanoutTimelineEndpointService.js';
+import { TimeService } from '@/global/TimeService.js';
 import { ApiError } from '../../error.js';
+
+const timelineModeValues = ['chronological', 'replies', 'recommended'] as const;
+type TimelineMode = typeof timelineModeValues[number];
+const RANKING_WINDOW = 1000 * 60 * 60 * 24 * 7;
 
 export const meta = {
 	tags: ['notes'],
@@ -59,7 +64,9 @@ export const paramDef = {
 		withRenotes: { type: 'boolean', default: true },
 		withReplies: { type: 'boolean', default: false },
 		withBots: { type: 'boolean', default: true },
+		timelineMode: { type: 'string', enum: timelineModeValues, default: 'chronological' },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+		offset: { type: 'integer', minimum: 0, maximum: 1000, default: 0 },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },
 		allowPartial: { type: 'boolean', default: false }, // true is recommended but for compatibility false by default
@@ -85,10 +92,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private fanoutTimelineEndpointService: FanoutTimelineEndpointService,
 		private queryService: QueryService,
 		private readonly userService: UserService,
+		private readonly timeService: TimeService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
+			const timelineMode = ps.timelineMode as TimelineMode;
 
 			const policies = await this.roleService.getUserPolicies(me ? me.id : null);
 			if (!policies.ltlAvailable) {
@@ -101,15 +110,33 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.userService.markUserActive(me);
 			}
 
+			if (timelineMode !== 'chronological') {
+				const timeline = await this.getFromDb({
+					untilId: null,
+					sinceId: null,
+					limit: ps.limit,
+					offset: ps.offset,
+					withFiles: ps.withFiles,
+					withReplies: ps.withReplies,
+					withBots: ps.withBots,
+					withRenotes: ps.withRenotes,
+					timelineMode,
+				}, me);
+
+				return await this.noteEntityService.packMany(timeline, me);
+			}
+
 			if (!this.serverSettings.enableFanoutTimeline) {
 				const timeline = await this.getFromDb({
 					untilId,
 					sinceId,
 					limit: ps.limit,
+					offset: ps.offset,
 					withFiles: ps.withFiles,
 					withReplies: ps.withReplies,
 					withBots: ps.withBots,
 					withRenotes: ps.withRenotes,
+					timelineMode,
 				}, me);
 
 				return await this.noteEntityService.packMany(timeline, me);
@@ -133,10 +160,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					untilId,
 					sinceId,
 					limit,
+					offset: 0,
 					withFiles: ps.withFiles,
 					withReplies: ps.withReplies,
 					withBots: ps.withBots,
 					withRenotes: ps.withRenotes,
+					timelineMode,
 				}, me),
 			});
 
@@ -148,13 +177,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		sinceId: string | null,
 		untilId: string | null,
 		limit: number,
+		offset: number,
 		withFiles: boolean,
 		withReplies: boolean,
 		withBots: boolean,
 		withRenotes: boolean,
+		timelineMode: TimelineMode,
 	}, me: MiLocalUser | null) {
-		const query = this.queryService.makePaginationQuery(this.notesRepository.createQueryBuilder('note'),
-			ps.sinceId, ps.untilId)
+		const query = (
+			ps.timelineMode === 'chronological'
+				? this.queryService.makePaginationQuery(this.notesRepository.createQueryBuilder('note'), ps.sinceId, ps.untilId)
+				: this.notesRepository.createQueryBuilder('note')
+					.andWhere('note.id > :rankingSinceId', { rankingSinceId: this.idService.gen(this.timeService.now - RANKING_WINDOW) })
+		)
 			.andWhere('note.visibility = \'public\'')
 			.andWhere('note.channelId IS NULL')
 			.andWhere('note.userHost IS NULL')
@@ -165,10 +200,25 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			.leftJoinAndSelect('renote.user', 'renoteUser')
 			.limit(ps.limit);
 
+		if (ps.timelineMode === 'replies') {
+			query
+				.orderBy('note.repliesCount', 'DESC')
+				.addOrderBy('note.id', 'DESC')
+				.offset(ps.offset);
+		} else if (ps.timelineMode === 'recommended') {
+			query
+				.orderBy('note.renoteCount', 'DESC')
+				.addOrderBy('note.repliesCount', 'DESC')
+				.addOrderBy('note.clippedCount', 'DESC')
+				.addOrderBy('note.id', 'DESC')
+				.offset(ps.offset);
+		}
+
 		if (!ps.withReplies) {
 			this.queryService.generateExcludedRepliesQueryForNotes(query, me);
 		}
 
+		this.queryService.generateReplyTargetVisibilityQuery(query, me);
 		this.queryService.generateBlockedHostQueryForNote(query);
 		this.queryService.generateSuspendedUserQueryForNote(query);
 		this.queryService.generateSilencedUserQueryForNotes(query, me);

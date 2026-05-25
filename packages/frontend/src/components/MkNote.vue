@@ -19,6 +19,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkAcct :user="appearNote.reply.user" :class="$style.collapsedInReplyToText" @click="inReplyToCollapsed = false"/>:
 		<Mfm :text="getNoteSummary(appearNote.reply)" :plain="true" :nowrap="true" :author="appearNote.reply.user" :nyaize="'respect'" :class="$style.collapsedInReplyToText" @click="inReplyToCollapsed = false"/>
 	</div>
+	<div v-if="appearNote.reply && appearNote.reply.replyId && !renoteCollapsed && !inReplyToCollapsed" :class="$style.conversation">
+		<MkButton v-if="!conversationLoaded" :class="$style.loadConversation" small rounded @click.stop="loadConversation">{{ i18n.ts.loadConversation }}</MkButton>
+		<MkNoteSub v-for="conversationNote in conversation" v-else :key="conversationNote.id" :note="conversationNote" :class="$style.replyToMore" @expandMute="n => emit('expandMute', n)"/>
+	</div>
 	<MkNoteSub v-if="appearNote.reply" v-show="!renoteCollapsed && !inReplyToCollapsed" :note="appearNote.reply" :class="$style.replyTo" @expandMute="n => emit('expandMute', n)"/>
 	<div v-if="pinned" :class="$style.tip"><i class="ti ti-pin"></i> {{ i18n.ts.pinnedNote }}</div>
 	<div v-if="isRenote" :class="$style.renote">
@@ -299,12 +303,29 @@ const renoteCollapsed = ref(
 const inReplyToCollapsed = ref(prefer.s.collapseNotesRepliedTo);
 const defaultLike = computed(() => prefer.s.like ? prefer.s.like : null);
 const animated = computed(() => parsed.value ? checkAnimationFromMfm(parsed.value) : null);
+const conversation = ref<Misskey.entities.Note[]>([]);
+const conversationLoaded = ref(false);
 const allowAnim = ref(prefer.s.advancedMfm && prefer.s.animatedMfm);
+
+watch(() => prefer.s.collapseNotesRepliedTo, (value) => {
+	inReplyToCollapsed.value = value;
+});
 
 const pleaseLoginContext = computed<OpenOnRemoteOptions>(() => ({
 	type: 'lookup',
 	url: appearNote.value.url ?? appearNote.value.uri ?? `${config.url}/notes/${appearNote.value.id}`,
 }));
+
+function loadConversation(): void {
+	conversationLoaded.value = true;
+	if (appearNote.value.replyId == null) return;
+	misskeyApi('notes/conversation', {
+		noteId: appearNote.value.replyId,
+		limit: prefer.s.numberOfReplies,
+	}).then(res => {
+		conversation.value = res.reverse();
+	});
+}
 
 const renoteTooltip = computeRenoteTooltip(appearNote);
 
@@ -940,6 +961,19 @@ function emitUpdReaction(emoji: string, delta: number) {
 }
 
 .replyTo {
+	opacity: 0.7;
+	padding-bottom: 0;
+}
+
+.conversation {
+	padding-top: 8px;
+}
+
+.loadConversation {
+	margin: 0 auto 8px;
+}
+
+.replyToMore {
 	opacity: 0.7;
 	padding-bottom: 0;
 }

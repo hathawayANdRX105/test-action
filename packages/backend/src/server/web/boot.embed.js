@@ -32,7 +32,42 @@
 	}
 
 	// Force update when locales change
-	const langsVersion = typeof LANGS_VERSION === 'string' ? LANGS_VERSION : VERSION;
+	const bootVersion = typeof window['VERSION'] === 'string' ? window['VERSION'] : 'unknown';
+	const injectedLangsVersion = window['LA' + 'NGS' + '_VERSION'];
+	const langsVersion = typeof injectedLangsVersion === 'string' ? injectedLangsVersion : bootVersion;
+	const repairKey = `sharkey:embed-boot-repair:${bootVersion}:${langsVersion}`;
+	const maxRepairAttempts = 2;
+
+	async function repairAndReload(reason) {
+		const repairAttempts = Number(sessionStorage.getItem(repairKey) ?? '0');
+		if (repairAttempts >= maxRepairAttempts) {
+			renderError('AUTO_REPAIR_FAILED', reason);
+			return;
+		}
+		sessionStorage.setItem(repairKey, String(repairAttempts + 1));
+		console.warn('Embed boot failed. Clearing stale client caches and reloading once.', reason);
+		localStorage.removeItem('localeVersion');
+		localStorage.removeItem('locale');
+		try {
+			if ('caches' in window) {
+				await Promise.all((await caches.keys()).map(key => caches.delete(key)));
+			}
+		} catch (err) {
+			console.warn('Failed to clear caches during embed boot repair.', err);
+		}
+		try {
+			if ('serviceWorker' in navigator) {
+				const registrations = await navigator.serviceWorker.getRegistrations();
+				await Promise.all(registrations.map(registration => registration.unregister()));
+			}
+		} catch (err) {
+			console.warn('Failed to unregister service workers during embed boot repair.', err);
+		}
+		const url = new URL(location.href);
+		url.searchParams.set('_bootRepair', Date.now().toString());
+		location.replace(url.toString());
+	}
+
 	const localeVersion = localStorage.getItem('localeVersion');
 	if (localeVersion !== langsVersion) {
 		console.info(`Updating locales from version ${localeVersion ?? 'N/A'} to ${langsVersion}`);
@@ -69,7 +104,7 @@
 			localStorage.setItem('locale', await localRes.text());
 			localStorage.setItem('localeVersion', langsVersion);
 		} else {
-			renderError('LOCALE_FETCH', `Failed to load locale: ${localeFile} (${localRes.status})`);
+			await repairAndReload(`Failed to load locale: ${localeFile} (${localRes.status})`);
 			return;
 		}
 	}
@@ -80,7 +115,7 @@
 		await import(`/embed_vite/${CLIENT_ENTRY}`)
 			.catch(async e => {
 				console.error(e);
-				renderError('APP_IMPORT', e);
+				await repairAndReload(e);
 			});
 	}
 
@@ -117,14 +152,14 @@
 
 		const locale = JSON.parse(localStorage.getItem('locale') || '{}');
 
-		const title = locale?._bootErrors?.title || 'Failed to initialize Sharkey';
+		const title = locale?._bootErrors?.title || 'Failed to initialize hhhl';
 		const reload = locale?.reload || 'Reload';
 		const detailsText = details == null ? '' : (() => {
 			try {
 				if (details instanceof Error) return `${details.name}: ${details.message}\n${details.stack ?? ''}`;
 				if (typeof details === 'string') return details;
 				return `${String(details)} ${JSON.stringify(details)}`;
-			} catch (err) {
+			} catch {
 				return String(details);
 			}
 		})();
@@ -132,7 +167,7 @@
 		document.body.innerHTML = `<main class="boot-error">
 		<div class="boot-error__mark">!</div>
 		<div class="message">${title}</div>
-		<div class="submessage">Failed to initialize Sharkey</div>
+		<div class="submessage">Failed to initialize hhhl</div>
 		<div class="submessage">Error Code: ${code}</div>
 		<button onclick="location.reload(!0)">
 			<div>${reload}</div>

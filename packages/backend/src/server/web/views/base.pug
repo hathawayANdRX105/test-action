@@ -2,6 +2,7 @@ block vars
 
 block loadClientEntry
 	- const entry = config.frontendEntry;
+	- const clientEntryFile = entry.file === 'app-Bkyj-mo7.js' ? 'app-Bkyj-mo7.repair.js' : entry.file;
 	- const baseUrl = config.url;
 
 doctype html
@@ -17,32 +18,30 @@ doctype html
 	                                   __/ |
 	                                  |___/
 
-	 Thank you for using Sharkey!
-	 If you are reading this message... how about joining the development?
-	 https://activitypub.software/TransFem-org/Sharkey
+	 Thank you for using hhhl!
 
 
 html
 
 	head
 		meta(charset='utf-8')
-		meta(name='application-name' content='Sharkey')
+		meta(name='application-name' content='hhhl')
 		meta(name='referrer' content='origin')
 		meta(name='theme-color' content= themeColor || '#86b300')
 		meta(name='theme-color-orig' content= themeColor || '#86b300')
-		meta(property='og:site_name' content= instanceName || 'Sharkey')
+		meta(property='og:site_name' content= instanceName || 'hhhl')
 		meta(property='instance_url' content= instanceUrl)
 		meta(name='viewport' content='width=device-width, initial-scale=1')
 		meta(name='format-detection' content='telephone=no,date=no,address=no,email=no,url=no')
 		link(rel='icon' href= icon || '/favicon.ico')
 		link(rel='apple-touch-icon' href= appleTouchIcon || '/apple-touch-icon.png')
-		link(rel='search' type='application/opensearchdescription+xml' title=(title || "Sharkey") href=`${baseUrl}/opensearch.xml`)
+		link(rel='search' type='application/opensearchdescription+xml' title=(title || "hhhl") href=`${baseUrl}/opensearch.xml`)
 		link(rel='prefetch' href=serverErrorImageUrl)
 		link(rel='prefetch' href=infoImageUrl)
 		link(rel='prefetch' href=notFoundImageUrl)
 		link(rel='stylesheet' href=`/assets/phosphor-icons/bold/style.css?version=${version}`)
 		link(rel='stylesheet' href=`/static-assets/fonts/sharkey-icons/style.css?version=${version}`)
-		link(rel='modulepreload' href=`/vite/${entry.file}`)
+		link(rel='modulepreload' href=`/vite/${clientEntryFile}`)
 
 		| !{customHead}
 
@@ -55,7 +54,7 @@ html
 
 		title
 			block title
-				= title || 'Sharkey'
+				= title || 'hhhl'
 
 		if noindex
 			meta(name='robots' content='noindex')
@@ -66,7 +65,7 @@ html
 		block meta
 
 		block og
-			meta(property='og:title'       content= title || 'Sharkey')
+			meta(property='og:title'       content= title || 'hhhl')
 			meta(property='og:description' content= desc || '✨🌎✨ A interplanetary communication platform ✨🚀✨')
 			meta(property='og:image'       content= img)
 			meta(property='twitter:card'   content='summary')
@@ -76,14 +75,14 @@ html
 
 		script.
 			var VERSION = "#{version}";
-			var CLIENT_ENTRY = "#{entry.file}";
+			var CLIENT_ENTRY = "#{clientEntryFile}";
 			var LANGS = !{JSON.stringify(langs)};
 			var LANGS_VERSION = "#{langsVersion}";
 
-		script(type='application/json' id='misskey_meta' data-generated-at=now)
+		script(type='application/json' id='hhhl_meta' data-generated-at=now)
 			!= metaJson
 
-		script(type='application/json' id='misskey_clientCtx' data-generated-at=now)
+		script(type='application/json' id='hhhl_clientCtx' data-generated-at=now)
 			!= clientCtx
 
 		script

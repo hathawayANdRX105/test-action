@@ -63,7 +63,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:moveClass="$style.transition_x_move"
 					tag="div" class="_gaps"
 				>
-					<div v-for="item in timeline.toReversed()" :key="item.id">
+					<div v-for="item in timeline.toReversed()" :key="item.id" :data-scroll-anchor="item.type === 'item' ? item.id : undefined">
 						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" @reply="replyTarget = item.data" @quote="quoteTarget = item.data"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
@@ -242,10 +242,14 @@ async function waitChannelConnected() {
 	const waitConnected = (channel as { waitConnected?: () => Promise<void> }).waitConnected;
 	if (waitConnected == null) return;
 
-	await Promise.race([
-		waitConnected(),
-		new Promise<void>(resolve => window.setTimeout(resolve, STREAM_CONNECT_TIMEOUT)),
-	]);
+	try {
+		await Promise.race([
+			waitConnected(),
+			new Promise<void>(resolve => window.setTimeout(resolve, STREAM_CONNECT_TIMEOUT)),
+		]);
+	} catch (err) {
+		console.warn('Failed to connect chat stream. Falling back to timeline polling.', err);
+	}
 }
 
 function connectStream() {

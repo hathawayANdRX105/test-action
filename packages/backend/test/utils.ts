@@ -104,6 +104,10 @@ export const api = async <E extends keyof misskey.Endpoints, P extends misskey.E
 		? await res.json() as misskey.api.SwitchCaseResponseType<E, P>
 		: null;
 
+	if (process.env.DEBUG_API_ERRORS === '1' && res.status >= 400) {
+		console.error('API error', path, res.status, inspect(body, { depth: 5, colors: false }));
+	}
+
 	return {
 		status: res.status,
 		headers: res.headers,

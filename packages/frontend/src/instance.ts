@@ -18,7 +18,7 @@ const minMetaAge = 1000 * 3; // 3 seconds
 const maxMetaAge = 1000 * 60 * 60; // 1 hour
 
 //#region loader
-const providedMetaEl = window.document.getElementById('misskey_meta');
+const providedMetaEl = window.document.getElementById('hhhl_meta') ?? window.document.getElementById('misskey_meta');
 const providedMeta = computed<CachedMeta | null>(() => {
 	const providedAtValue = providedMetaEl?.dataset.generatedAt;
 	const providedMetaValue = providedMetaEl?.textContent;

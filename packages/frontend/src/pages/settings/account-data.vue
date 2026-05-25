@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<!-- TODO translations -->
 								<MkRadios v-model="noteType" style="padding-bottom: 8px;" small>
 									<template #label>Origin</template>
-									<option value="Misskey">Misskey/Firefish/Sharkey</option>
+										<option value="Misskey">hhhl/Firefish compatible</option>
 									<option value="Mastodon">Mastodon</option>
 									<option value="Pleroma">Pleroma/Akkoma</option>
 									<option value="Twitter">Twitter</option>
