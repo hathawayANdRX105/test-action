@@ -175,7 +175,6 @@ export function migrateOldSettings() {
 		prefer.commit('cornerRadius', miLocalStorage.getItem('cornerRadius') ?? 'sharkey');
 		prefer.commit('lang', miLocalStorage.getItem('lang') ?? 'en-US');
 		prefer.commit('customCss', miLocalStorage.getItem('customCss') ?? '');
-		prefer.commit('neverShowDonationInfo', miLocalStorage.getItem('neverShowDonationInfo') != null);
 		prefer.commit('neverShowLocalOnlyInfo', miLocalStorage.getItem('neverShowLocalOnlyInfo') != null);
 		//#endregion
 

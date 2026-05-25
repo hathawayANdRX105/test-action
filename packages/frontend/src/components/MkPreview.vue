@@ -72,7 +72,7 @@ const openForm = async () => {
 		},
 		baz: {
 			type: 'string',
-			default: 'Misskey makes you happy.',
+			default: 'hhhl makes you happy.',
 			label: 'This is a string property',
 		},
 	});

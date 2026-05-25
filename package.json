@@ -1,11 +1,11 @@
 {
-	"name": "sharkey",
+	"name": "hhhl",
 	"version": "2025.5.2-dev",
 	"type": "module",
 	"codename": "shonk",
 	"repository": {
 		"type": "git",
-		"url": "https://activitypub.software/TransFem-org/Sharkey.git"
+		"url": "https://github.com/hhhl/hhhl.git"
 	},
 	"packageManager": "pnpm@10.26.2",
 	"workspaces": [

@@ -23,8 +23,6 @@ renotesCount: "ブーストした数やで"
 renotedCount: "ブーストされた数やで"
 sendErrorReportsDescription: "オンにしたら、なんか変なことが起きたとき、詳しいのが全部Sharkeyに送られて、ソフトウェアをもっと良うするで。エラー情報には、OSのバージョン、ブラウザの種類、行動履歴なんかが含まれるな。"
 misskeyUpdated: "Sharkeyが更新されたで！\nモデレーターの人らに感謝せなあかんで"
-didYouLikeMisskey: "Sharkey気に入ってくれた？"
-pleaseDonate: "Sharkeyは{host}が使うとる無料のソフトウェアやで。これからも開発を続けれるように、寄付したってな～。"
 collapseRenotes: "見たことあるブーストは飛ばして表示するで"
 collapseRenotesDescription: "リアクションやブーストをしたことがあるノートをたたんで表示するで。"
 renotesList: "ブースト一覧"
@@ -66,7 +64,6 @@ _aboutMisskey:
   about: "Sharkeyは、Misskeyをベースにしたオープンソースなソフトウェアや。"
   thisIsModifiedVersion: "{name}はオリジナルのSharkeyをいじったバージョンをつこうてるで。"
   translation: "Sharkeyを翻訳"
-  donate: "Sharkeyに寄付"
 _channel:
   allowRenoteToExternal: "チャンネルの外にブーストできるようにする"
 _soundSettings:

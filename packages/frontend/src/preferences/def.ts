@@ -551,16 +551,6 @@ export const PREF_DEF = {
 			}
 		},
 	} as Pref<string>,
-	neverShowDonationInfo: {
-		default: false,
-		onSet: neverShowDonationInfo => {
-			if (neverShowDonationInfo) {
-				miLocalStorage.setItem('neverShowDonationInfo', 'true');
-			} else {
-				miLocalStorage.removeItem('neverShowDonationInfo');
-			}
-		},
-	} as Pref<boolean>,
 	neverShowLocalOnlyInfo: {
 		default: false,
 		onSet: neverShowLocalOnlyInfo => {

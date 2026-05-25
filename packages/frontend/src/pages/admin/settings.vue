@@ -77,10 +77,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #prefix><i class="ti ti-link"></i></template>
 					</MkInput>
 
-					<MkInput v-model="infoForm.state.donationUrl" type="url">
-						<template #label>{{ i18n.ts.donationUrl }}</template>
-						<template #prefix><i class="ph-link ph-bold ph-lg"></i></template>
-					</MkInput>
 				</div>
 			</MkFolder>
 
@@ -357,7 +353,6 @@ const infoForm = useForm({
 	inquiryUrl: meta.inquiryUrl ?? '',
 	repositoryUrl: meta.repositoryUrl ?? '',
 	impressumUrl: meta.impressumUrl ?? '',
-	donationUrl: meta.donationUrl ?? '',
 }, async (state) => {
 	await os.apiWithDialog('admin/update-meta', {
 		name: state.name,
@@ -371,7 +366,6 @@ const infoForm = useForm({
 		inquiryUrl: state.inquiryUrl,
 		repositoryUrl: state.repositoryUrl,
 		impressumUrl: state.impressumUrl,
-		donationUrl: state.donationUrl,
 	});
 	fetchInstance(true);
 });

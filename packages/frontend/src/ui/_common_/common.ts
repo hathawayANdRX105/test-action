@@ -130,17 +130,7 @@ export function openInstanceMenu(ev: MouseEvent) {
 		});
 	}
 
-	if (instance.donationUrl) {
-		menuItems.push({
-			type: 'a',
-			text: i18n.ts.donation,
-			icon: 'ph-hand-coins ph-bold ph-lg',
-			href: instance.donationUrl,
-			target: '_blank',
-		});
-	}
-
-	if (instance.impressumUrl != null || instance.tosUrl != null || instance.privacyPolicyUrl != null || instance.donationUrl != null) {
+	if (instance.impressumUrl != null || instance.tosUrl != null || instance.privacyPolicyUrl != null) {
 		menuItems.push({ type: 'divider' });
 	}
 

@@ -18,14 +18,14 @@ export interface Locale extends ILocale {
      */
     "headlineMisskey": string;
     /**
-     * Welcome! Sharkey is an open source, decentralized microblogging service.
+     * Welcome! hhhl is an open source, decentralized microblogging service.
      * Create "notes" to share your thoughts with everyone around you. 📡
      * With "reactions", you can also quickly express your feelings about everyone's notes. 👍
      * Let's explore a new world! 🚀
      */
     "introMisskey": string;
     /**
-     * {name} is one of the services powered by the open source platform <b>Sharkey</b> which is based on Misskey (referred to as a "Misskey instance").
+     * {name} is powered by the open source platform <b>hhhl</b>.
      */
     "poweredByMisskeyDescription": ParameterizedString<"name">;
     /**
@@ -775,7 +775,7 @@ export interface Locale extends ILocale {
      */
     "flagAsBot": string;
     /**
-     * Enable this option if this account is controlled by a program. If enabled, it will act as a flag for other developers to prevent endless interaction chains with other bots and adjust Sharkey's internal systems to treat this account as a bot.
+     * Enable this option if this account is controlled by a program. If enabled, it will act as a flag for other developers to prevent endless interaction chains with other bots and adjust hhhl's internal systems to treat this account as a bot.
      */
     "flagAsBotDescription": string;
     /**
@@ -819,7 +819,7 @@ export interface Locale extends ILocale {
      */
     "continueOnRemote": string;
     /**
-     * Choose a instance from Misskey Hub
+     * Choose an instance
      */
     "chooseServerOnMisskeyHub": string;
     /**
@@ -1071,7 +1071,7 @@ export interface Locale extends ILocale {
      */
     "pinLimitExceeded": string;
     /**
-     * Installation of Sharkey has been finished! Please create an admin user.
+     * Installation of hhhl has been finished! Please create an admin user.
      */
     "intro": string;
     /**
@@ -1851,7 +1851,7 @@ export interface Locale extends ILocale {
      */
     "about": string;
     /**
-     * About Sharkey
+     * About hhhl
      */
     "aboutMisskey": string;
     /**
@@ -2407,7 +2407,7 @@ export interface Locale extends ILocale {
      */
     "notUseSound": string;
     /**
-     * Output sounds only if Sharkey is active.
+     * Output sounds only if hhhl is active.
      */
     "useSoundOnlyWhenActive": string;
     /**
@@ -2475,7 +2475,7 @@ export interface Locale extends ILocale {
      */
     "scratchpad": string;
     /**
-     * The Scratchpad provides an environment for AiScript experiments. You can write, execute, and check the results of it interacting with Sharkey in it.
+     * The Scratchpad provides an environment for AiScript experiments. You can write, execute, and check the results of it interacting with hhhl in it.
      */
     "scratchpadDescription": string;
     /**
@@ -3263,8 +3263,8 @@ export interface Locale extends ILocale {
      */
     "sendErrorReports": string;
     /**
-     * When turned on, detailed error information will be shared with Sharkey when a problem occurs, helping to improve the quality of Sharkey.
-     * This will include information such the version of your OS, what browser you're using, your activity in Sharkey, etc.
+     * When turned on, detailed error information will be shared with hhhl when a problem occurs, helping to improve the quality of hhhl.
+     * This will include information such the version of your OS, what browser you're using, your activity in hhhl, etc.
      */
     "sendErrorReportsDescription": string;
     /**
@@ -3644,7 +3644,7 @@ export interface Locale extends ILocale {
      */
     "learnMore": string;
     /**
-     * Sharkey has been updated!
+     * hhhl has been updated!
      */
     "misskeyUpdated": string;
     /**
@@ -4180,14 +4180,6 @@ export interface Locale extends ILocale {
      */
     "remindMeLater": string;
     /**
-     * Have you taken a liking to Sharkey?
-     */
-    "didYouLikeMisskey": string;
-    /**
-     * {host} uses the free software, Sharkey. We would highly appreciate your donations so development of Sharkey can continue!
-     */
-    "pleaseDonate": ParameterizedString<"host">;
-    /**
      * 対応するソースコードは{anchor}から利用可能です。
      */
     "correspondingSourceIsAvailable": ParameterizedString<"anchor">;
@@ -4692,7 +4684,7 @@ export interface Locale extends ILocale {
      */
     "later": string;
     /**
-     * To Sharkey
+     * To hhhl
      */
     "goToMisskey": string;
     /**
@@ -4940,7 +4932,7 @@ export interface Locale extends ILocale {
      */
     "repositoryUrl": string;
     /**
-     * If there is a repository where the source code is publicly available, enter its URL. If you are using Sharkey as-is (without any changes to the source code), enter https://activitypub.software/TransFem-org/Sharkey/.
+     * If there is a repository where the source code is publicly available, enter its URL. If you are using hhhl as-is (without any changes to the source code), enter https://github.com/hhhl/hhhl.
      */
     "repositoryUrlDescription": string;
     /**
@@ -6262,7 +6254,7 @@ export interface Locale extends ILocale {
          */
         "haveFun": ParameterizedString<"name">;
         /**
-         * You can proceed to a tutorial on how to use {name} (Sharkey) or you can exit the setup here and start using it immediately.
+         * You can proceed to a tutorial on how to use {name} (hhhl) or you can exit the setup here and start using it immediately.
          */
         "youCanContinueTutorial": ParameterizedString<"name">;
         /**
@@ -6301,7 +6293,7 @@ export interface Locale extends ILocale {
              */
             "title": string;
             /**
-             * Here, you can learn the basics of using Sharkey and its features.
+             * Here, you can learn the basics of using hhhl and its features.
              */
             "description": string;
         };
@@ -6311,7 +6303,7 @@ export interface Locale extends ILocale {
              */
             "title": string;
             /**
-             * Posts on Sharkey are called 'Notes.' Notes are arranged chronologically on the timeline and are updated in real-time.
+             * Posts on hhhl are called 'Notes.' Notes are arranged chronologically on the timeline and are updated in real-time.
              */
             "description": string;
             /**
@@ -6363,7 +6355,7 @@ export interface Locale extends ILocale {
              */
             "title": string;
             /**
-             * Sharkey provides multiple timelines based on usage (some may not be available depending on the server's policies).
+             * hhhl provides multiple timelines based on usage (some may not be available depending on the server's policies).
              */
             "description1": string;
             /**
@@ -6401,7 +6393,7 @@ export interface Locale extends ILocale {
              */
             "title": string;
             /**
-             * When posting a note on Sharkey, various options are available. The posting form looks like this.
+             * When posting a note on hhhl, various options are available. The posting form looks like this.
              */
             "description1": string;
             "_visibility": {
@@ -6501,7 +6493,7 @@ export interface Locale extends ILocale {
              */
             "title": string;
             /**
-             * The functions introduced here are just a small part. For a more detailed understanding of using Sharkey, please refer to {link}.
+             * The functions introduced here are just a small part. For a more detailed understanding of using hhhl, please refer to {link}.
              */
             "description": ParameterizedString<"link">;
         };
@@ -6608,7 +6600,7 @@ export interface Locale extends ILocale {
          */
         "deliverSuspendedSoftware": string;
         /**
-         * You can specify a range of names and versions of the server's software to stop delivery for vulnerability or other reasons. This version information is provided by the server and is not guaranteed to be reliable. A semver range specification can be used to specify the version, but specifying >= 2024.3.1 will not include custom versions such as 2024.3.1-custom.0, so it is recommended that a prerelease specification be used, such as >= 2024.3.1-0. Specifying * will match any name or version, even when the server doesn't provide one. You can also provide a regular expression like /^sharkey-/i or /^1-/
+         * You can specify a range of names and versions of the server's software to stop delivery for vulnerability or other reasons. This version information is provided by the server and is not guaranteed to be reliable. A semver range specification can be used to specify the version, but specifying >= 2024.3.1 will not include custom versions such as 2024.3.1-custom.0, so it is recommended that a prerelease specification be used, such as >= 2024.3.1-0. Specifying * will match any name or version, even when the server doesn't provide one. You can also provide a regular expression like /^hhhl-/i or /^1-/
          */
         "deliverSuspendedSoftwareDescription": string;
         /**
@@ -6671,7 +6663,7 @@ export interface Locale extends ILocale {
          *
          * While migration of followers is automatic, you must manually prepare some steps to migrate the list of users you are following. To do so, carry out a follows export that you will later import on the new account in the settings menu. The same procedure applies to your lists as well as your muted and blocked users.
          *
-         * (This explanation applies to Sharkey v13.12.0 and later. Other ActivityPub software, such as Mastodon, might function differently.)
+         * (This explanation applies to hhhl v13.12.0 and later. Other ActivityPub software, such as Mastodon, might function differently.)
          */
         "moveAccountDescription": string;
         /**
@@ -6719,7 +6711,7 @@ export interface Locale extends ILocale {
                  */
                 "description": string;
                 /**
-                 * Have a good time with Sharkey!
+                 * Have a good time with hhhl!
                  */
                 "flavor": string;
             };
@@ -7043,7 +7035,7 @@ export interface Locale extends ILocale {
                  */
                 "description": string;
                 /**
-                 * Thank you for using Sharkey!
+                 * Thank you for using hhhl!
                  */
                 "flavor": string;
             };
@@ -7243,15 +7235,15 @@ export interface Locale extends ILocale {
             };
             "_iLoveMisskey": {
                 /**
-                 * I Love Sharkey
+                 * I Love hhhl
                  */
                 "title": string;
                 /**
-                 * Post "I ❤ #Sharkey"
+                 * Post "I ❤ #hhhl"
                  */
                 "description": string;
                 /**
-                 * Sharkey's development team greatly appreciates your support!
+                 * hhhl's development team greatly appreciates your support!
                  */
                 "flavor": string;
             };
@@ -7271,17 +7263,17 @@ export interface Locale extends ILocale {
                  */
                 "title": string;
                 /**
-                 * Keep Sharkey opened for at least 30 minutes
+                 * Keep hhhl opened for at least 30 minutes
                  */
                 "description": string;
             };
             "_client60min": {
                 /**
-                 * No "Miss" in Sharkey
+                 * No "Miss" in hhhl
                  */
                 "title": string;
                 /**
-                 * Keep Sharkey opened for at least 60 minutes
+                 * Keep hhhl opened for at least 60 minutes
                  */
                 "description": string;
             };
@@ -7501,7 +7493,7 @@ export interface Locale extends ILocale {
                  */
                 "description": string;
                 /**
-                 * Sharkey-Sharkey La-Tu-Ma
+                 * hhhl-hhhl La-Tu-Ma
                  */
                 "flavor": string;
             };
@@ -7517,7 +7509,7 @@ export interface Locale extends ILocale {
             };
             "_tutorialCompleted": {
                 /**
-                 * Sharkey Elementary Course Diploma
+                 * hhhl Elementary Course Diploma
                  */
                 "title": string;
                 /**
@@ -8307,7 +8299,7 @@ export interface Locale extends ILocale {
     };
     "_aboutMisskey": {
         /**
-         * Sharkey is open-source software based on Misskey which has been in development by syuilo since 2014.
+         * hhhl is open-source social networking software.
          */
         "about": string;
         /**
@@ -8327,17 +8319,13 @@ export interface Locale extends ILocale {
          */
         "original": string;
         /**
-         * {name} uses a modified version of the original Sharkey.
+         * {name} uses a modified version of the original hhhl.
          */
         "thisIsModifiedVersion": ParameterizedString<"name">;
         /**
-         * Translate Sharkey
+         * Translate hhhl
          */
         "translation": string;
-        /**
-         * Misskeyに寄付
-         */
-        "donate": string;
         /**
          * 他にも多くの方が支援してくれています。ありがとうございます🥰
          */
@@ -8351,25 +8339,13 @@ export interface Locale extends ILocale {
          */
         "projectMembers": string;
         /**
-         * Sharkey original
+         * hhhl original
          */
-        "original_sharkey": string;
-        /**
-         * Donate to Sharkey
-         */
-        "donate_sharkey": string;
+        "original_hhhl": string;
         /**
          * Testers
          */
         "testers": string;
-        /**
-         * Misskey Contributors
-         */
-        "misskeyContributors": string;
-        /**
-         * Our lovely Sponsors
-         */
-        "ourLovelySponsors": string;
     };
     "_displayOfSensitiveMedia": {
         /**
@@ -8825,7 +8801,7 @@ export interface Locale extends ILocale {
          */
         "driveFileDurationWarn": string;
         /**
-         * Long audio may disrupt using Sharkey. Still continue?
+         * Long audio may disrupt using hhhl. Still continue?
          */
         "driveFileDurationWarnDescription": string;
         /**
@@ -11723,7 +11699,7 @@ export interface Locale extends ILocale {
          */
         "summaryProxy": string;
         /**
-         * Generate previews using Summaly Proxy, instead of Sharkey itself.
+         * Generate previews using Summaly Proxy, instead of hhhl itself.
          */
         "summaryProxyDescription": string;
         /**
@@ -12495,7 +12471,7 @@ export interface Locale extends ILocale {
      */
     "abuseMarkAsResolved": string;
     /**
-     * Sharkey specific changes are translated in its own {link}.
+     * hhhl specific changes are translated in its own {link}.
      */
     "i18nInfoSharkey": ParameterizedString<"link">;
     /**
@@ -12600,10 +12576,6 @@ export interface Locale extends ILocale {
      */
     "defaultLike": string;
     /**
-     * You can also support {host} directly by donating to your instance administration.
-     */
-    "pleaseDonateInstance": ParameterizedString<"host">;
-    /**
      * Cancel
      */
     "thisPostIsMissingAltTextCancel": string;
@@ -12671,14 +12643,6 @@ export interface Locale extends ILocale {
      * Click to open notes
      */
     "clickToOpen": string;
-    /**
-     * Donate
-     */
-    "donation": string;
-    /**
-     * Donation URL
-     */
-    "donationUrl": string;
     /**
      * Show Below Avatar
      */
@@ -12787,11 +12751,11 @@ export interface Locale extends ILocale {
          */
         "uncommonFeature": string;
         /**
-         * MFM is a markup language used on Misskey, Sharkey, Firefish, Akkoma, and more that can be used in many places. Here you can view a list of all available MFM syntax.
+         * MFM is a markup language used on Misskey, hhhl, Firefish, Akkoma, and more that can be used in many places. Here you can view a list of all available MFM syntax.
          */
         "intro": string;
         /**
-         * Sharkey expands the world of the Fediverse
+         * hhhl expands the world of the Fediverse
          */
         "dummy": string;
         /**
@@ -13196,7 +13160,7 @@ export interface Locale extends ILocale {
      */
     "robotsTxt": string;
     /**
-     * Adding entries here will override the default robots.txt packaged with Sharkey.
+     * Adding entries here will override the default robots.txt packaged with hhhl.
      */
     "robotsTxtDescription": string;
     /**

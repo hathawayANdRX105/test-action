@@ -107,22 +107,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</FormSection>
 	</FormSuspense>
 
-	<FormSection v-if="sponsors.length > 0">
-		<template #label>Our lovely Sponsors</template>
-		<div :class="$style.contributors">
-			<span
-				v-for="(sponsor, i) of sponsors"
-				:key="i"
-				style="margin-bottom: 0.5rem;"
-			>
-				<a :href="sponsor.website || sponsor.profile" target="_blank" :class="$style.contributor">
-					<img :src="sponsor.image || `https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=${sponsor.name}`" :class="$style.contributorAvatar">
-					<span :class="$style.contributorUsername">{{ sponsor.name }}</span>
-				</a>
-			</span>
-		</div>
-	</FormSection>
-
 	<FormSection>
 		<template #label>Well-known resources</template>
 		<div class="_gaps_s">
@@ -137,7 +121,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
 import { host, version } from '@@/js/config.js';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
@@ -152,10 +135,7 @@ import MkKeyValue from '@/components/MkKeyValue.vue';
 import MkLink from '@/components/MkLink.vue';
 import sanitizeHtml from '@/utility/sanitize-html.js';
 
-const sponsors = ref<{ name: string, image: string | null, website: string | null, profile: string }[]>([]);
-
 const initStats = () => misskeyApi('stats', {});
-await misskeyApi('sponsors', { instance: true }).then((res) => sponsors.value = res.sponsor_data);
 </script>
 
 <style lang="scss" module>

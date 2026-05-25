@@ -9,8 +9,6 @@ export type Keys = (
 	'instance' |
 	'instanceCachedAt' |
 	'account' |
-	'latestDonationInfoShownAt' |
-	'neverShowDonationInfo' |
 	'neverShowLocalOnlyInfo' |
 	'modifiedVersionMustProminentlyOfferInAgplV3Section13Read' |
 	'lastUsed' |

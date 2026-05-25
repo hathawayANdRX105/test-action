@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-panel class="about">
 					<div ref="containerEl" class="container" :class="{ playing: easterEggEngine != null }">
 						<img src="/client-assets/about-icon.png" alt="" class="icon" draggable="false" @load="iconLoaded" @click="gravity"/>
-						<div class="misskey">Sharkey</div>
+						<div class="misskey">hhhl</div>
 						<div class="version">v{{ version }}</div>
 						<span v-for="emoji in easterEggEmojis" :key="emoji.id" class="emoji" :data-physics-x="emoji.left" :data-physics-y="emoji.top" :class="{ _physics_circle_: !emoji.emoji.startsWith(':') }">
 							<MkCustomEmoji v-if="emoji.emoji[0] === ':'" class="emoji" :name="emoji.emoji" :normal="true" :noStyle="true" :fallbackToImage="true"/>
@@ -25,7 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					{{ instance.name ?? host }}
 				</div>
 				<div v-if="$i != null" style="text-align: center;">
-					<MkButton primary rounded inline @click="iLoveMisskey">I <Mfm text="$[jelly ❤]"/> #Sharkey</MkButton>
+					<MkButton primary rounded inline @click="iLoveMisskey">I <Mfm text="$[jelly ❤]"/> #hhhl</MkButton>
 				</div>
 				<FormSection v-for="section in everyone" :key="section.heading">
 					<template #label>{{ section.heading }}</template>
@@ -45,17 +45,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { nextTick, onBeforeUnmount, ref, computed, useTemplateRef } from 'vue';
-import { version } from '@@/js/config.js';
-import FormLink from '@/components/form/link.vue';
+import { host, version } from '@@/js/config.js';
 import FormSection from '@/components/form/section.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkLink from '@/components/MkLink.vue';
-import MkInfo from '@/components/MkInfo.vue';
 import { physics } from '@/utility/physics.js';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
 import * as os from '@/os.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
 import { claimAchievement, claimedAchievements } from '@/utility/achievements.js';
 import { $i } from '@/i';
 import { definePage } from '@/page';
@@ -159,88 +156,8 @@ const everyone = ref<Section[]>([
 			},
 		],
 	},
-	{
-		heading: i18n.ts._aboutMisskey.misskeyContributors,
-		people: [
-			{
-				handle: '@syuilo',
-				avatar: 'https://avatars.githubusercontent.com/u/4439005?s=128&v=4',
-				link: 'https://github.com/syuilo',
-			},
-			{
-				handle: '@tamaina',
-				avatar: 'https://avatars.githubusercontent.com/u/7973572?s=128&v=4',
-				link: 'https://github.com/tamaina',
-			},
-			{
-				handle: '@acid-chicken',
-				avatar: 'https://avatars.githubusercontent.com/u/20679825?s=128&v=4',
-				link: 'https://github.com/acid-chicken',
-			},
-			{
-				handle: '@mei23',
-				avatar: 'https://avatars.githubusercontent.com/u/30769358?s=128&v=4',
-				link: 'https://github.com/mei23',
-			},
-			{
-				handle: '@AyaMorisawa',
-				avatar: 'https://avatars.githubusercontent.com/u/10798641?s=128&v=4',
-				link: 'https://github.com/AyaMorisawa',
-			},
-			{
-				handle: '@kakkokari-gtyih',
-				avatar: 'https://avatars.githubusercontent.com/u/67428053?s=128&v=4',
-				link: 'https://github.com/kakkokari-gtyih',
-			},
-			{
-				handle: '@tai-cha',
-				avatar: 'https://avatars.githubusercontent.com/u/40626578?s=128&v=4',
-				link: 'https://github.com/tai-cha',
-			},
-			{
-				handle: '@Johann150',
-				avatar: 'https://avatars.githubusercontent.com/u/20990607?s=128&v=4',
-				link: 'https://github.com/Johann150',
-			},
-			{
-				handle: '@anatawa12',
-				avatar: 'https://avatars.githubusercontent.com/u/22656849?s=128&v=4',
-				link: 'https://github.com/anatawa12',
-			},
-			{
-				handle: '@saschanaz',
-				avatar: 'https://avatars.githubusercontent.com/u/3396686?s=128&v=4',
-				link: 'https://github.com/saschanaz',
-			},
-			{
-				handle: '@zyoshoka',
-				avatar: 'https://avatars.githubusercontent.com/u/107108195?s=128&v=4',
-				link: 'https://github.com/zyoshoka',
-			},
-			{
-				handle: '@samunohito',
-				avatar: 'https://avatars.githubusercontent.com/u/46447427?s=128&v=4',
-				link: 'https://github.com/samunohito',
-			},
-		],
-	},
 ]);
 const containerEl = useTemplateRef('containerEl');
-
-await misskeyApi('sponsors', { forceUpdate: false }).then((res) => {
-	const section: Section = {
-		heading: i18n.ts._aboutMisskey.ourLovelySponsors,
-		people: [],
-	};
-	for (const sponsor of res.sponsor_data) {
-		section.people.push({
-			handle: sponsor.name,
-			avatar: sponsor.image || `https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=${sponsor.name}`,
-			link: sponsor.website || sponsor.profile,
-		});
-	}
-	everyone.value.push(section);
-});
 
 /**
  * Based on the pseudocode description from Wikipedia:
@@ -256,6 +173,7 @@ function fisher_yates<T>(array: T[]): T[] {
 }
 
 function iconLoaded() {
+	if (!containerEl.value) return;
 	const emojis = store.s.reactions;
 	const containerWidth = containerEl.value.offsetWidth;
 	for (let i = 0; i < 32; i++) {
@@ -273,14 +191,14 @@ function iconLoaded() {
 }
 
 function gravity() {
-	if (!easterEggReady) return;
+	if (!easterEggReady || !containerEl.value) return;
 	easterEggReady = false;
 	easterEggEngine.value = physics(containerEl.value);
 }
 
 function iLoveMisskey() {
 	os.post({
-		initialText: 'I $[jelly ❤] #Sharkey',
+		initialText: 'I $[jelly ❤] #hhhl',
 		instant: true,
 	});
 }

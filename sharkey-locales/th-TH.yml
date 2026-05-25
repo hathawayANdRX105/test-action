@@ -14,8 +14,6 @@ _achievements:
 poweredByMisskeyDescription: "{name} เป็นหนึ่งในเซิร์ฟเวอร์ของแพลตฟอร์มโอเพ่นซอร์ส <b>Sharkey</b>"
 introMisskey: "ยินดีต้อนรับทุกคนจ้า! Sharkey คือ ซอฟต์แวร์โอเพนซอร์สสำหรับบริการไมโครบล็อกกิ้ง (MicroBlogging) แบบกระจายศูนย์อำนาจ (Decentralized) \n\nเขียน “โน้ต (Note)” เพื่อส่งต่อเรื่องราวของคุณให้ทั้งโลกได้รับรู้📡\nและอย่าลืมที่จะ “รีแอคชั่น” กับเรื่องราวของคนอื่น ๆ ด้วยนะ! 👍\n\nท่องสำรวจโลกใบใหม่กันเถอะ🚀"
 misskeyUpdated: "Sharkey ได้รับการอัปเดตแล้ว!"
-didYoulikeMisskey: "คุณชอบ Sharkey ไหม?"
-pleaseDonate: "Sharkey เป็นซอฟต์แวร์ฟรีที่ใช้งานโดย {host} เราขอขอบคุณการสนับสนุนของคุณอย่างสูงเพื่อให้การพัฒนา Sharkey สามารถดำเนินต่อไปได้!"
 aboutMisskey: "เกี่ยวกับ Sharkey"
 thisPostIsMissingAltTextCancel: "ยกเลิก"
 thisPostIsMissingAltTextIgnore: "โพสต์ต่อไป"
