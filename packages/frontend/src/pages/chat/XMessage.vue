@@ -379,6 +379,8 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	padding: 8px 12px 18px;
 	border-radius: 18px 18px 18px 6px;
 	text-align: left;
+	overflow-wrap: break-word;
+	word-break: break-word;
 	background: light-dark(#ffffff, #182533);
 	color: var(--MI_THEME-fg);
 	box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
@@ -393,6 +395,10 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 		background: inherit;
 		clip-path: polygon(100% 0, 100% 100%, 0 100%);
 	}
+}
+
+.bubble > :global(*) {
+	max-width: 100%;
 }
 
 .isMe .bubble {

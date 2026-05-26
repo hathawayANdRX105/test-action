@@ -77,6 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:enterFromClass="$style.transition_x_enterFrom"
 					:leaveToClass="$style.transition_x_leaveTo"
 					:moveClass="$style.transition_x_move"
+					:animate="!isRestoringHistoryScroll"
 					tag="div" :class="$style.messageList"
 				>
 					<div v-for="item in timeline.toReversed()" :key="item.id" :data-scroll-anchor="item.type === 'item' ? item.id : undefined">
@@ -196,7 +197,7 @@ const TIMELINE_LIMIT = 20;
 const STREAM_CONNECT_TIMEOUT = 5000;
 let removeTimelineScrollListener: (() => void) | null = null;
 let historyFetchArmed = true;
-let isRestoringHistoryScroll = false;
+const isRestoringHistoryScroll = ref(false);
 
 function isAtLatest() {
 	if (timelineEl.value == null) return true;
@@ -282,6 +283,10 @@ function restoreVisibleMessageAnchor(anchor: { id: string; offset: number; } | n
 	scrollContainer.scrollTop += rect.top - containerRect.top - anchor.offset;
 }
 
+function waitAnimationFrame() {
+	return new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
+}
+
 // column-reverseなので本来はスクロール位置の最下部への追従は不要なはずだが、おそらくブラウザのバグにより、最下部にスクロールした状態でも追従されない場合がある(スクロール位置が少数になることがあるのが関わっていそう)
 // そのため補助としてMutationObserverを使って追従を行う
 useMutationObserver(timelineEl, {
@@ -289,7 +294,7 @@ useMutationObserver(timelineEl, {
 	childList: true,
 	attributes: false,
 }, () => {
-	if (isRestoringHistoryScroll) return;
+	if (isRestoringHistoryScroll.value) return;
 
 	const scrollContainer = getScrollContainer(timelineEl.value)!;
 	// column-reverseなのでscrollTopは負になる
@@ -507,7 +512,7 @@ async function fetchMore() {
 	if (!canFetchMore.value || moreFetching.value || messages.value.length === 0) return;
 
 	const anchor = getVisibleMessageAnchor();
-	isRestoringHistoryScroll = true;
+	isRestoringHistoryScroll.value = true;
 	moreFetching.value = true;
 
 	try {
@@ -525,11 +530,15 @@ async function fetchMore() {
 
 		canFetchMore.value = newMessages.length === LIMIT;
 		await nextTick();
+		await waitAnimationFrame();
+		restoreVisibleMessageAnchor(anchor);
+		await waitAnimationFrame();
 		restoreVisibleMessageAnchor(anchor);
 	} finally {
 		moreFetching.value = false;
 		await nextTick();
-		isRestoringHistoryScroll = false;
+		await waitAnimationFrame();
+		isRestoringHistoryScroll.value = false;
 	}
 }
 
@@ -920,6 +929,7 @@ definePage(computed(() => {
 	box-sizing: border-box;
 	overflow: clip;
 	overflow-y: scroll;
+	overflow-anchor: none;
 	overscroll-behavior: contain;
 	display: flex;
 	flex-direction: column-reverse;
