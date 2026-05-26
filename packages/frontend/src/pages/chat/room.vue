@@ -67,7 +67,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 
 			<div v-else ref="timelineEl" :class="$style.timeline">
-				<div v-if="canFetchMore || moreFetching" v-appear="canFetchMore ? fetchMore : null" :class="$style.more">
+				<div v-if="canFetchMore || moreFetching" :class="$style.more">
 					<MkLoading v-if="moreFetching" :mini="true"/>
 				</div>
 
@@ -195,6 +195,8 @@ const SCROLL_HISTORY_THRESHOLD = 480;
 const TIMELINE_LIMIT = 20;
 const STREAM_CONNECT_TIMEOUT = 5000;
 let removeTimelineScrollListener: (() => void) | null = null;
+let historyFetchArmed = true;
+let isRestoringHistoryScroll = false;
 
 function isAtLatest() {
 	if (timelineEl.value == null) return true;
@@ -226,14 +228,58 @@ function setupTimelineScrollListener() {
 		if (!canFetchMore.value || moreFetching.value || messages.value.length === 0) return;
 
 		const historyDistance = scrollContainer.scrollHeight - scrollContainer.clientHeight - Math.abs(scrollContainer.scrollTop);
+		if (historyDistance >= SCROLL_HISTORY_THRESHOLD) {
+			historyFetchArmed = true;
+			return;
+		}
+
+		if (!historyFetchArmed) return;
+
 		if (historyDistance < SCROLL_HISTORY_THRESHOLD) {
+			historyFetchArmed = false;
 			fetchMore();
 		}
 	};
 
 	scrollContainer.addEventListener('scroll', onScroll, { passive: true });
 	removeTimelineScrollListener = () => scrollContainer.removeEventListener('scroll', onScroll);
-	onScroll();
+}
+
+function getVisibleMessageAnchor(): { id: string; offset: number; } | null {
+	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+	if (scrollContainer == null || timelineEl.value == null) return null;
+
+	const containerRect = scrollContainer.getBoundingClientRect();
+	const elements = timelineEl.value.querySelectorAll<HTMLElement>('[data-scroll-anchor]');
+
+	for (const element of elements) {
+		const rect = element.getBoundingClientRect();
+		if (rect.bottom > containerRect.top && rect.top < containerRect.bottom) {
+			const id = element.dataset.scrollAnchor;
+			if (id == null) return null;
+
+			return {
+				id,
+				offset: rect.top - containerRect.top,
+			};
+		}
+	}
+
+	return null;
+}
+
+function restoreVisibleMessageAnchor(anchor: { id: string; offset: number; } | null) {
+	if (anchor == null || timelineEl.value == null) return;
+
+	const scrollContainer = getScrollContainer(timelineEl.value);
+	if (scrollContainer == null) return;
+
+	const element = timelineEl.value.querySelector<HTMLElement>(`[data-scroll-anchor="${CSS.escape(anchor.id)}"]`);
+	if (element == null) return;
+
+	const containerRect = scrollContainer.getBoundingClientRect();
+	const rect = element.getBoundingClientRect();
+	scrollContainer.scrollTop += rect.top - containerRect.top - anchor.offset;
 }
 
 // column-reverseなので本来はスクロール位置の最下部への追従は不要なはずだが、おそらくブラウザのバグにより、最下部にスクロールした状態でも追従されない場合がある(スクロール位置が少数になることがあるのが関わっていそう)
@@ -243,6 +289,8 @@ useMutationObserver(timelineEl, {
 	childList: true,
 	attributes: false,
 }, () => {
+	if (isRestoringHistoryScroll) return;
+
 	const scrollContainer = getScrollContainer(timelineEl.value)!;
 	// column-reverseなのでscrollTopは負になる
 	if (-scrollContainer.scrollTop < SCROLL_HEAD_THRESHOLD) {
@@ -458,6 +506,8 @@ async function fetchMore() {
 	const LIMIT = 30;
 	if (!canFetchMore.value || moreFetching.value || messages.value.length === 0) return;
 
+	const anchor = getVisibleMessageAnchor();
+	isRestoringHistoryScroll = true;
 	moreFetching.value = true;
 
 	try {
@@ -474,9 +524,12 @@ async function fetchMore() {
 		appendFetchedMessages(newMessages);
 
 		canFetchMore.value = newMessages.length === LIMIT;
+		await nextTick();
+		restoreVisibleMessageAnchor(anchor);
 	} finally {
 		moreFetching.value = false;
-		nextTick(setupTimelineScrollListener);
+		await nextTick();
+		isRestoringHistoryScroll = false;
 	}
 }
 

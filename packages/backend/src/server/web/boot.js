@@ -29,9 +29,37 @@
 	const repairKey = `sharkey:boot-repair:${bootVersion}:${langsVersion}`;
 	const maxRepairAttempts = 2;
 
+	function clearStartupStorage() {
+		for (const key of [
+			'account',
+			'instance',
+			'instanceCachedAt',
+			'preferences',
+			'latestPreferencesUpdate',
+		]) {
+			localStorage.removeItem(key);
+		}
+
+		for (let i = localStorage.length - 1; i >= 0; i--) {
+			const key = localStorage.key(i);
+			if (key == null) continue;
+			if (key.startsWith('miux:') || key.startsWith('idbfallback::')) {
+				localStorage.removeItem(key);
+			}
+		}
+	}
+
 	async function repairAndReload(reason) {
 		const repairAttempts = Number(sessionStorage.getItem(repairKey) ?? '0');
 		if (repairAttempts >= maxRepairAttempts) {
+			if (repairAttempts === maxRepairAttempts) {
+				sessionStorage.setItem(repairKey, String(repairAttempts + 1));
+				clearStartupStorage();
+				const url = new URL(location.href);
+				url.searchParams.set('_bootRepair', Date.now().toString());
+				location.replace(url.toString());
+				return;
+			}
 			renderError('AUTO_REPAIR_FAILED', reason);
 			return;
 		}

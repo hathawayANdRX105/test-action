@@ -293,9 +293,14 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	position: relative;
 	display: flex;
 	align-items: flex-end;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
 
 	&.isMe {
 		flex-direction: row-reverse;
+		justify-content: flex-start;
 		text-align: right;
 
 		.avatar {
@@ -345,9 +350,17 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 .body {
 	margin: 0 8px;
 	max-width: min(76%, 640px);
+	box-sizing: border-box;
 
 	// https://stackoverflow.com/questions/36230944/prevent-flex-items-from-overflowing-a-container
 	min-width: 0;
+}
+
+.isMe .body {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	max-width: min(76%, 640px);
 }
 
 .header {
@@ -359,8 +372,10 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 .bubble {
 	position: relative;
 	display: inline-block;
+	width: fit-content;
 	min-width: 72px;
 	max-width: 100%;
+	box-sizing: border-box;
 	padding: 8px 12px 18px;
 	border-radius: 18px 18px 18px 6px;
 	text-align: left;
@@ -436,6 +451,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	overflow: clip;
 	overflow-wrap: break-word;
 	word-break: break-word;
+	max-width: 100%;
 }
 
 .footer {
