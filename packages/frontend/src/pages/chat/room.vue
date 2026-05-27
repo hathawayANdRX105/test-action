@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div ref="rootEl" :class="$style.root">
-	<div :class="$style.localHeader" data-chat-room-tabs>
+	<div :class="$style.localHeader" data-chat-room-header data-chat-room-tabs>
 		<div :class="$style.localTitle">
 			<i v-if="room" class="ti ti-users"></i>
 			<MkAvatar v-else-if="user" :user="user" :class="$style.localTitleAvatar" indicator/>
@@ -80,7 +80,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:animate="!isRestoringHistoryScroll && !isRoomChat"
 					tag="div" :class="$style.messageList"
 				>
-					<div v-for="item in timeline.toReversed()" :key="item.id" :class="$style.messageItem" :data-scroll-anchor="item.type === 'item' ? item.id : undefined">
+					<div v-for="item in timeline.toReversed()" :key="item.id" :class="[$style.messageItem, { [$style.contextTarget]: item.type === 'item' && item.id === contextTargetMessageId }]" :data-scroll-anchor="item.type === 'item' ? item.id : undefined">
 						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
@@ -89,6 +89,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 				</SkTransitionGroup>
+
+				<div v-if="canFetchNewer || newerFetching" :class="$style.more">
+					<MkLoading v-if="newerFetching" :mini="true"/>
+				</div>
 			</div>
 
 			<div v-if="user && (!user.canChat || user.host !== null)">
@@ -99,8 +103,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'search'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XSearch :userId="userId" :roomId="roomId"/>
+	<div v-else-if="tab === 'search'" :class="$style.searchPane">
+		<XSearch :userId="userId" :roomId="roomId" @openContext="openMessageContext"/>
 	</div>
 
 	<div v-else-if="tab === 'members'" class="_spacer" style="--MI_SPACER-w: 700px;">
@@ -159,6 +163,7 @@ const router = useRouter();
 const props = defineProps<{
 	userId?: string;
 	roomId?: string;
+	messageId?: string;
 }>();
 
 export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions' | 'reply' | 'quote'> & {
@@ -177,8 +182,10 @@ const initializeError = ref<string | null>(null);
 const joinRequiredRoom = ref<Misskey.entities.ChatRoom | null>(null);
 const joiningRoom = ref(false);
 const moreFetching = ref(false);
+const newerFetching = ref(false);
 const messages = ref<NormalizedChatMessage[]>([]);
 const canFetchMore = ref(false);
+const canFetchNewer = ref(false);
 const user = ref<Misskey.entities.UserDetailed | null>(null);
 const room = ref<Misskey.entities.ChatRoom | null>(null);
 const replyTarget = ref<NormalizedChatMessage | null>(null);
@@ -190,16 +197,38 @@ const rootEl = ref<HTMLElement | null>(null);
 const timelineEl = ref<HTMLElement | null>(null);
 const formEl = ref<InstanceType<typeof XForm> | null>(null);
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
+const contextTargetMessageId = ref<string | null>(null);
+const pendingContextScrollId = ref<string | null>(null);
 
 const SCROLL_HEAD_THRESHOLD = 200;
 const SCROLL_HISTORY_THRESHOLD = 480;
+const SCROLL_TAIL_THRESHOLD = 480;
 const TIMELINE_LIMIT = 20;
+const CONTEXT_LIMIT = 30;
 const MAX_ROOM_MESSAGES = 500;
 const STREAM_CONNECT_TIMEOUT = 5000;
 let removeTimelineScrollListener: (() => void) | null = null;
 let historyFetchArmed = true;
+let newerFetchArmed = true;
+let scrollRestorationDepth = 0;
 const isRestoringHistoryScroll = ref(false);
 const isRoomChat = computed(() => props.roomId != null);
+const isContextMode = computed(() => contextTargetMessageId.value != null);
+
+type ScrollAnchor = {
+	id: string;
+	offset: number;
+};
+
+function beginScrollRestoration() {
+	scrollRestorationDepth++;
+	isRestoringHistoryScroll.value = true;
+}
+
+function endScrollRestoration() {
+	scrollRestorationDepth = Math.max(0, scrollRestorationDepth - 1);
+	isRestoringHistoryScroll.value = scrollRestorationDepth > 0;
+}
 
 function isAtLatest() {
 	if (timelineEl.value == null) return true;
@@ -210,14 +239,20 @@ function isAtLatest() {
 	return Math.abs(scrollContainer.scrollTop) < SCROLL_HEAD_THRESHOLD;
 }
 
+function clearNewMessageIndicator() {
+	if (!showIndicator.value && newMessageCount.value === 0) return;
+
+	showIndicator.value = false;
+	newMessageCount.value = 0;
+}
+
 function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
 	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 	scrollContainer?.scrollTo({
 		top: 0,
 		behavior,
 	});
-	showIndicator.value = false;
-	newMessageCount.value = 0;
+	clearNewMessageIndicator();
 }
 
 function setupTimelineScrollListener() {
@@ -228,19 +263,28 @@ function setupTimelineScrollListener() {
 	if (scrollContainer == null) return;
 
 	const onScroll = () => {
-		if (!canFetchMore.value || moreFetching.value || messages.value.length === 0) return;
-
 		const historyDistance = scrollContainer.scrollHeight - scrollContainer.clientHeight - Math.abs(scrollContainer.scrollTop);
 		if (historyDistance >= SCROLL_HISTORY_THRESHOLD) {
 			historyFetchArmed = true;
-			return;
 		}
 
-		if (!historyFetchArmed) return;
-
-		if (historyDistance < SCROLL_HISTORY_THRESHOLD) {
+		if (!isRestoringHistoryScroll.value && canFetchMore.value && !moreFetching.value && messages.value.length > 0 && historyFetchArmed && historyDistance < SCROLL_HISTORY_THRESHOLD) {
 			historyFetchArmed = false;
 			fetchMore();
+		}
+
+		const latestDistance = Math.abs(scrollContainer.scrollTop);
+		if (latestDistance < SCROLL_HEAD_THRESHOLD) {
+			clearNewMessageIndicator();
+		}
+
+		if (latestDistance >= SCROLL_TAIL_THRESHOLD) {
+			newerFetchArmed = true;
+		}
+
+		if (!isRestoringHistoryScroll.value && canFetchNewer.value && !newerFetching.value && messages.value.length > 0 && newerFetchArmed && latestDistance < SCROLL_TAIL_THRESHOLD) {
+			newerFetchArmed = false;
+			fetchNewer();
 		}
 	};
 
@@ -248,45 +292,145 @@ function setupTimelineScrollListener() {
 	removeTimelineScrollListener = () => scrollContainer.removeEventListener('scroll', onScroll);
 }
 
-function getVisibleMessageAnchor(): { id: string; offset: number; } | null {
+function getVisibleMessageAnchor(): ScrollAnchor | null {
 	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 	if (scrollContainer == null || timelineEl.value == null) return null;
 
 	const containerRect = scrollContainer.getBoundingClientRect();
 	const elements = timelineEl.value.querySelectorAll<HTMLElement>('[data-scroll-anchor]');
+	let best: ScrollAnchor | null = null;
+	let bestDistance = Number.POSITIVE_INFINITY;
 
 	for (const element of elements) {
 		const rect = element.getBoundingClientRect();
 		if (rect.bottom > containerRect.top && rect.top < containerRect.bottom) {
 			const id = element.dataset.scrollAnchor;
-			if (id == null) return null;
+			if (id == null) continue;
 
-			return {
-				id,
-				offset: rect.top - containerRect.top,
-			};
+			const offset = rect.top - containerRect.top;
+			const distance = Math.abs(offset);
+			if (distance < bestDistance) {
+				bestDistance = distance;
+				best = {
+					id,
+					offset,
+				};
+			}
 		}
 	}
 
-	return null;
+	return best;
 }
 
-function restoreVisibleMessageAnchor(anchor: { id: string; offset: number; } | null) {
-	if (anchor == null || timelineEl.value == null) return;
+function restoreVisibleMessageAnchor(anchor: ScrollAnchor | null): number | null {
+	if (anchor == null || timelineEl.value == null) return null;
 
 	const scrollContainer = getScrollContainer(timelineEl.value);
-	if (scrollContainer == null) return;
+	if (scrollContainer == null) return null;
 
 	const element = timelineEl.value.querySelector<HTMLElement>(`[data-scroll-anchor="${CSS.escape(anchor.id)}"]`);
-	if (element == null) return;
+	if (element == null) return null;
 
 	const containerRect = scrollContainer.getBoundingClientRect();
 	const rect = element.getBoundingClientRect();
-	scrollContainer.scrollTop += rect.top - containerRect.top - anchor.offset;
+	const getDelta = () => {
+		const latestContainerRect = scrollContainer.getBoundingClientRect();
+		const latestRect = element.getBoundingClientRect();
+		return latestRect.top - latestContainerRect.top - anchor.offset;
+	};
+	const originalScrollTop = scrollContainer.scrollTop;
+	const delta = getDelta();
+	if (Math.abs(delta) <= 0.5) {
+		return delta;
+	}
+
+	const candidates = [originalScrollTop + delta, originalScrollTop - delta];
+	let bestScrollTop = originalScrollTop;
+	let bestDelta = Math.abs(delta);
+
+	for (const candidate of candidates) {
+		scrollContainer.scrollTop = candidate;
+		const currentDelta = Math.abs(getDelta());
+		if (currentDelta < bestDelta) {
+			bestDelta = currentDelta;
+			bestScrollTop = scrollContainer.scrollTop;
+		}
+	}
+
+	scrollContainer.scrollTop = bestScrollTop;
+	return getDelta();
+}
+
+function scrollMessageIntoView(messageId: string, block: ScrollLogicalPosition = 'nearest'): boolean {
+	if (timelineEl.value == null) return false;
+
+	const element = timelineEl.value.querySelector<HTMLElement>(`[data-scroll-anchor="${CSS.escape(messageId)}"]`);
+	if (element == null) return false;
+
+	const scrollContainer = getScrollContainer(timelineEl.value);
+	if (scrollContainer == null) {
+		element.scrollIntoView({
+			block,
+			behavior: 'auto',
+		});
+		return true;
+	}
+
+	const getDelta = () => {
+		const containerRect = scrollContainer.getBoundingClientRect();
+		const elementRect = element.getBoundingClientRect();
+		const targetOffset = block === 'center'
+			? (scrollContainer.clientHeight - elementRect.height) / 2
+			: block === 'end'
+				? scrollContainer.clientHeight - elementRect.height
+				: 0;
+		return elementRect.top - containerRect.top - targetOffset;
+	};
+	const originalScrollTop = scrollContainer.scrollTop;
+	const delta = getDelta();
+	const candidates = [originalScrollTop + delta, originalScrollTop - delta];
+	let bestScrollTop = originalScrollTop;
+	let bestDelta = Math.abs(delta);
+
+	for (const candidate of candidates) {
+		scrollContainer.scrollTop = candidate;
+		const currentDelta = Math.abs(getDelta());
+		if (currentDelta < bestDelta) {
+			bestDelta = currentDelta;
+			bestScrollTop = scrollContainer.scrollTop;
+		}
+	}
+
+	scrollContainer.scrollTop = bestScrollTop;
+	if (bestDelta > 1) {
+		element.scrollIntoView({
+			block,
+			behavior: 'auto',
+		});
+	}
+	return true;
 }
 
 function waitAnimationFrame() {
 	return new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
+}
+
+async function restoreVisibleMessageAnchorAfterLayout(anchor: ScrollAnchor | null) {
+	if (anchor == null) return;
+
+	let stableFrames = 0;
+	for (let i = 0; i < 8; i++) {
+		await nextTick();
+		await waitAnimationFrame();
+		const delta = restoreVisibleMessageAnchor(anchor);
+		if (delta == null) return;
+		if (Math.abs(delta) <= 0.5) {
+			stableFrames++;
+			if (stableFrames >= 2) return;
+		} else {
+			stableFrames = 0;
+		}
+	}
 }
 
 // column-reverseなので本来はスクロール位置の最下部への追従は不要なはずだが、おそらくブラウザのバグにより、最下部にスクロールした状態でも追従されない場合がある(スクロール位置が少数になることがあるのが関わっていそう)
@@ -296,7 +440,7 @@ useMutationObserver(timelineEl, {
 	childList: true,
 	attributes: false,
 }, () => {
-	if (isRestoringHistoryScroll.value) return;
+	if (isRestoringHistoryScroll.value || isContextMode.value) return;
 
 	const scrollContainer = getScrollContainer(timelineEl.value)!;
 	// column-reverseなのでscrollTopは負になる
@@ -328,7 +472,7 @@ function sortMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
 }
 
 function trimMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
-	if (!isRoomChat.value || items.length <= MAX_ROOM_MESSAGES) return items;
+	if (!isRoomChat.value || isContextMode.value || items.length <= MAX_ROOM_MESSAGES) return items;
 	return items.slice(0, MAX_ROOM_MESSAGES);
 }
 
@@ -362,6 +506,10 @@ function prependMessage(message: NormalizedChatMessage) {
 
 function appendFetchedMessages(fetched: Misskey.entities.ChatMessageLite[]) {
 	messages.value = mergeMessages(messages.value, fetched.map(x => normalizeMessage(x)));
+}
+
+function replaceMessages(fetched: (Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage)[]) {
+	messages.value = mergeMessages(fetched.map(x => normalizeMessage(x)));
 }
 
 function onSentMessage(message: Misskey.entities.ChatMessageLite) {
@@ -425,16 +573,91 @@ async function fetchLatestGap() {
 	appendFetchedMessages(newMessages);
 }
 
+async function initializeContextTimeline(messageId: string) {
+	const context = await misskeyApi<{
+		before: Misskey.entities.ChatMessage[];
+		target: Misskey.entities.ChatMessage;
+		after: Misskey.entities.ChatMessage[];
+		hasMoreBefore: boolean;
+		hasMoreAfter: boolean;
+	}>('chat/messages/context', {
+		messageId,
+		limitBefore: CONTEXT_LIMIT,
+		limitAfter: CONTEXT_LIMIT,
+	});
+
+	contextTargetMessageId.value = context.target.id;
+	pendingContextScrollId.value = context.target.id;
+	replaceMessages([...context.after, context.target, ...context.before]);
+	canFetchMore.value = context.hasMoreBefore;
+	canFetchNewer.value = context.hasMoreAfter;
+}
+
+async function openMessageContext(messageId: string) {
+	tab.value = 'chat';
+	initializeError.value = null;
+	joinRequiredRoom.value = null;
+	canFetchMore.value = false;
+	canFetchNewer.value = false;
+	messages.value = [];
+	showIndicator.value = false;
+	newMessageCount.value = 0;
+	contextTargetMessageId.value = null;
+	pendingContextScrollId.value = null;
+	historyFetchArmed = true;
+	newerFetchArmed = true;
+	initializing.value = true;
+
+	try {
+		await initializeContextTimeline(messageId);
+	} catch (err) {
+		console.error('Failed to open chat message context:', err);
+		messages.value = [];
+		initializeError.value = props.roomId ? i18n.ts._chat.noPermissionToViewRoom : i18n.ts.pageLoadError;
+	} finally {
+		await finishInitializeRender();
+	}
+}
+
+async function scrollContextTargetAfterRender(messageId: string) {
+	beginScrollRestoration();
+	try {
+		for (let i = 0; i < 60; i++) {
+			await nextTick();
+			await waitAnimationFrame();
+			if (scrollMessageIntoView(messageId, 'center')) {
+				break;
+			}
+		}
+	} finally {
+		endScrollRestoration();
+	}
+}
+
+async function finishInitializeRender() {
+	initializing.value = false;
+	const messageId = pendingContextScrollId.value;
+	pendingContextScrollId.value = null;
+	if (messageId == null || initializeError.value != null || joinRequiredRoom.value != null) return;
+
+	await scrollContextTargetAfterRender(messageId);
+}
+
 async function initialize() {
 	initializing.value = true;
 	initializeError.value = null;
 	joinRequiredRoom.value = null;
 	canFetchMore.value = false;
+	canFetchNewer.value = false;
 	messages.value = [];
 	connection.value?.dispose();
 	connection.value = null;
 	showIndicator.value = false;
 	newMessageCount.value = 0;
+	contextTargetMessageId.value = null;
+	pendingContextScrollId.value = null;
+	historyFetchArmed = true;
+	newerFetchArmed = true;
 
 	try {
 		if (props.userId) {
@@ -445,13 +668,17 @@ async function initialize() {
 			connectStream();
 			await waitChannelConnected();
 
-			const m = await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: TIMELINE_LIMIT });
-			appendFetchedMessages(m);
+			if (props.messageId != null) {
+				await initializeContextTimeline(props.messageId);
+			} else {
+				const m = await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: TIMELINE_LIMIT });
+				appendFetchedMessages(m);
 
-			if (m.length === TIMELINE_LIMIT) {
-				canFetchMore.value = true;
+				if (m.length === TIMELINE_LIMIT) {
+					canFetchMore.value = true;
+				}
+				await fetchLatestGap();
 			}
-			await fetchLatestGap();
 		} else {
 			const roomId = props.roomId;
 			if (roomId == null) {
@@ -479,20 +706,24 @@ async function initialize() {
 			connectStream();
 			await waitChannelConnected();
 
-			const m = await misskeyApi('chat/messages/room-timeline', { roomId, limit: TIMELINE_LIMIT });
-			appendFetchedMessages(m);
+			if (props.messageId != null) {
+				await initializeContextTimeline(props.messageId);
+			} else {
+				const m = await misskeyApi('chat/messages/room-timeline', { roomId, limit: TIMELINE_LIMIT });
+				appendFetchedMessages(m);
 
-			if (m.length === TIMELINE_LIMIT) {
-				canFetchMore.value = true;
+				if (m.length === TIMELINE_LIMIT) {
+					canFetchMore.value = true;
+				}
+				await fetchLatestGap();
 			}
-			await fetchLatestGap();
 		}
 	} catch (err) {
 		console.error('Failed to initialize chat room:', err);
 		messages.value = [];
 		initializeError.value = props.roomId ? i18n.ts._chat.noPermissionToViewRoom : i18n.ts.pageLoadError;
 	} finally {
-		initializing.value = false;
+		await finishInitializeRender();
 	}
 }
 
@@ -535,7 +766,7 @@ async function fetchMore() {
 	if (!canFetchMore.value || moreFetching.value || messages.value.length === 0) return;
 
 	const anchor = getVisibleMessageAnchor();
-	isRestoringHistoryScroll.value = true;
+	beginScrollRestoration();
 	moreFetching.value = true;
 
 	try {
@@ -552,25 +783,59 @@ async function fetchMore() {
 		appendFetchedMessages(newMessages);
 
 		canFetchMore.value = newMessages.length === LIMIT;
-		await nextTick();
-		await waitAnimationFrame();
-		restoreVisibleMessageAnchor(anchor);
-		await waitAnimationFrame();
-		restoreVisibleMessageAnchor(anchor);
 	} finally {
 		moreFetching.value = false;
-		await nextTick();
-		await waitAnimationFrame();
-		isRestoringHistoryScroll.value = false;
+		// The loading row is part of the scroll layout, so restore only after it is gone.
+		await restoreVisibleMessageAnchorAfterLayout(anchor);
+		endScrollRestoration();
+	}
+}
+
+async function fetchNewer() {
+	const LIMIT = 30;
+	if (!canFetchNewer.value || newerFetching.value || messages.value.length === 0) return;
+
+	const anchor = getVisibleMessageAnchor();
+	beginScrollRestoration();
+	newerFetching.value = true;
+
+	try {
+		const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
+			userId: user.value!.id,
+			limit: LIMIT,
+			sinceId: messages.value[0].id,
+		}) : await misskeyApi('chat/messages/room-timeline', {
+			roomId: room.value!.id,
+			limit: LIMIT,
+			sinceId: messages.value[0].id,
+		});
+
+		appendFetchedMessages(newMessages);
+		canFetchNewer.value = newMessages.length === LIMIT;
+	} finally {
+		newerFetching.value = false;
+		await restoreVisibleMessageAnchorAfterLayout(anchor);
+		endScrollRestoration();
 	}
 }
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {
+	const wasAtLatest = isAtLatest();
+	const anchor = wasAtLatest ? null : getVisibleMessageAnchor();
+	if (!wasAtLatest) {
+		beginScrollRestoration();
+	}
+
 	if (room.value?.isMuted !== true) {
 		sound.playMisskeySfx('chatMessage');
 	}
 
 	prependMessage(normalizeMessage(message));
+	if (!wasAtLatest) {
+		void restoreVisibleMessageAnchorAfterLayout(anchor).finally(() => {
+			endScrollRestoration();
+		});
+	}
 
 	// TODO: DOM的にバックグラウンドになっていないかどうかも考慮する
 	if (message.fromUserId !== $i.id && !window.document.hidden && isActivated) {
@@ -580,7 +845,7 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 	}
 
 	if (message.fromUserId !== $i.id) {
-		if (isAtLatest()) {
+		if (wasAtLatest) {
 			nextTick(() => scrollToLatest('instant'));
 		} else {
 			notifyNewMessage();
@@ -651,6 +916,15 @@ function onVisibilitychange() {
 onMounted(() => {
 	window.document.addEventListener('visibilitychange', onVisibilitychange);
 	watch(timelineEl, () => nextTick(setupTimelineScrollListener), { immediate: true });
+	watch(() => props.messageId, (to, from) => {
+		if (to !== from) {
+			if (to != null) {
+				openMessageContext(to);
+			} else {
+				initialize();
+			}
+		}
+	});
 	initialize();
 });
 
@@ -820,6 +1094,8 @@ definePage(computed(() => {
 }
 
 .localHeader {
+	--chat-room-header-bg: color(from var(--MI_THEME-pageHeaderBg) srgb r g b / 0.92);
+
 	position: relative;
 	z-index: 1000;
 	display: grid;
@@ -829,9 +1105,17 @@ definePage(computed(() => {
 	min-height: 52px;
 	padding: 0 18px;
 	box-sizing: border-box;
-	background: color(from var(--MI_THEME-pageHeaderBg) srgb r g b / 0.92);
+	background: var(--chat-room-header-bg);
 	border-bottom: solid 1px var(--MI_THEME-divider);
 	color: var(--MI_THEME-pageHeaderFg);
+}
+
+:global(html[data-color-scheme=dark]) {
+	.localHeader {
+		--chat-room-header-bg: color-mix(in srgb, var(--MI_THEME-bg) 94%, #000);
+
+		color: var(--MI_THEME-fg);
+	}
 }
 
 .localTitle {
@@ -951,6 +1235,11 @@ definePage(computed(() => {
 	box-sizing: border-box;
 }
 
+.contextTarget {
+	border-radius: 22px;
+	animation: contextTargetPulse 2.2s ease-out 1;
+}
+
 .more {
 	min-height: 44px;
 	display: grid;
@@ -980,6 +1269,12 @@ definePage(computed(() => {
 
 .chatPane > :global(._gaps) {
 	width: 100%;
+}
+
+.searchPane {
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .error {
@@ -1089,5 +1384,17 @@ definePage(computed(() => {
 	margin: 0 auto;
 	background: light-dark(rgb(255 255 255 / 0.72), rgb(31 45 58 / 0.82));
 	box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+@keyframes contextTargetPulse {
+	0% {
+		background: color(from var(--MI_THEME-accent) srgb r g b / 0.28);
+		box-shadow: 0 0 0 5px color(from var(--MI_THEME-accent) srgb r g b / 0.18);
+	}
+
+	100% {
+		background: transparent;
+		box-shadow: 0 0 0 0 color(from var(--MI_THEME-accent) srgb r g b / 0);
+	}
 }
 </style>

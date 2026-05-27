@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div v-if="show" ref="el" :class="[$style.root]">
+<div v-if="show" ref="el" :class="[$style.root]" data-page-header>
 	<div :class="[$style.upper, { [$style.slim]: narrow, [$style.thin]: thin_ }]">
 		<div v-if="!thin_ && narrow && props.displayMyAvatar && $i" class="_button" :class="$style.buttonsLeft" @click="openAccountMenu">
 			<MkAvatar :class="$style.avatar" :user="$i"/>
@@ -145,12 +145,22 @@ onUnmounted(() => {
 
 <style lang="scss" module>
 .root {
-	background: color(from var(--MI_THEME-pageHeaderBg) srgb r g b / 0.75);
+	--page-header-surface-bg: color(from var(--MI_THEME-pageHeaderBg) srgb r g b / 0.75);
+
+	background: var(--page-header-surface-bg);
 	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
 	backdrop-filter: var(--MI-blur, blur(15px));
 	border-bottom: solid 0.5px transparent;
 	width: 100%;
 	color: var(--MI_THEME-pageHeaderFg);
+}
+
+:global(html[data-color-scheme=dark]) {
+	.root {
+		--page-header-surface-bg: color-mix(in srgb, var(--MI_THEME-bg) 94%, #000);
+
+		color: var(--MI_THEME-fg);
+	}
 }
 
 @container style(--MI_THEME-pageHeaderBg: var(--MI_THEME-bg)) {
@@ -162,7 +172,7 @@ onUnmounted(() => {
 .upper,
 .lower {
 	width: 100%;
-	background: transparent;
+	background: var(--page-header-surface-bg);
 }
 
 .upper {

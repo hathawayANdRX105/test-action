@@ -8170,6 +8170,20 @@ export interface Locale extends ILocale {
         "unlike": string;
     };
     "_email": {
+        /**
+         * メール設定
+         */
+        "emailSetting": string;
+        "_login": {
+            /**
+             * ログインがありました
+             */
+            "title": string;
+            /**
+             * 新しいログインがありました。このログインに心当たりがない場合は、パスワードを変更するなど、アカウントのセキュリティ状態を更新してください。
+             */
+            "body": string;
+        };
         "_follow": {
             /**
              * フォローされました

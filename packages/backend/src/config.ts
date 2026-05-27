@@ -308,9 +308,9 @@ export type Config = QueueConfig & {
 	authUrl: string;
 	driveUrl: string;
 	userAgent: string;
-	frontendEntry: string;
+	frontendEntry: { file: string; css?: string[]; };
 	frontendManifestExists: boolean;
-	frontendEmbedEntry: string;
+	frontendEmbedEntry: { file: string; css?: string[]; };
 	frontendEmbedManifestExists: boolean;
 	mediaDirectory: string;
 	mediaProxy: string;

@@ -20,7 +20,7 @@ vi.mock('@/preferences.js', () => ({
 	},
 }));
 
-const makeTheme = (base: 'light' | 'dark', bg: string, fg: string): Theme => ({
+const makeTheme = (base: 'light' | 'dark', bg: string, fg: string, props: Record<string, string> = {}): Theme => ({
 	id: `test-${base}`,
 	name: `Test ${base}`,
 	author: 'test',
@@ -30,6 +30,7 @@ const makeTheme = (base: 'light' | 'dark', bg: string, fg: string): Theme => ({
 		fg,
 		accent: '#86b300',
 		htmlThemeColor: bg,
+		...props,
 	},
 });
 
@@ -84,5 +85,27 @@ describe(applyTheme, () => {
 		expect(localStorage.getItem('colorScheme')).toBe('dark');
 		expect(JSON.parse(localStorage.getItem('theme') ?? '{}').fg).toBe('rgb(238, 238, 238)');
 		expect(document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe('rgb(0, 0, 0)');
+	});
+
+	test('normalizes light custom surfaces in dark themes', () => {
+		applyTheme(makeTheme('dark', '#0c1210', '#dee7e4', {
+			panel: '#ffffff',
+			pageHeaderBg: '#ffffff',
+			pageHeaderFg: '#111111',
+			navBg: '#ffffff',
+			navFg: '#111111',
+			panelHeaderBg: '#ffffff',
+			panelHeaderFg: '#111111',
+			htmlThemeColor: '#ffffff',
+		}));
+
+		expect(document.documentElement.style.getPropertyValue('--MI_THEME-panel')).toBe('#1b1b1b');
+		expect(document.documentElement.style.getPropertyValue('--MI_THEME-pageHeaderBg')).toBe('#111111');
+		expect(document.documentElement.style.getPropertyValue('--MI_THEME-pageHeaderFg')).toBe('rgb(222, 231, 228)');
+		expect(document.documentElement.style.getPropertyValue('--MI_THEME-navBg')).toBe('#171717');
+		expect(document.documentElement.style.getPropertyValue('--MI_THEME-navFg')).toBe('#ffffff');
+		expect(document.documentElement.style.getPropertyValue('--MI_THEME-panelHeaderBg')).toBe('#202020');
+		expect(document.documentElement.style.getPropertyValue('--MI_THEME-panelHeaderFg')).toBe('rgb(222, 231, 228)');
+		expect(document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe('#111111');
 	});
 });

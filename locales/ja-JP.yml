@@ -2089,6 +2089,10 @@ _gallery:
   unlike: "いいね解除"
 
 _email:
+  emailSetting: "メール設定"
+  _login:
+    title: "ログインがありました"
+    body: "新しいログインがありました。このログインに心当たりがない場合は、パスワードを変更するなど、アカウントのセキュリティ状態を更新してください。"
   _follow:
     title: "フォローされました"
   _receiveFollowRequest:

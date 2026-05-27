@@ -484,6 +484,67 @@ export class ChatService {
 	}
 
 	@bindThis
+	private withMessageRelations(query = this.chatMessagesRepository.createQueryBuilder('message')) {
+		return query
+			.leftJoinAndSelect('message.file', 'file')
+			.leftJoinAndSelect('message.fromUser', 'fromUser')
+			.leftJoinAndSelect('message.toUser', 'toUser')
+			.leftJoinAndSelect('message.toRoom', 'toRoom')
+			.leftJoinAndSelect('toRoom.owner', 'toRoomOwner')
+			.leftJoinAndSelect('message.reply', 'reply')
+			.leftJoinAndSelect('reply.file', 'replyFile')
+			.leftJoinAndSelect('reply.fromUser', 'replyFromUser')
+			.leftJoinAndSelect('message.quote', 'quote')
+			.leftJoinAndSelect('quote.file', 'quoteFile')
+			.leftJoinAndSelect('quote.fromUser', 'quoteFromUser');
+	}
+
+	@bindThis
+	public async messageContext(message: MiChatMessage, limitBefore: number, limitAfter: number) {
+		const addScope = (query = this.withMessageRelations()) => {
+			if (message.toRoomId != null) {
+				return query.andWhere('message.toRoomId = :roomId', { roomId: message.toRoomId });
+			}
+
+			return query.andWhere(new Brackets(qb => {
+				qb
+					.where(new Brackets(qb => {
+						qb
+							.where('message.fromUserId = :fromUserId')
+							.andWhere('message.toUserId = :toUserId');
+					}))
+					.orWhere(new Brackets(qb => {
+						qb
+							.where('message.fromUserId = :toUserId')
+							.andWhere('message.toUserId = :fromUserId');
+					}));
+			}))
+				.setParameter('fromUserId', message.fromUserId)
+				.setParameter('toUserId', message.toUserId);
+		};
+
+		const before = await addScope()
+			.andWhere('message.id < :messageId', { messageId: message.id })
+			.orderBy('message.id', 'DESC')
+			.take(limitBefore + 1)
+			.getMany();
+
+		const after = await addScope()
+			.andWhere('message.id > :messageId', { messageId: message.id })
+			.orderBy('message.id', 'ASC')
+			.take(limitAfter + 1)
+			.getMany();
+
+		return {
+			before: before.slice(0, limitBefore),
+			target: message,
+			after: after.slice(0, limitAfter).reverse(),
+			hasMoreBefore: before.length > limitBefore,
+			hasMoreAfter: after.length > limitAfter,
+		};
+	}
+
+	@bindThis
 	public async userHistory(meId: MiUser['id'], limit: number): Promise<MiChatMessage[]> {
 		const history: MiChatMessage[] = [];
 

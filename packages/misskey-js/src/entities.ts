@@ -362,6 +362,7 @@ export type SigninFlowRequest = {
 	username: string;
 	password?: string;
 	token?: string;
+	lang?: string;
 	credential?: AuthenticationResponseJSON;
 	'hcaptcha-response'?: string | null;
 	'g-recaptcha-response'?: string | null;
@@ -385,6 +386,7 @@ export type SigninFlowResponse = {
 export type SigninWithPasskeyRequest = {
 	credential?: AuthenticationResponseJSON;
 	context?: string;
+	lang?: string;
 };
 
 export type SigninWithPasskeyInitResponse = {

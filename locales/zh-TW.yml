@@ -1434,6 +1434,7 @@ _preferencesProfile:
   profileName: "設定檔案名稱"
   profileNameDescription: "設定一個名稱來識別此裝置。"
   profileNameDescription2: "例如：「主要個人電腦」、「智慧型手機」等"
+  manageProfiles: "管理設定檔案"
 _preferencesBackup:
   autoBackup: "自動備份"
   restoreFromBackup: "從備份還原"
@@ -2015,6 +2016,10 @@ _gallery:
   like: "讚好"
   unlike: "收回讚好"
 _email:
+  emailSetting: "郵件通知設定"
+  _login:
+    title: "有新的登入"
+    body: "您的帳戶有新的登入。如果這不是您本人操作，請盡快檢查帳戶安全狀態並修改密碼。"
   _follow:
     title: "您有新的追隨者"
   _receiveFollowRequest:

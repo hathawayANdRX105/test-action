@@ -45,7 +45,7 @@ export class EmailService {
 	}
 
 	@bindThis
-	public async sendEmail(to: string, subject: string, html: string, text: string, opts?: { announcementFor?: MiUserProfile } | undefined) {
+	public async sendEmail(to: string, subject: string, html: string, text: string, opts?: { announcementFor?: MiUserProfile, emailSettingLabel?: string } | undefined) {
 		if (!this.meta.enableEmail) return;
 
 		const iconUrl = `${this.config.url}/static-assets/mi-white.png`;
@@ -137,7 +137,7 @@ export class EmailService {
 				<div>${ html }</div>
 			</article>
 			<footer>
-				<a href="${ emailSettingUrl }">${ 'Email setting' }</a>
+				<a href="${ emailSettingUrl }">${ opts?.emailSettingLabel ?? 'Email setting' }</a>
 			</footer>
 		</main>
 		<nav>

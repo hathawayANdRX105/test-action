@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div class="_spacer" :style="{ '--MI_SPACER-w': narrow ? '800px' : '1100px', ...background }">
-	<div ref="rootEl" class="ftskorzw" :class="{ wide: !narrow }" style="container-type: inline-size;">
+	<div ref="rootEl" class="ftskorzw" :class="{ wide: !narrow, 'has-background': user.backgroundUrl != null }" style="container-type: inline-size;">
 		<div class="main _gaps">
 			<MkInfo v-if="user.isDeleted" :warn="true">{{ i18n.ts.userDeleted }}</MkInfo>
 			<MkInfo v-if="user.isSuspended" :warn="true">{{ i18n.ts.userSuspended }}</MkInfo>
@@ -798,6 +798,45 @@ onUnmounted(() => {
 			max-width: 350px;
 			min-width: 350px;
 			margin-left: var(--MI-margin);
+		}
+	}
+
+	&.has-background {
+		> .main {
+			> .profile {
+				> .main {
+					> .banner-container > .title,
+					> .title {
+						color: #fff;
+						text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.55);
+
+						> .name {
+							color: #fff;
+						}
+
+						> .bottom {
+							color: color-mix(in srgb, #fff 88%, transparent);
+
+							> * {
+								color: inherit;
+								opacity: 1;
+							}
+
+							> .username {
+								color: color-mix(in srgb, #fff 92%, transparent);
+
+								:deep(span) {
+									opacity: 1 !important;
+								}
+
+								:deep(span + span) {
+									opacity: 0.82 !important;
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 }

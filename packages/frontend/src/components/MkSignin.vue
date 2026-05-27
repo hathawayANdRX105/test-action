@@ -75,6 +75,7 @@ import { showSuspendedDialog } from '@/utility/show-suspended-dialog.js';
 import { i18n } from '@/i18n.js';
 import { showSystemAccountDialog } from '@/utility/show-system-account-dialog.js';
 import * as os from '@/os.js';
+import { prefer } from '@/preferences.js';
 
 import XInput from '@/components/MkSignin.input.vue';
 import XPassword from '@/components/MkSignin.password.vue';
@@ -135,6 +136,7 @@ function onPasskeyDone(credential: AuthenticationPublicKeyCredential): void {
 		misskeyApi('signin-with-passkey', {
 			credential: credential.toJSON(),
 			context: passkeyContext.value,
+			lang: prefer.s.lang,
 		}).then((res) => {
 			if (res.signinResponse == null) {
 				onSigninApiError();
@@ -218,6 +220,7 @@ async function onTotpSubmitted(token: string) {
 async function tryLogin(req: Partial<Misskey.entities.SigninFlowRequest>): Promise<Misskey.entities.SigninFlowResponse> {
 	const _req = {
 		username: req.username ?? userInfo.value?.username,
+		lang: prefer.s.lang,
 		...req,
 	};
 

@@ -64,6 +64,7 @@ export class SigninWithPasskeyApiService {
 			Body: {
 				credential?: AuthenticationResponseJSON;
 				context?: string;
+				lang?: string;
 			};
 		}>,
 		reply: FastifyReply,
@@ -175,7 +176,7 @@ export class SigninWithPasskeyApiService {
 			});
 		}
 
-		const signinResponse = this.signinService.signin(request, reply, user);
+		const signinResponse = this.signinService.signin(request, reply, user, body.lang);
 		return {
 			signinResponse: signinResponse,
 		};

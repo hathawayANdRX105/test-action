@@ -1468,6 +1468,7 @@ _preferencesProfile:
   profileName: "配置名"
   profileNameDescription: "请指定用于识别此设备的名称"
   profileNameDescription2: "如「PC」、「手机」等"
+  manageProfiles: "管理配置文件"
 _preferencesBackup:
   autoBackup: "自动备份"
   restoreFromBackup: "从备份恢复"
@@ -2048,6 +2049,10 @@ _gallery:
   like: "喜欢"
   unlike: "取消喜欢"
 _email:
+  emailSetting: "邮件通知设置"
+  _login:
+    title: "有新的登录"
+    body: "您的账户有新的登录。如果这不是您本人操作，请尽快检查账户安全状态并修改密码。"
   _follow:
     title: "你有新的关注者"
   _receiveFollowRequest:

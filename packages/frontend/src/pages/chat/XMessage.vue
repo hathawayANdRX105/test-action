@@ -8,7 +8,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="!isMe" :preview="false"/>
 	<div v-else :class="[$style.avatar, $style.avatarFallback]"><i class="ti ti-user-question"></i></div>
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
-		<div :class="$style.header"><MkUserName v-if="!isMe && message.fromUser != null" :user="message.fromUser"/></div>
+		<div :class="$style.header">
+			<MkUserName v-if="message.fromUser != null" :user="message.fromUser" :class="$style.sender"/>
+			<div :class="$style.headerMeta" @click.stop>
+				<button class="_button" :class="$style.menuButton" @click="showMenu">
+					<i class="ti ti-dots-circle-horizontal"></i>
+				</button>
+				<MkA v-if="isSearchResult && 'toRoom' in message && message.toRoom != null" :class="$style.contextLink" :to="`/chat/room/${message.toRoomId}`">{{ message.toRoom.name }}</MkA>
+				<MkA v-if="isSearchResult && 'toUser' in message && message.toUser != null && isMe" :class="$style.contextLink" :to="`/chat/user/${message.toUserId}`">@{{ message.toUser.username }}</MkA>
+				<MkTime :class="$style.time" :time="message.createdAt" mode="absolute"/>
+				<i v-if="isMe" class="ti ti-checks" :class="$style.sentIcon"></i>
+			</div>
+		</div>
 		<div :class="$style.bubble">
 			<div v-if="message.reply || message.quote || messageWithReferenceState.replyUnavailable || messageWithReferenceState.quoteUnavailable" :class="$style.references">
 				<MkA v-if="message.reply && message.reply.id !== '0'" :to="`/chat/messages/${message.reply.id}`" :class="$style.reference">
@@ -44,17 +55,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:enableEmojiMenuReaction="true"
 			/>
 			<MkMediaList v-if="message.file" :mediaList="[message.file]" :class="$style.file"/>
-		</div>
-		<div :class="$style.metaRow" @click.stop>
-			<div :class="$style.footer">
-				<button class="_textButton" style="color: currentColor;" @click="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
-				<MkA v-if="isSearchResult && 'toRoom' in message && message.toRoom != null" :to="`/chat/room/${message.toRoomId}`">{{ message.toRoom.name }}</MkA>
-				<MkA v-if="isSearchResult && 'toUser' in message && message.toUser != null && isMe" :to="`/chat/user/${message.toUserId}`">@{{ message.toUser.username }}</MkA>
-			</div>
-			<div :class="$style.timeGroup">
-				<MkTime :class="$style.time" :time="message.createdAt" mode="absolute"/>
-				<i v-if="isMe" class="ti ti-checks"></i>
-			</div>
 		</div>
 		<div class="_gaps_s" style="margin: 8px 0;" @click.stop>
 			<SkUrlPreviewGroup :sourceNodes="parsed" :showAsQuote="!message.fromUser?.rejectQuotes"/>
@@ -294,7 +294,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 .root {
 	position: relative;
 	display: flex;
-	align-items: flex-end;
+	align-items: flex-start;
 	width: 100%;
 	max-width: 100%;
 	min-width: 0;
@@ -309,10 +309,6 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 		.avatar {
 			display: none;
 		}
-
-		.footer {
-			justify-content: flex-end;
-		}
 	}
 }
 
@@ -321,7 +317,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	display: block;
 	width: 36px;
 	height: 36px;
-	margin-bottom: 4px;
+	margin-top: 24px;
 }
 
 .avatarFallback {
@@ -370,9 +366,62 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 }
 
 .header {
-	min-height: 4px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: fit-content;
+	max-width: 100%;
+	min-height: 20px;
+	margin: 0 4px 4px;
 	font-size: 80%;
 	color: light-dark(#168acd, #6ab7f5);
+}
+
+.sender {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.headerMeta {
+	display: inline-flex;
+	flex: 0 1 auto;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	color: light-dark(#7e8b94, #abc4d8);
+	line-height: 1.3;
+	white-space: nowrap;
+	user-select: none;
+}
+
+.menuButton {
+	display: inline-grid;
+	flex: 0 0 auto;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 999px;
+	color: currentColor;
+	font-size: 1em;
+
+	&:hover {
+		background: color(from var(--MI_THEME-fg) srgb r g b / 0.08);
+	}
+}
+
+.contextLink {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: inherit;
+}
+
+.time,
+.sentIcon {
+	flex: 0 0 auto;
 }
 
 .bubble {
@@ -419,10 +468,25 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	}
 }
 
+.isMe .header {
+	align-self: flex-end;
+	flex-direction: row-reverse;
+	justify-content: flex-start;
+	text-align: right;
+}
+
+.isMe .sender {
+	display: none;
+}
+
 .references {
 	display: grid;
 	gap: 6px;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
 	margin-bottom: 8px;
+	overflow: hidden;
 }
 
 .reference {
@@ -431,7 +495,9 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	gap: 6px;
 	align-items: center;
 	width: 100%;
+	max-width: 100%;
 	min-width: 0;
+	box-sizing: border-box;
 	padding: 7px 9px;
 	border-left: solid 3px var(--MI_THEME-accent);
 	border-radius: var(--MI-radius-xs);
@@ -439,6 +505,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	color: var(--MI_THEME-fg);
 	font-size: 85%;
 	text-align: left;
+	overflow: hidden;
 }
 
 .referenceText {
@@ -453,66 +520,6 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	overflow-wrap: break-word;
 	word-break: break-word;
 	max-width: 100%;
-}
-
-.metaRow {
-	display: flex;
-	flex-direction: row-reverse;
-	align-items: center;
-	gap: 6px;
-	width: fit-content;
-	max-width: 100%;
-	min-width: 0;
-	margin: 4px 6px 0;
-	font-size: 75%;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.isMe .metaRow {
-	align-self: flex-end;
-	flex-direction: row;
-	justify-content: flex-end;
-}
-
-.footer {
-	display: inline-flex;
-	flex-direction: row;
-	flex: 1 1 auto;
-	align-items: center;
-	gap: 0.5em;
-	max-width: 100%;
-	min-width: 0;
-	color: inherit;
-	line-height: 1.35;
-}
-
-.footer > :global(*) {
-	min-width: 0;
-	overflow-wrap: anywhere;
-}
-
-.footer > :global(button) {
-	flex: 0 0 auto;
-}
-
-.footer > :global(a) {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.timeGroup {
-	display: inline-flex;
-	flex: 0 0 auto;
-	align-items: center;
-	gap: 3px;
-	white-space: nowrap;
-	color: light-dark(#7e8b94, #abc4d8);
-	user-select: none;
-}
-
-.time {
-	opacity: 1;
 }
 
 .reactions {

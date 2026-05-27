@@ -17,6 +17,7 @@ import { CacheService } from '@/core/CacheService.js';
 import { EmailService } from '@/core/EmailService.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { buildSigninEmail } from './signin-email.js';
 
 @Injectable()
 export class SigninService {
@@ -37,7 +38,7 @@ export class SigninService {
 	}
 
 	@bindThis
-	public signin(request: FastifyRequest, reply: FastifyReply, user: MiLocalUser) {
+	public signin(request: FastifyRequest, reply: FastifyReply, user: MiLocalUser, requestLang?: unknown) {
 		setImmediate(async () => {
 			this.notificationService.createNotification(user.id, 'login', {});
 
@@ -53,9 +54,10 @@ export class SigninService {
 
 			const profile = await this.cacheService.userProfileCache.fetch(user.id);
 			if (profile.email && profile.emailVerified) {
-				trackPromise(this.emailService.sendEmail(profile.email, 'New login / ログインがありました',
-					'There is a new login. If you do not recognize this login, update the security status of your account, including changing your password. / 新しいログインがありました。このログインに心当たりがない場合は、パスワードを変更するなど、アカウントのセキュリティ状態を更新してください。',
-					'There is a new login. If you do not recognize this login, update the security status of your account, including changing your password. / 新しいログインがありました。このログインに心当たりがない場合は、パスワードを変更するなど、アカウントのセキュリティ状態を更新してください。'));
+				const email = buildSigninEmail(profile.lang, requestLang, request.headers['accept-language']);
+				trackPromise(this.emailService.sendEmail(profile.email, email.subject, email.html, email.text, {
+					emailSettingLabel: email.emailSettingLabel,
+				}));
 			}
 		});
 
@@ -67,4 +69,3 @@ export class SigninService {
 		} satisfies Misskey.entities.SigninFlowResponse;
 	}
 }
-

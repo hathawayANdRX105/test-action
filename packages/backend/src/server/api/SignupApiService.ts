@@ -80,6 +80,7 @@ export class SignupApiService {
 				host?: string;
 				invitationCode?: string;
 				emailAddress?: string;
+				lang?: string;
 				reason?: string;
 				'hcaptcha-response'?: string;
 				'g-recaptcha-response'?: string;

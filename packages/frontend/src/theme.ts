@@ -121,6 +121,7 @@ export function applyTheme(theme: Theme, persist = true) {
 	normalizeThemeContrast(_theme);
 
 	const props = compile(_theme);
+	normalizeCompiledThemeContrast(props, colorScheme);
 
 	for (const tag of window.document.head.children) {
 		if (tag.tagName === 'META' && tag.getAttribute('name') === 'theme-color') {
@@ -199,6 +200,76 @@ function normalizeThemeContrast(theme: Theme) {
 	} else if (!navFg.isValid() || tinycolor.readability(navBg, navFg) < minReadableContrast) {
 		theme.props.navFg = navReadableFg;
 	}
+}
+
+function normalizeCompiledThemeContrast(props: Record<string, string>, colorScheme: 'dark' | 'light') {
+	if (colorScheme !== 'dark') return;
+
+	const darkSurfaceFallbacks: Record<string, string> = {
+		bg: '#111111',
+		panel: '#1b1b1b',
+		panelHighlight: '#242424',
+		panelHeaderBg: '#202020',
+		folderHeaderBg: 'rgba(255, 255, 255, 0.05)',
+		folderHeaderHoverBg: 'rgba(255, 255, 255, 0.1)',
+		header: 'rgba(27, 27, 27, 0.7)',
+		navBg: '#171717',
+		pageHeaderBg: '#111111',
+		popup: '#202020',
+		windowHeader: 'rgba(27, 27, 27, 0.85)',
+		htmlThemeColor: '#111111',
+	};
+
+	for (const [key, fallback] of Object.entries(darkSurfaceFallbacks)) {
+		const color = tinycolor(props[key]);
+		if (!color.isValid() || isVisiblyLightOnDark(color, props.bg)) {
+			props[key] = fallback;
+		}
+	}
+
+	const fg = tinycolor(props.fg);
+	if (!fg.isValid() || tinycolor.readability(props.bg, props.fg) < 4.5) {
+		props.fg = '#dee7e4';
+	}
+
+	const pageHeaderFg = tinycolor(props.pageHeaderFg);
+	if (!pageHeaderFg.isValid() || tinycolor.readability(props.pageHeaderBg, props.pageHeaderFg) < 4.5) {
+		props.pageHeaderFg = props.fg;
+	}
+
+	const navFg = tinycolor(props.navFg);
+	if (!navFg.isValid() || tinycolor.readability(props.navBg, props.navFg) < 4.5) {
+		props.navFg = '#ffffff';
+		props.navActive = '#ffffff';
+	}
+
+	const panelHeaderFg = tinycolor(props.panelHeaderFg);
+	if (!panelHeaderFg.isValid() || tinycolor.readability(props.panelHeaderBg, props.panelHeaderFg) < 4.5) {
+		props.panelHeaderFg = props.fg;
+	}
+}
+
+function isVisiblyLightOnDark(color: tinycolor.Instance, darkBg: string): boolean {
+	const alpha = color.getAlpha();
+
+	if (alpha >= 0.65) {
+		return color.isLight();
+	}
+
+	const bg = tinycolor(darkBg);
+	if (!bg.isValid()) {
+		return color.isLight() && alpha >= 0.2;
+	}
+
+	const fgRgb = color.toRgb();
+	const bgRgb = bg.toRgb();
+	const mixed = tinycolor({
+		r: Math.round(fgRgb.r * alpha + bgRgb.r * (1 - alpha)),
+		g: Math.round(fgRgb.g * alpha + bgRgb.g * (1 - alpha)),
+		b: Math.round(fgRgb.b * alpha + bgRgb.b * (1 - alpha)),
+	});
+
+	return mixed.isLight();
 }
 
 export function compile(theme: Theme): Record<string, string> {

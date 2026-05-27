@@ -15,20 +15,38 @@ SPDX-License-Identifier: AGPL-3.0-only
 		v-model="searchQuery"
 		:placeholder="i18n.ts._chat.searchMessages"
 		type="search"
+		:disabled="searchFetching"
+		@enter="search"
 	>
 		<template #prefix><i class="ti ti-search"></i></template>
 	</MkInput>
 
-	<MkButton v-if="searchQuery.length > 0" primary rounded @click="search">{{ i18n.ts.search }}</MkButton>
+	<MkButton v-if="searchQuery.length > 0" primary rounded :wait="searchFetching" @click="search">{{ i18n.ts.search }}</MkButton>
 
 	<MkFoldableSection v-if="searched">
 		<template #header>{{ i18n.ts.searchResult }}</template>
 
-		<div class="_gaps_s">
-			<div v-for="message in searchResults" :key="message.id" :class="$style.searchResultItem">
+		<MkLoading v-if="searchFetching"/>
+		<MkError v-else-if="searchError" @retry="search"/>
+		<div v-else-if="searchResults.length > 0" class="_gaps_s">
+			<div
+				v-for="message in searchResults"
+				:key="message.id"
+				role="button"
+				tabindex="0"
+				:class="$style.searchResultItem"
+				@click="openContext(message)"
+				@keydown.enter.prevent="openContext(message)"
+				@keydown.space.prevent="openContext(message)"
+			>
 				<XMessage :message="message" :isSearchResult="true"/>
+				<button class="_button" :class="$style.openContext" @click.stop="openContext(message)">
+					<i class="ti ti-messages"></i>
+					<span>{{ i18n.ts.show }}</span>
+				</button>
 			</div>
 		</div>
+		<MkResult v-else type="notFound"/>
 	</MkFoldableSection>
 
 	<MkFoldableSection>
@@ -55,6 +73,7 @@ import MkInput from '@/components/MkInput.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkChatHistories from '@/components/MkChatHistories.vue';
+import { chatMessageContextPath } from './chat-navigation.js';
 
 const $i = ensureSignin();
 
@@ -62,6 +81,8 @@ const router = useRouter();
 
 const searchQuery = ref('');
 const searched = ref(false);
+const searchFetching = ref(false);
+const searchError = ref(false);
 const searchResults = ref<Misskey.entities.ChatMessage[]>([]);
 
 function start(ev: MouseEvent) {
@@ -131,12 +152,30 @@ async function createRoom() {
 }
 
 async function search() {
-	const res = await misskeyApi('chat/messages/search', {
-		query: searchQuery.value,
-	});
+	const query = searchQuery.value.trim();
+	if (query.length === 0 || searchFetching.value) return;
 
-	searchResults.value = res;
 	searched.value = true;
+	searchFetching.value = true;
+	searchError.value = false;
+
+	try {
+		const res = await misskeyApi('chat/messages/search', {
+			query,
+		});
+
+		searchResults.value = res;
+	} catch (err) {
+		console.error('Failed to search chat messages:', err);
+		searchResults.value = [];
+		searchError.value = true;
+	} finally {
+		searchFetching.value = false;
+	}
+}
+
+function openContext(message: Misskey.entities.ChatMessage) {
+	router.push(chatMessageContextPath(message));
 }
 
 onMounted(() => {
@@ -150,8 +189,29 @@ onMounted(() => {
 }
 
 .searchResultItem {
+	cursor: pointer;
 	padding: 12px;
 	border: solid 1px var(--MI_THEME-divider);
 	border-radius: 12px;
+	background: var(--MI_THEME-panel);
+	outline: none;
+
+	&:hover,
+	&:focus-visible {
+		background: var(--MI_THEME-buttonHoverBg);
+	}
+
+	&:focus-visible {
+		box-shadow: 0 0 0 3px var(--MI_THEME-focus);
+	}
+}
+
+.openContext {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+	color: var(--MI_THEME-accent);
+	font-size: 85%;
 }
 </style>

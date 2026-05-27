@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div ref="el" :class="$style.tabs" @wheel="onTabWheel">
+<div ref="el" :class="$style.tabs" data-page-header-tabs @wheel="onTabWheel">
 	<div :class="$style.tabsInner">
 		<button
 			v-for="t in tabs" :ref="(el) => tabRefs[t.key] = (el as HTMLElement)" v-tooltip.noDelay="t.title"
@@ -194,6 +194,7 @@ onUnmounted(() => {
 	overflow-x: auto;
 	overflow-y: hidden;
 	scrollbar-width: none;
+	background: var(--page-header-tabs-bg, transparent);
 	color: var(--page-header-tab-fg, inherit);
 
 	&::-webkit-scrollbar {
@@ -203,16 +204,22 @@ onUnmounted(() => {
 
 :global(html[data-color-scheme=dark]) {
 	.tabs {
+		--page-header-tabs-bg: color-mix(in srgb, var(--MI_THEME-bg) 94%, #000);
 		--page-header-tab-fg: #fff;
 	}
 }
 
 :global(html[data-color-scheme=dark] [class*="MkPageHeader-tabs-tabs-"]),
+:global(html[data-color-scheme=dark] [class*="MkPageHeader-tabs-tabsInner-"]),
 :global(html[data-color-scheme=dark] [class*="MkPageHeader-tabs-tab-"]),
 :global(html[data-color-scheme=dark] [class*="MkPageHeader-tabs-tabInner-"]),
 :global(html[data-color-scheme=dark] [class*="MkPageHeader-tabs-tabIcon-"]),
 :global(html[data-color-scheme=dark] [class*="MkPageHeader-tabs-tabTitle-"]) {
 	color: #fff !important;
+}
+
+:global(html[data-color-scheme=dark] [class*="MkPageHeader-tabs-tabs-"]) {
+	background: color-mix(in srgb, var(--MI_THEME-bg) 94%, #000) !important;
 }
 
 .tabsInner {

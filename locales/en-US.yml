@@ -1479,6 +1479,7 @@ _preferencesProfile:
   profileName: "Profile name"
   profileNameDescription: "Set a name that identifies this device."
   profileNameDescription2: "Example: \"Main PC\", \"Smartphone\""
+  manageProfiles: "Manage profiles"
 _preferencesBackup:
   autoBackup: "Auto backup"
   restoreFromBackup: "Restore from backup"
@@ -2060,6 +2061,10 @@ _gallery:
   like: "Like"
   unlike: "Remove like"
 _email:
+  emailSetting: "Email settings"
+  _login:
+    title: "New login"
+    body: "There is a new login. If you do not recognize this login, update the security status of your account, including changing your password."
   _follow:
     title: "You've got a new follower"
   _receiveFollowRequest:

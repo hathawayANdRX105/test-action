@@ -194,6 +194,15 @@ function menuEdit() {
 :global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemText-"]),
 :global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-active-"][class*="navbar-item-"]) {
 	color: #fff !important;
+	-webkit-text-fill-color: #fff !important;
+	opacity: 1 !important;
+}
+
+:global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemIcon-"]::before),
+:global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemIcon-"]::after),
+:global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemIcon-"] *) {
+	color: #fff !important;
+	-webkit-text-fill-color: #fff !important;
 }
 
 .body {
@@ -515,6 +524,14 @@ function menuEdit() {
 		position: relative;
 		width: 32px;
 		margin-right: 8px;
+		color: inherit !important;
+		-webkit-text-fill-color: currentColor !important;
+
+		&::before,
+		&::after {
+			color: inherit !important;
+			-webkit-text-fill-color: currentColor !important;
+		}
 	}
 
 	.itemIndicator {

@@ -78,9 +78,14 @@ describe('ChatService large room fast path', () => {
 			update: jest.fn(function () { return this; }),
 			set: jest.fn(function () { return this; }),
 			where: jest.fn(function () { return this; }),
+			orWhere: jest.fn(function () { return this; }),
 			andWhere: jest.fn(function () { return this; }),
+			leftJoinAndSelect: jest.fn(function () { return this; }),
+			orderBy: jest.fn(function () { return this; }),
+			take: jest.fn(function () { return this; }),
 			setParameter: jest.fn(function () { return this; }),
 			execute: jest.fn(async () => ({ affected: 1 })),
+			getMany: jest.fn(async () => []),
 		};
 		const chatMessagesRepository = {
 			insertOne: jest.fn(async (message) => ({ ...message, reactions: [] })),
@@ -188,6 +193,19 @@ describe('ChatService large room fast path', () => {
 			globalEventService,
 			pushNotificationService,
 			timeService,
+		};
+	}
+
+	function createMessageQueryBuilder(rows: unknown[]) {
+		return {
+			where: jest.fn(function () { return this; }),
+			orWhere: jest.fn(function () { return this; }),
+			andWhere: jest.fn(function () { return this; }),
+			leftJoinAndSelect: jest.fn(function () { return this; }),
+			orderBy: jest.fn(function () { return this; }),
+			take: jest.fn(function () { return this; }),
+			setParameter: jest.fn(function () { return this; }),
+			getMany: jest.fn(async () => rows),
 		};
 	}
 
@@ -390,5 +408,62 @@ describe('ChatService large room fast path', () => {
 
 		expect(ctx.globalEventService.publishChatUserStream).not.toHaveBeenCalled();
 		expect(ctx.globalEventService.publishChatRoomStream).not.toHaveBeenCalled();
+	});
+
+	test('message context returns a room window around the target message', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		const beforeRows = [
+			{ id: 'm09', toRoomId: 'room' },
+			{ id: 'm08', toRoomId: 'room' },
+			{ id: 'm07', toRoomId: 'room' },
+		];
+		const afterRows = [
+			{ id: 'm11', toRoomId: 'room' },
+			{ id: 'm12', toRoomId: 'room' },
+			{ id: 'm13', toRoomId: 'room' },
+		];
+		const beforeQuery = createMessageQueryBuilder(beforeRows);
+		const afterQuery = createMessageQueryBuilder(afterRows);
+		ctx.chatMessagesRepository.createQueryBuilder
+			.mockReturnValueOnce(beforeQuery)
+			.mockReturnValueOnce(afterQuery);
+
+		const target = { id: 'm10', fromUserId: 'sender', toUserId: null, toRoomId: 'room' };
+		const context = await ctx.service.messageContext(target as never, 2, 2);
+
+		expect(context).toEqual({
+			before: beforeRows.slice(0, 2),
+			target,
+			after: [afterRows[1], afterRows[0]],
+			hasMoreBefore: true,
+			hasMoreAfter: true,
+		});
+		expect(beforeQuery.andWhere).toHaveBeenCalledWith('message.toRoomId = :roomId', { roomId: 'room' });
+		expect(beforeQuery.andWhere).toHaveBeenCalledWith('message.id < :messageId', { messageId: 'm10' });
+		expect(beforeQuery.orderBy).toHaveBeenCalledWith('message.id', 'DESC');
+		expect(beforeQuery.take).toHaveBeenCalledWith(3);
+		expect(afterQuery.andWhere).toHaveBeenCalledWith('message.id > :messageId', { messageId: 'm10' });
+		expect(afterQuery.orderBy).toHaveBeenCalledWith('message.id', 'ASC');
+	});
+
+	test('message context scopes user chats to both participants', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		const beforeQuery = createMessageQueryBuilder([]);
+		const afterQuery = createMessageQueryBuilder([]);
+		ctx.chatMessagesRepository.createQueryBuilder
+			.mockReturnValueOnce(beforeQuery)
+			.mockReturnValueOnce(afterQuery);
+
+		await ctx.service.messageContext({
+			id: 'm10',
+			fromUserId: 'sender',
+			toUserId: 'receiver',
+			toRoomId: null,
+		} as never, 10, 10);
+
+		expect(beforeQuery.setParameter).toHaveBeenCalledWith('fromUserId', 'sender');
+		expect(beforeQuery.setParameter).toHaveBeenCalledWith('toUserId', 'receiver');
+		expect(afterQuery.setParameter).toHaveBeenCalledWith('fromUserId', 'sender');
+		expect(afterQuery.setParameter).toHaveBeenCalledWith('toUserId', 'receiver');
 	});
 });

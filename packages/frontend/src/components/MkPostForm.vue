@@ -146,6 +146,7 @@ import { mfmFunctionPicker } from '@/utility/mfm-function-picker.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { DI } from '@/di.js';
+import { appendMissingHashtags, extractHashtagsFromText } from '@/utility/post-form-hashtags.js';
 
 const $i = ensureSignin();
 
@@ -941,18 +942,7 @@ async function post(ev?: MouseEvent) {
 	};
 
 	if (withHashtags.value && hashtags.value && hashtags.value.trim() !== '') {
-		const hashtags_ = hashtags.value.trim().split(' ').map(x => x.startsWith('#') ? x : '#' + x).join(' ');
-		if (!postData.text) {
-			postData.text = hashtags_;
-		} else {
-			const postTextLines = postData.text.split('\n');
-			if (postTextLines[postTextLines.length - 1].trim() === '') {
-				postTextLines[postTextLines.length - 1] += hashtags_;
-			} else {
-				postTextLines[postTextLines.length - 1] += ' ' + hashtags_;
-			}
-			postData.text = postTextLines.join('\n');
-		}
+		postData.text = appendMissingHashtags(postData.text, hashtags.value);
 	}
 
 	// plugin
@@ -994,7 +984,7 @@ async function post(ev?: MouseEvent) {
 			deleteDraft();
 			emit('posted');
 			if (postData.text && postData.text !== '') {
-				const hashtags_ = mfm.parse(postData.text).map(x => x.type === 'hashtag' && x.props.hashtag).filter(x => x) as string[];
+				const hashtags_ = extractHashtagsFromText(postData.text);
 				const history = JSON.parse(miLocalStorage.getItem('hashtags') ?? '[]') as string[];
 				miLocalStorage.setItem('hashtags', JSON.stringify(unique(hashtags_.concat(history))));
 			}

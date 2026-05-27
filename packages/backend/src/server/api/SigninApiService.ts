@@ -83,6 +83,7 @@ export class SigninApiService {
 				username: string;
 				password?: string;
 				token?: string;
+				lang?: string;
 				credential?: AuthenticationResponseJSON;
 				'hcaptcha-response'?: string;
 				'g-recaptcha-response'?: string;
@@ -235,7 +236,7 @@ export class SigninApiService {
 					await this.internalEventService.emit('userUpdated', { id: user.id });
 				}
 
-				return this.signinService.signin(request, reply, user);
+				return this.signinService.signin(request, reply, user, body.lang);
 			} else {
 				return await fail(403, {
 					id: '932c904e-9460-45b7-9ce6-7ed33be7eb2c',
@@ -263,7 +264,7 @@ export class SigninApiService {
 				await this.internalEventService.emit('userUpdated', { id: user.id });
 			}
 
-			return this.signinService.signin(request, reply, user);
+			return this.signinService.signin(request, reply, user, body.lang);
 		} else if (body.credential) {
 			if (!same && !profile.usePasswordLessLogin) {
 				return await fail(403, {
@@ -278,7 +279,7 @@ export class SigninApiService {
 					await this.usersRepository.update(user.id, { approved: true });
 					await this.internalEventService.emit('userUpdated', { id: user.id });
 				}
-				return this.signinService.signin(request, reply, user);
+				return this.signinService.signin(request, reply, user, body.lang);
 			} else {
 				return await fail(403, {
 					id: '93b86c4b-72f9-40eb-9815-798928603d1e',

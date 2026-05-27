@@ -507,6 +507,28 @@ describe('ユーザー', () => {
 		assert.deepStrictEqual(response, expected, inspect(parameters()));
 	});
 
+	test('キャッシュ済みのプロフィール項目を書き換えることができる', async () => {
+		await successfulApiCall({ endpoint: 'i', parameters: {}, user: alice });
+
+		const parameters = {
+			description: 'updated profile cache regression',
+			mutedWords: [['cache', 'mute']],
+			hardMutedWords: ['/hard-cache-mute/i'],
+			mutedInstances: ['example.invalid'],
+		};
+		const response = await successfulApiCall({ endpoint: 'i/update', parameters, user: alice });
+		assert.strictEqual(response.description, parameters.description);
+		assert.deepStrictEqual(response.mutedWords, parameters.mutedWords);
+		assert.deepStrictEqual(response.hardMutedWords, parameters.hardMutedWords);
+		assert.deepStrictEqual(response.mutedInstances, parameters.mutedInstances);
+
+		const refreshed = await successfulApiCall({ endpoint: 'i', parameters: {}, user: alice });
+		assert.strictEqual(refreshed.description, parameters.description);
+		assert.deepStrictEqual(refreshed.mutedWords, parameters.mutedWords);
+		assert.deepStrictEqual(refreshed.hardMutedWords, parameters.hardMutedWords);
+		assert.deepStrictEqual(refreshed.mutedInstances, parameters.mutedInstances);
+	});
+
 	test('を書き換えることができる(Avatar)', async () => {
 		const aliceFile = (await uploadFile(alice)).body;
 		const parameters = { avatarId: aliceFile!.id };

@@ -623,8 +623,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			profileUpdates.verifiedLinks = await verifyFieldLinks(newFields, profileUrls, this.httpRequestService);
 			await this.userProfilesRepository.update(user.id, profileUpdates);
 
-			// Internal event purges the cache, which we immediately refill
+			// Internal events purge the caches, which we immediately refill.
 			await this.internalEventService.emit('userUpdated', { id: user.id });
+			if (Object.keys(profileUpdates).length > 0) {
+				await this.internalEventService.emit('updateUserProfile', {
+					userId: user.id,
+					keys: Object.keys(profileUpdates) as (keyof MiUserProfile)[],
+				});
+			}
 			const updatedUser = await this.cacheService.findLocalUserById(user.id);
 			const updatedProfile = await this.cacheService.userProfileCache.fetch(user.id);
 
