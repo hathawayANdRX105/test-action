@@ -54,10 +54,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.room) {
 				const roomIds = history.map(m => m.toRoomId!);
-				const readStateMap = await this.chatService.getRoomReadStateMap(me.id, roomIds);
+				const [readStateMap, mentionStateMap] = await Promise.all([
+					this.chatService.getRoomReadStateMap(me.id, roomIds),
+					this.chatService.getRoomMentionStateMap(me.id, roomIds),
+				]);
 
 				for (const message of packedMessages) {
 					message.isRead = readStateMap[message.toRoomId!] ?? false;
+					message.hasUnreadMention = mentionStateMap[message.toRoomId!] ?? false;
 				}
 			} else {
 				const otherIds = history.map(m => m.fromUserId === me.id ? m.toUserId! : m.fromUserId!);

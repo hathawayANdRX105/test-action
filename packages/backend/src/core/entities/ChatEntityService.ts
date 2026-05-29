@@ -4,6 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import * as mfm from 'mfm-js';
 import { DI } from '@/di-symbols.js';
 import type { MiUser, ChatMessagesRepository, MiChatMessage, ChatRoomsRepository, MiChatRoom, MiChatRoomInvitation, ChatRoomInvitationsRepository, MiChatRoomMembership, ChatRoomMembershipsRepository } from '@/models/_.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
@@ -16,6 +17,10 @@ import type { MiMeta } from '@/models/Meta.js';
 import { UserEntityService } from './UserEntityService.js';
 import { DriveFileEntityService } from './DriveFileEntityService.js';
 import { In } from 'typeorm';
+import { MfmService } from '@/core/MfmService.js';
+import { RemoteUserResolveService } from '@/core/RemoteUserResolveService.js';
+import { isLocalUser } from '@/models/User.js';
+import { promiseMap } from '@/misc/promise-map.js';
 
 @Injectable()
 export class ChatEntityService {
@@ -39,7 +44,36 @@ export class ChatEntityService {
 		private driveFileEntityService: DriveFileEntityService,
 		private idService: IdService,
 		private roleService: RoleService,
+		private mfmService: MfmService,
+		private remoteUserResolveService: RemoteUserResolveService,
 	) {
+	}
+
+	@bindThis
+	private async extractMessageMentionedUserIds(text: string | null | undefined): Promise<MiUser['id'][]> {
+		if (text == null || !text.includes('@')) return [];
+
+		let nodes: mfm.MfmNode[];
+		try {
+			nodes = mfm.parse(text);
+		} catch {
+			return [];
+		}
+
+		const mentions = this.mfmService.extractMentions(nodes);
+		if (mentions.length === 0) return [];
+
+		const mentionedUsers = await promiseMap(
+			mentions,
+			async mention => await this.remoteUserResolveService.resolveUser(mention.username, mention.host).catch(() => null),
+			{ limiter: 2 },
+		);
+
+		return Array.from(new Map(
+			mentionedUsers
+				.filter(user => user != null && isLocalUser(user))
+				.map(user => [user.id, user.id]),
+		).values());
 	}
 
 	@bindThis
@@ -88,6 +122,7 @@ export class ChatEntityService {
 		const packedRooms = options?._hint_?.packedRooms;
 
 		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneByOrFail({ id: src });
+		const mentionedUserIds = message.toRoomId ? await this.extractMessageMentionedUserIds(message.text) : [];
 
 		const reactions: { user: Packed<'UserLite'>; reaction: string; }[] = [];
 
@@ -115,6 +150,8 @@ export class ChatEntityService {
 			reply: message.replyId ? await this.packMessageReference(message.reply ?? message.replyId, { _hint_: { packedUsers } }) : null,
 			quoteId: message.quoteId,
 			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId, { _hint_: { packedUsers } }) : null,
+			mentionedUserIds: message.toRoomId ? mentionedUserIds : undefined,
+			hasMentionForMe: message.toRoomId ? (me != null && message.fromUserId !== me.id && mentionedUserIds.includes(me.id)) : undefined,
 			reactions,
 		};
 	}
@@ -227,6 +264,7 @@ export class ChatEntityService {
 		const packedUsers = options?._hint_?.packedUsers;
 
 		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneByOrFail({ id: src });
+		const mentionedUserIds = await this.extractMessageMentionedUserIds(message.text);
 
 		const reactions: { user: Packed<'UserLite'>; reaction: string; }[] = [];
 
@@ -251,6 +289,7 @@ export class ChatEntityService {
 			reply: message.replyId ? await this.packMessageReference(message.reply ?? message.replyId) : null,
 			quoteId: message.quoteId,
 			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId) : null,
+			mentionedUserIds,
 			reactions,
 		};
 	}

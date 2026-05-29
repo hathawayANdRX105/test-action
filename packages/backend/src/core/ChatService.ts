@@ -4,8 +4,9 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import * as mfm from 'mfm-js';
 import * as Redis from 'ioredis';
-import { Brackets } from 'typeorm';
+import { Brackets, In } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
 import { QueueService } from '@/core/QueueService.js';
@@ -34,6 +35,9 @@ import { CacheService } from '@/core/CacheService.js';
 import { isLocalUser } from '@/models/User.js';
 import { MiMeta } from '@/models/Meta.js';
 import { AppLockService } from '@/core/AppLockService.js';
+import { MfmService } from '@/core/MfmService.js';
+import { RemoteUserResolveService } from '@/core/RemoteUserResolveService.js';
+import { promiseMap } from '@/misc/promise-map.js';
 
 export const MIN_CHAT_ROOM_MEMBER_LIMIT = 1;
 export const MAX_CHAT_ROOM_MEMBER_LIMIT = 10000;
@@ -114,7 +118,70 @@ export class ChatService {
 		private readonly timeService: TimeService,
 		private readonly cacheService: CacheService,
 		private readonly appLockService: AppLockService,
+		private readonly mfmService: MfmService,
+		private readonly remoteUserResolveService: RemoteUserResolveService,
 	) {
+	}
+
+	@bindThis
+	private async extractMentionedLocalUserIds(text: string | null, selfHost: MiUser['host']): Promise<MiUser['id'][]> {
+		if (text == null || !text.includes('@')) return [];
+
+		let nodes: mfm.MfmNode[];
+		try {
+			nodes = mfm.parse(text);
+		} catch {
+			return [];
+		}
+
+		const mentions = this.mfmService.extractMentions(nodes, selfHost);
+		if (mentions.length === 0) return [];
+
+		const mentionedUsers = await promiseMap(
+			mentions,
+			async mention => await this.remoteUserResolveService.resolveUser(mention.username, mention.host).catch(() => null),
+			{ limiter: 2 },
+		);
+
+		return Array.from(new Map(
+			mentionedUsers
+				.filter(user => user != null && isLocalUser(user))
+				.map(user => [user.id, user.id]),
+		).values());
+	}
+
+	@bindThis
+	private async filterRoomMentionedUserIds(
+		room: MiChatRoom,
+		senderId: MiUser['id'],
+		mentionedUserIds: MiUser['id'][],
+	): Promise<MiUser['id'][]> {
+		const targetUserIds = Array.from(new Set(mentionedUserIds)).filter(userId => userId !== senderId);
+		if (targetUserIds.length === 0) return [];
+
+		const memberUserIds = new Set<MiUser['id']>();
+		if (targetUserIds.includes(room.ownerId)) {
+			memberUserIds.add(room.ownerId);
+		}
+
+		const membershipTargetUserIds = targetUserIds.filter(userId => userId !== room.ownerId);
+		if (membershipTargetUserIds.length > 0) {
+			const memberships = await this.chatRoomMembershipsRepository.find({
+				select: {
+					userId: true,
+				},
+				where: {
+					roomId: room.id,
+					userId: In(membershipTargetUserIds),
+				},
+			});
+
+			for (const membership of memberships) {
+				memberUserIds.add(membership.userId);
+			}
+		}
+
+		return targetUserIds.filter(userId => memberUserIds.has(userId));
 	}
 
 	@bindThis
@@ -295,6 +362,12 @@ export class ChatService {
 		if (text == null && params.file == null) {
 			throw new Error('content required');
 		}
+		const mentionedUserIds = await this.filterRoomMentionedUserIds(
+			toRoom,
+			fromUser.id,
+			await this.extractMentionedLocalUserIds(text, fromUser.host),
+		);
+		const mentionedUserIdSet = new Set(mentionedUserIds);
 
 		const message = {
 			id: this.idService.gen(),
@@ -315,7 +388,41 @@ export class ChatService {
 		this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
 		if (isLargeRoom) {
-			await this.redisClient.set(`latestRoomChatMessage:${toRoom.id}`, message.id, 'EX', 60 * 60 * 24 * 30);
+			const redisPipeline = this.redisClient.pipeline();
+			redisPipeline.set(`latestRoomChatMessage:${toRoom.id}`, message.id, 'EX', 60 * 60 * 24 * 30);
+			for (const userId of mentionedUserIds) {
+				redisPipeline.set(`newRoomChatMentionExists:${userId}:${toRoom.id}`, message.id);
+				redisPipeline.sadd(`newChatMessagesExists:${userId}`, `room:${toRoom.id}`);
+			}
+			await redisPipeline.exec();
+
+			if (mentionedUserIds.length > 0) {
+				this.timeService.startTimer(async () => {
+					const redisPipeline = this.redisClient.pipeline();
+					for (const userId of mentionedUserIds) {
+						redisPipeline.get(`newRoomChatMentionExists:${userId}:${toRoom.id}`);
+					}
+					const markers = await redisPipeline.exec();
+					if (markers == null) throw new Error('redis error');
+
+					if (markers.every(marker => marker[1] == null)) return;
+
+					const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted);
+
+					for (let i = 0; i < mentionedUserIds.length; i++) {
+						const marker = markers[i][1];
+						if (marker == null) continue;
+
+						const messageForRecipient = {
+							...packedMessageForTo,
+							hasMentionForMe: true,
+						};
+						this.globalEventService.publishMainStream(mentionedUserIds[i], 'newChatMessage', messageForRecipient);
+						this.pushNotificationService.pushNotification(mentionedUserIds[i], 'newChatMessage', messageForRecipient);
+					}
+				}, 3000);
+			}
+
 			return packedMessage;
 		}
 
@@ -330,10 +437,14 @@ export class ChatService {
 
 		const redisPipeline = this.redisClient.pipeline();
 		for (const membership of membershipsOtherThanMe) {
-			if (membership.isMuted) continue;
+			const hasMention = mentionedUserIdSet.has(membership.userId);
+			if (membership.isMuted && !hasMention) continue;
 
 			redisPipeline.set(`newRoomChatMessageExists:${membership.userId}:${toRoom.id}`, message.id);
 			redisPipeline.sadd(`newChatMessagesExists:${membership.userId}`, `room:${toRoom.id}`);
+			if (hasMention) {
+				redisPipeline.set(`newRoomChatMentionExists:${membership.userId}:${toRoom.id}`, message.id);
+			}
 		}
 		redisPipeline.exec();
 
@@ -354,8 +465,13 @@ export class ChatService {
 				const marker = markers[i][1];
 				if (marker == null) continue;
 
-				this.globalEventService.publishMainStream(membershipsOtherThanMe[i].userId, 'newChatMessage', packedMessageForTo);
-				this.pushNotificationService.pushNotification(membershipsOtherThanMe[i].userId, 'newChatMessage', packedMessageForTo);
+				const userId = membershipsOtherThanMe[i].userId;
+				const messageForRecipient = {
+					...packedMessageForTo,
+					hasMentionForMe: mentionedUserIdSet.has(userId),
+				};
+				this.globalEventService.publishMainStream(userId, 'newChatMessage', messageForRecipient);
+				this.pushNotificationService.pushNotification(userId, 'newChatMessage', messageForRecipient);
 			}
 		}, 3000);
 
@@ -381,6 +497,7 @@ export class ChatService {
 		const latestRoomMessageId = await this.redisClient.get(`latestRoomChatMessage:${roomId}`);
 		const redisPipeline = this.redisClient.pipeline();
 		redisPipeline.del(`newRoomChatMessageExists:${readerId}:${roomId}`);
+		redisPipeline.del(`newRoomChatMentionExists:${readerId}:${roomId}`);
 		redisPipeline.srem(`newChatMessagesExists:${readerId}`, `room:${roomId}`);
 		if (latestRoomMessageId != null) {
 			redisPipeline.set(`readRoomChatMessage:${readerId}:${roomId}`, latestRoomMessageId, 'EX', 60 * 60 * 24 * 30);
@@ -663,6 +780,27 @@ export class ChatService {
 	}
 
 	@bindThis
+	public async getRoomMentionStateMap(userId: MiUser['id'], roomIds: MiChatRoom['id'][]) {
+		const mentionStateMap: Record<MiChatRoom['id'], boolean> = {};
+		if (roomIds.length === 0) return mentionStateMap;
+
+		const redisPipeline = this.redisClient.pipeline();
+
+		for (const roomId of roomIds) {
+			redisPipeline.get(`newRoomChatMentionExists:${userId}:${roomId}`);
+		}
+
+		const markers = await redisPipeline.exec();
+		if (markers == null) throw new Error('redis error');
+
+		for (let i = 0; i < roomIds.length; i++) {
+			mentionStateMap[roomIds[i]] = markers[i][1] != null;
+		}
+
+		return mentionStateMap;
+	}
+
+	@bindThis
 	public async hasUnreadMessages(userId: MiUser['id']) {
 		const card = await this.redisClient.scard(`newChatMessagesExists:${userId}`);
 		return card > 0;
@@ -758,9 +896,11 @@ export class ChatService {
 		// Erase any message notifications for this room
 		const redisPipeline = this.redisClient.pipeline();
 		const memberships = await this.chatRoomMembershipsRepository.findBy({ roomId: room.id });
-		for (const membership of memberships) {
-			redisPipeline.del(`newRoomChatMessageExists:${membership.userId}:${room.id}`);
-			redisPipeline.srem(`newChatMessagesExists:${membership.userId}`, `room:${room.id}`);
+		const memberUserIds = Array.from(new Set([...memberships.map(membership => membership.userId), room.ownerId]));
+		for (const userId of memberUserIds) {
+			redisPipeline.del(`newRoomChatMessageExists:${userId}:${room.id}`);
+			redisPipeline.del(`newRoomChatMentionExists:${userId}:${room.id}`);
+			redisPipeline.srem(`newChatMessagesExists:${userId}`, `room:${room.id}`);
 		}
 		await redisPipeline.exec();
 

@@ -77,6 +77,22 @@ export const packedChatMessageSchema = {
 			type: 'boolean',
 			optional: true, nullable: false,
 		},
+		hasUnreadMention: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		mentionedUserIds: {
+			type: 'array',
+			optional: true, nullable: false,
+			items: {
+				type: 'string',
+				optional: false, nullable: false,
+			},
+		},
+		hasMentionForMe: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
 		reactions: {
 			type: 'array',
 			optional: false, nullable: false,
@@ -158,6 +174,18 @@ export const packedChatMessageLiteSchema = {
 			type: 'object',
 			optional: true, nullable: true,
 			ref: 'ChatMessageReference',
+		},
+		mentionedUserIds: {
+			type: 'array',
+			optional: true, nullable: false,
+			items: {
+				type: 'string',
+				optional: false, nullable: false,
+			},
+		},
+		hasMentionForMe: {
+			type: 'boolean',
+			optional: true, nullable: false,
 		},
 		reactions: {
 			type: 'array',
@@ -368,6 +396,14 @@ export const packedChatMessageLiteForRoomSchema = {
 			type: 'object',
 			optional: true, nullable: true,
 			ref: 'ChatMessageReference',
+		},
+		mentionedUserIds: {
+			type: 'array',
+			optional: true, nullable: false,
+			items: {
+				type: 'string',
+				optional: false, nullable: false,
+			},
 		},
 		reactions: {
 			type: 'array',

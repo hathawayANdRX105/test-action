@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkA
 		v-for="item in history"
 		:key="item.id"
-		:class="[$style.message, { [$style.isMe]: item.isMe, [$style.isRead]: item.message.isRead }]"
+		:class="[$style.message, { [$style.isMe]: item.isMe, [$style.isRead]: item.message.isRead, [$style.hasUnreadMention]: item.hasUnreadMention }]"
 		class="_panel"
 		:to="item.message.toRoomId ? `/chat/room/${item.message.toRoomId}` : `/chat/user/${item.other!.id}`"
 	>
@@ -17,6 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.messageBody">
 			<header v-if="item.message.toRoom" :class="$style.messageHeader">
 				<span :class="$style.messageHeaderName"><i class="ti ti-users"></i> {{ item.message.toRoom.name }}</span>
+				<span v-if="item.hasUnreadMention" :class="$style.mentionBadge">@</span>
 				<MkTime :time="item.message.createdAt" :class="$style.messageHeaderTime"/>
 			</header>
 			<header v-else :class="$style.messageHeader">
@@ -42,11 +43,16 @@ import { ensureSignin } from '@/i.js';
 
 const $i = ensureSignin();
 
+type ChatMessageWithMentionState = Misskey.entities.ChatMessage & {
+	hasUnreadMention?: boolean;
+};
+
 const history = ref<{
 	id: string;
-	message: Misskey.entities.ChatMessage;
+	message: ChatMessageWithMentionState;
 	other: Misskey.entities.ChatMessage['fromUser'] | Misskey.entities.ChatMessage['toUser'] | null;
 	isMe: boolean;
+	hasUnreadMention: boolean;
 }[]>([]);
 
 const initializing = ref(true);
@@ -66,9 +72,10 @@ async function fetchHistory() {
 		.toSorted((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 		.map(m => ({
 			id: m.id,
-			message: m,
+			message: m as ChatMessageWithMentionState,
 			other: (!('room' in m) || m.room == null) ? (m.fromUserId === $i.id ? m.toUser : m.fromUser) : null,
 			isMe: m.fromUserId === $i.id,
+			hasUnreadMention: m.toRoomId != null && (m as ChatMessageWithMentionState).hasUnreadMention === true,
 		}));
 
 	fetching.value = false;
@@ -122,9 +129,20 @@ onMounted(() => {
 		text-decoration: none;
 	}
 
+	&.hasUnreadMention {
+		border-color: color(from var(--MI_THEME-accent) srgb r g b / 0.45);
+		background: color(from var(--MI_THEME-accent) srgb r g b / 0.08);
+		box-shadow: inset 3px 0 0 var(--MI_THEME-accent);
+		opacity: 1;
+	}
+
 	&.isRead,
 	&.isMe {
 		opacity: 0.8;
+	}
+
+	&.hasUnreadMention:not(.isMe) {
+		opacity: 1;
 	}
 
 	&:not(.isMe):not(.isRead) {
@@ -138,6 +156,10 @@ onMounted(() => {
 			border-radius: 100%;
 			background-color: var(--MI_THEME-accent);
 		}
+	}
+
+	&.hasUnreadMention::before {
+		display: none;
 	}
 }
 
@@ -196,6 +218,21 @@ onMounted(() => {
 	font-size: 1em;
 	font-weight: bold;
 	color: inherit;
+}
+
+.mentionBadge {
+	display: inline-grid;
+	flex: 0 0 auto;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	margin-left: 8px;
+	border-radius: var(--MI-radius-ellipse);
+	background: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent);
+	font-size: 0.9em;
+	font-weight: 800;
+	line-height: 1;
 }
 
 .messageHeaderUsername {
