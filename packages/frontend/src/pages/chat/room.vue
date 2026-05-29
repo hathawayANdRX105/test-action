@@ -81,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					tag="div" :class="$style.messageList"
 				>
 					<div v-for="item in timeline.toReversed()" :key="item.id" :class="[$style.messageItem, { [$style.contextTarget]: item.type === 'item' && item.id === contextTargetMessageId }]" :data-scroll-anchor="item.type === 'item' ? item.id : undefined">
-						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)"/>
+						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)" @openReference="openReferenceMessage"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 							<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -253,6 +253,8 @@ function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
 		behavior,
 	});
 	clearNewMessageIndicator();
+	newerFetchArmed = false;
+	historyFetchArmed = true;
 }
 
 function setupTimelineScrollListener() {
@@ -263,7 +265,9 @@ function setupTimelineScrollListener() {
 	if (scrollContainer == null) return;
 
 	const onScroll = () => {
-		const historyDistance = scrollContainer.scrollHeight - scrollContainer.clientHeight - Math.abs(scrollContainer.scrollTop);
+		const maxReverseScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+		const reverseScroll = Math.min(maxReverseScroll, Math.max(0, Math.abs(scrollContainer.scrollTop)));
+		const historyDistance = maxReverseScroll - reverseScroll;
 		if (historyDistance >= SCROLL_HISTORY_THRESHOLD) {
 			historyFetchArmed = true;
 		}
@@ -273,7 +277,7 @@ function setupTimelineScrollListener() {
 			fetchMore();
 		}
 
-		const latestDistance = Math.abs(scrollContainer.scrollTop);
+		const latestDistance = reverseScroll;
 		if (latestDistance < SCROLL_HEAD_THRESHOLD) {
 			clearNewMessageIndicator();
 		}
@@ -619,6 +623,38 @@ async function openMessageContext(messageId: string) {
 	}
 }
 
+async function openReferenceMessage(messageId: string) {
+	tab.value = 'chat';
+	initializeError.value = null;
+	joinRequiredRoom.value = null;
+	showIndicator.value = false;
+	newMessageCount.value = 0;
+	contextTargetMessageId.value = messageId;
+	pendingContextScrollId.value = messageId;
+
+	if (messages.value.some(message => message.id === messageId)) {
+		await scrollContextTargetAfterRender(messageId);
+		return;
+	}
+
+	canFetchMore.value = false;
+	canFetchNewer.value = false;
+	historyFetchArmed = true;
+	newerFetchArmed = true;
+	initializing.value = true;
+
+	try {
+		await initializeContextTimeline(messageId);
+	} catch (err) {
+		console.error('Failed to open referenced chat message:', err);
+		contextTargetMessageId.value = null;
+		pendingContextScrollId.value = null;
+		initializeError.value = props.roomId ? i18n.ts._chat.noPermissionToViewRoom : i18n.ts.pageLoadError;
+	} finally {
+		await finishInitializeRender();
+	}
+}
+
 async function scrollContextTargetAfterRender(messageId: string) {
 	beginScrollRestoration();
 	try {
@@ -788,6 +824,13 @@ async function fetchMore() {
 		// The loading row is part of the scroll layout, so restore only after it is gone.
 		await restoreVisibleMessageAnchorAfterLayout(anchor);
 		endScrollRestoration();
+		nextTick(() => {
+			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+			if (scrollContainer == null) return;
+			const maxReverseScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+			const reverseScroll = Math.min(maxReverseScroll, Math.max(0, Math.abs(scrollContainer.scrollTop)));
+			historyFetchArmed = (maxReverseScroll - reverseScroll) >= SCROLL_HISTORY_THRESHOLD;
+		});
 	}
 }
 
@@ -816,6 +859,13 @@ async function fetchNewer() {
 		newerFetching.value = false;
 		await restoreVisibleMessageAnchorAfterLayout(anchor);
 		endScrollRestoration();
+		nextTick(() => {
+			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+			if (scrollContainer == null) return;
+			const maxReverseScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+			const reverseScroll = Math.min(maxReverseScroll, Math.max(0, Math.abs(scrollContainer.scrollTop)));
+			newerFetchArmed = reverseScroll >= SCROLL_TAIL_THRESHOLD;
+		});
 	}
 }
 
@@ -833,6 +883,8 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 	prependMessage(normalizeMessage(message));
 	if (!wasAtLatest) {
 		void restoreVisibleMessageAnchorAfterLayout(anchor).finally(() => {
+			historyFetchArmed = true;
+			newerFetchArmed = true;
 			endScrollRestoration();
 		});
 	}
@@ -1274,7 +1326,19 @@ definePage(computed(() => {
 .searchPane {
 	height: 100%;
 	min-height: 0;
+	max-height: 100%;
 	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	touch-action: pan-y;
+	overscroll-behavior: contain;
+}
+
+.searchPane > * {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: 100%;
+	width: 100%;
 }
 
 .error {

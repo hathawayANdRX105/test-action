@@ -20,23 +20,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i v-if="isMe" class="ti ti-checks" :class="$style.sentIcon"></i>
 			</div>
 		</div>
-		<div :class="$style.bubble">
+		<div :class="[$style.bubble, { [$style.mentionedBubble]: isMentionedMe }]">
+			<div v-if="isMentionedMe" :class="$style.mentionNotice"><i class="ti ti-at"></i><span>{{ i18n.ts.you }}</span></div>
 			<div v-if="message.reply || message.quote || messageWithReferenceState.replyUnavailable || messageWithReferenceState.quoteUnavailable" :class="$style.references">
-				<MkA v-if="message.reply && message.reply.id !== '0'" :to="`/chat/messages/${message.reply.id}`" :class="$style.reference">
+				<button v-if="message.reply && message.reply.id !== '0'" class="_button" :class="[$style.reference, $style.referenceButton]" @click.stop="openReference(message.reply.id)">
 					<i class="ti ti-arrow-back-up"></i>
 					<span>{{ i18n.ts.reply }}</span>
 					<span :class="$style.referenceText">{{ getReferenceText(message.reply) }}</span>
-				</MkA>
+				</button>
 				<div v-else-if="message.reply || messageWithReferenceState.replyUnavailable" :class="$style.reference">
 					<i class="ti ti-arrow-back-up"></i>
 					<span>{{ i18n.ts.reply }}</span>
 					<span :class="$style.referenceText">{{ i18n.ts.deletedNote }}</span>
 				</div>
-				<MkA v-if="message.quote && message.quote.id !== '0'" :to="`/chat/messages/${message.quote.id}`" :class="$style.reference">
+				<button v-if="message.quote && message.quote.id !== '0'" class="_button" :class="[$style.reference, $style.referenceButton]" @click.stop="openReference(message.quote.id)">
 					<i class="ti ti-quote"></i>
 					<span>{{ i18n.ts.quote }}</span>
 					<span :class="$style.referenceText">{{ getReferenceText(message.quote) }}</span>
-				</MkA>
+				</button>
 				<div v-else-if="message.quote || messageWithReferenceState.quoteUnavailable" :class="$style.reference">
 					<i class="ti ti-quote"></i>
 					<span>{{ i18n.ts.quote }}</span>
@@ -114,6 +115,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(ev: 'reply', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
 	(ev: 'quote', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
+	(ev: 'openReference', messageId: string): void;
 }>();
 
 type MessageReaction = NormalizedChatMessage['reactions'][number] | Misskey.entities.ChatMessage['reactions'][number];
@@ -124,10 +126,20 @@ type MessageWithReferenceState = typeof props.message & {
 	replyUnavailable?: boolean;
 	quoteUnavailable?: boolean;
 };
+type MessageWithMentionState = typeof props.message & {
+	mentionedUserIds?: string[];
+	hasMentionForMe?: boolean;
+};
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
 const messageWithReferenceState = computed<MessageWithReferenceState>(() => props.message);
+const isMentionedMe = computed(() => {
+	const message = props.message as MessageWithMentionState;
+	if (isMe.value || message.toRoomId == null) return false;
+	if (message.hasMentionForMe === true) return true;
+	return message.mentionedUserIds?.includes($i.id) === true;
+});
 const visibleReactions = computed<VisibleReaction[]>(() => {
 	const records: VisibleReaction[] = [];
 	for (const record of props.message.reactions) {
@@ -186,6 +198,10 @@ function onContextmenu(ev: MouseEvent) {
 	if (window.getSelection()?.toString() !== '') return;
 
 	showMenu(ev, true);
+}
+
+function openReference(messageId: string) {
+	emit('openReference', messageId);
 }
 
 function showMenu(ev: MouseEvent, contextmenu = false) {
@@ -468,6 +484,28 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	}
 }
 
+.mentionedBubble {
+	border: solid 1px color(from var(--MI_THEME-accent) srgb r g b / 0.45);
+	background:
+		linear-gradient(0deg, color(from var(--MI_THEME-accent) srgb r g b / 0.12), color(from var(--MI_THEME-accent) srgb r g b / 0.12)),
+		light-dark(#ffffff, #182533);
+	box-shadow: 0 0 0 3px color(from var(--MI_THEME-accent) srgb r g b / 0.12), 0 1px 2px rgb(0 0 0 / 0.16);
+}
+
+.mentionNotice {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin: 0 0 6px;
+	padding: 2px 7px;
+	border-radius: var(--MI-radius-ellipse);
+	background: color(from var(--MI_THEME-accent) srgb r g b / 0.16);
+	color: var(--MI_THEME-accent);
+	font-size: 78%;
+	font-weight: 700;
+	line-height: 1.4;
+}
+
 .isMe .header {
 	align-self: flex-end;
 	flex-direction: row-reverse;
@@ -506,6 +544,20 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	font-size: 85%;
 	text-align: left;
 	overflow: hidden;
+}
+
+.referenceButton {
+	cursor: pointer;
+
+	&:hover,
+	&:focus-visible {
+		background: color(from var(--MI_THEME-accent) srgb r g b / 0.14);
+		outline: none;
+	}
+
+	&:focus-visible {
+		box-shadow: 0 0 0 2px color(from var(--MI_THEME-accent) srgb r g b / 0.45);
+	}
 }
 
 .referenceText {

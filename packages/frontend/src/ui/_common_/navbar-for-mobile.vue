@@ -15,7 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkA :class="$style.item" :activeClass="$style.active" to="/" exact>
 			<i :class="$style.itemIcon" class="ti ti-home ti-fw"></i><span :class="$style.itemText">{{ i18n.ts.timeline }}</span>
 		</MkA>
-		<template v-for="item in prefer.r.menu.value">
+		<template v-for="(item, index) in prefer.r.menu.value" :key="`${item}-${index}`">
 			<div v-if="item === '-'" :class="$style.divider"></div>
 			<component :is="navbarItemDef[item].to ? 'MkA' : 'button'" v-else-if="navbarItemDef[item] && (navbarItemDef[item].show !== false)" class="_button" :class="[$style.item, { [$style.active]: navbarItemDef[item].active }]" :activeClass="$style.active" :to="navbarItemDef[item].to" v-on="navbarItemDef[item].action ? { click: navbarItemDef[item].action } : {}">
 				<i class="ti-fw" :class="[$style.itemIcon, navbarItemDef[item].icon]"></i><span :class="$style.itemText">{{ navbarItemDef[item].title }}</span>
@@ -59,6 +59,11 @@ import { instance } from '@/instance.js';
 import { openAccountMenu as openAccountMenu_ } from '@/accounts.js';
 import { $i } from '@/i.js';
 
+const currentMenu = Array.isArray(prefer.s.menu) ? prefer.s.menu : [];
+if ($i != null && !currentMenu.includes('chat') && navbarItemDef.chat.show !== false) {
+	prefer.commit('menu', [...currentMenu, 'chat']);
+}
+
 const otherMenuItemIndicated = computed(() => {
 	for (const def in navbarItemDef) {
 		if (prefer.r.menu.value.includes(def)) continue;
@@ -88,8 +93,7 @@ function more() {
 	flex-direction: column;
 }
 
-:global(html[data-color-scheme=dark]),
-:global(html[style*="color-scheme: dark"]) {
+:global(html[data-color-scheme=dark]) {
 	.root {
 		--navbar-readable-fg: #fff;
 		--navbar-readable-fg-muted: color-mix(in srgb, #fff 82%, transparent);
@@ -116,10 +120,7 @@ function more() {
 
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"]),
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"]),
-:global(html[data-color-scheme=dark] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemText-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemText-"]) {
+:global(html[data-color-scheme=dark] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemText-"]) {
 	color: #fff !important;
 	-webkit-text-fill-color: #fff !important;
 	opacity: 1 !important;
@@ -127,10 +128,7 @@ function more() {
 
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"]::before),
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"]::after),
-:global(html[data-color-scheme=dark] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"] *),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"]::before),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"]::after),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"] *) {
+:global(html[data-color-scheme=dark] [class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"] *) {
 	color: #fff !important;
 	-webkit-text-fill-color: #fff !important;
 	opacity: 1 !important;
@@ -139,10 +137,7 @@ function more() {
 
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"][class*="navbar-for-mobile-item-"]),
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"][class*="navbar-for-mobile-active-"]),
-:global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"][class*="navbar-for-mobile-item-"] *),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"][class*="navbar-for-mobile-item-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"][class*="navbar-for-mobile-active-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"][class*="navbar-for-mobile-item-"] *) {
+:global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-item-"][class*="navbar-for-mobile-item-"] *) {
 	color: #fff !important;
 	-webkit-text-fill-color: #fff !important;
 	opacity: 1 !important;
@@ -152,12 +147,7 @@ function more() {
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"][class*="navbar-for-mobile-itemIcon-"]::before),
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"][class*="navbar-for-mobile-itemIcon-"]::after),
 :global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] i[class*="ph-"]::before),
-:global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] i[class*="ti-"]::before),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"][class*="navbar-for-mobile-itemIcon-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"][class*="navbar-for-mobile-itemIcon-"]::before),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] [class*="navbar-for-mobile-itemIcon-"][class*="navbar-for-mobile-itemIcon-"]::after),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] i[class*="ph-"]::before),
-:global(html[style*="color-scheme: dark"] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] i[class*="ti-"]::before) {
+:global(html[data-color-scheme=dark] [class*="navbar-for-mobile-root-"][class*="navbar-for-mobile-root-"] [class*="navbar-for-mobile-middle-"][class*="navbar-for-mobile-middle-"] i[class*="ti-"]::before) {
 	color: #fff !important;
 	-webkit-text-fill-color: #fff !important;
 	fill: #fff !important;

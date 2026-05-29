@@ -35,10 +35,11 @@ export function uploadFile(
 	folder?: string | Misskey.entities.DriveFolder | null,
 	name?: string,
 	keepOriginal = false,
-): Promise<Misskey.entities.DriveFile> {
+): Promise<Misskey.entities.DriveFile> & { id: string } {
 	if ($i == null) throw new Error('Not logged in');
 
 	const _folder = typeof folder === 'string' ? folder : folder?.id;
+	const id = uuid();
 
 	if ((file.size > instance.maxFileSize) || (file.size > ($i.policies.maxFileSizeMb * 1024 * 1024))) {
 		alert({
@@ -46,27 +47,23 @@ export function uploadFile(
 			title: i18n.ts.failedToUpload,
 			text: i18n.ts.cannotUploadBecauseExceedsFileSizeLimit,
 		});
-		return Promise.reject();
+		return Object.assign(Promise.reject(), { id });
 	}
 
-	return new Promise((resolve, reject) => {
-		const id = uuid();
+	const filename = name ?? file.name ?? 'untitled';
+	const extension = filename.split('.').length > 1 ? '.' + filename.split('.').pop() : '';
+	const ctx = reactive<Uploading>({
+		id,
+		name: prefer.s.keepOriginalFilename ? filename : id + extension,
+		progressMax: undefined,
+		progressValue: undefined,
+		img: window.URL.createObjectURL(file),
+	});
 
-		const reader = new FileReader();
-		reader.onload = async (): Promise<void> => {
-			const filename = name ?? file.name ?? 'untitled';
-			const extension = filename.split('.').length > 1 ? '.' + filename.split('.').pop() : '';
+	uploads.value.push(ctx);
 
-			const ctx = reactive<Uploading>({
-				id,
-				name: prefer.s.keepOriginalFilename ? filename : id + extension,
-				progressMax: undefined,
-				progressValue: undefined,
-				img: window.URL.createObjectURL(file),
-			});
-
-			uploads.value.push(ctx);
-
+	const promise = new Promise<Misskey.entities.DriveFile>((resolve, reject) => {
+		(async (): Promise<void> => {
 			const config = !keepOriginal ? await getCompressionConfig(file) : undefined;
 			let resizedImage: Blob | undefined;
 			if (config) {
@@ -156,7 +153,10 @@ export function uploadFile(
 			};
 
 			xhr.send(formData);
-		};
-		reader.readAsArrayBuffer(file);
+		})().catch(err => {
+			uploads.value = uploads.value.filter(x => x.id !== id);
+			reject(err);
+		});
 	});
+	return Object.assign(promise, { id });
 }

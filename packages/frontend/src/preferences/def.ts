@@ -144,6 +144,7 @@ export const PREF_DEF = {
 			'favorites',
 			'drive',
 			'achievements',
+			'chat',
 		],
 	},
 	statusbars: {

@@ -202,6 +202,7 @@ export const store = markRaw(new Pizzax('base', {
 			'favorites',
 			'drive',
 			'achievements',
+			'chat',
 		],
 	},
 	statusbars: {

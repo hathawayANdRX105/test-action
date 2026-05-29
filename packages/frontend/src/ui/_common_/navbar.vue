@@ -16,7 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkA v-tooltip.noDelay.right="i18n.ts.timeline" :class="$style.item" :activeClass="$style.active" to="/" exact>
 				<i :class="$style.itemIcon" class="ti ti-home ti-fw" style="viewTransitionName: navbar-homeIcon;"></i><span :class="$style.itemText">{{ i18n.ts.timeline }}</span>
 			</MkA>
-			<template v-for="item in prefer.r.menu.value">
+			<template v-for="(item, index) in prefer.r.menu.value" :key="`${item}-${index}`">
 				<div v-if="item === '-'" :class="$style.divider"></div>
 				<component
 					:is="navbarItemDef[item].to ? 'MkA' : 'button'"
@@ -105,6 +105,11 @@ import { prefer } from '@/preferences.js';
 import { openAccountMenu as openAccountMenu_ } from '@/accounts.js';
 import { $i } from '@/i.js';
 
+const currentMenu = Array.isArray(prefer.s.menu) ? prefer.s.menu : [];
+if ($i != null && !currentMenu.includes('chat') && navbarItemDef.chat.show !== false) {
+	prefer.commit('menu', [...currentMenu, 'chat']);
+}
+
 const router = useRouter();
 
 const props = defineProps<{
@@ -182,8 +187,7 @@ function menuEdit() {
 	box-sizing: border-box;
 }
 
-:global(html[data-color-scheme=dark]),
-:global(html[style*="color-scheme: dark"]) {
+:global(html[data-color-scheme=dark]) {
 	.root {
 		--navbar-readable-fg: #fff;
 		--navbar-readable-fg-muted: color-mix(in srgb, #fff 82%, transparent);
@@ -211,11 +215,7 @@ function menuEdit() {
 :global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-item-"]),
 :global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemIcon-"]),
 :global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemText-"]),
-:global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-active-"][class*="navbar-item-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-middle-"] [class*="navbar-item-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-middle-"] [class*="navbar-itemIcon-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-middle-"] [class*="navbar-itemText-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-middle-"] [class*="navbar-active-"][class*="navbar-item-"]) {
+:global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-active-"][class*="navbar-item-"]) {
 	color: #fff !important;
 	-webkit-text-fill-color: #fff !important;
 	opacity: 1 !important;
@@ -223,10 +223,7 @@ function menuEdit() {
 
 :global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemIcon-"]::before),
 :global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemIcon-"]::after),
-:global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemIcon-"] *),
-:global(html[style*="color-scheme: dark"] [class*="navbar-middle-"] [class*="navbar-itemIcon-"]::before),
-:global(html[style*="color-scheme: dark"] [class*="navbar-middle-"] [class*="navbar-itemIcon-"]::after),
-:global(html[style*="color-scheme: dark"] [class*="navbar-middle-"] [class*="navbar-itemIcon-"] *) {
+:global(html[data-color-scheme=dark] [class*="navbar-middle-"] [class*="navbar-itemIcon-"] *) {
 	color: #fff !important;
 	-webkit-text-fill-color: #fff !important;
 	opacity: 1 !important;
@@ -235,10 +232,7 @@ function menuEdit() {
 
 :global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-item-"][class*="navbar-item-"]),
 :global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-item-"][class*="navbar-active-"]),
-:global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-item-"][class*="navbar-item-"] *),
-:global(html[style*="color-scheme: dark"] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-item-"][class*="navbar-item-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-item-"][class*="navbar-active-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-item-"][class*="navbar-item-"] *) {
+:global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-item-"][class*="navbar-item-"] *) {
 	color: #fff !important;
 	-webkit-text-fill-color: #fff !important;
 	opacity: 1 !important;
@@ -248,12 +242,7 @@ function menuEdit() {
 :global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-itemIcon-"][class*="navbar-itemIcon-"]::before),
 :global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-itemIcon-"][class*="navbar-itemIcon-"]::after),
 :global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] i[class*="ph-"]::before),
-:global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] i[class*="ti-"]::before),
-:global(html[style*="color-scheme: dark"] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-itemIcon-"][class*="navbar-itemIcon-"]),
-:global(html[style*="color-scheme: dark"] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-itemIcon-"][class*="navbar-itemIcon-"]::before),
-:global(html[style*="color-scheme: dark"] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] [class*="navbar-itemIcon-"][class*="navbar-itemIcon-"]::after),
-:global(html[style*="color-scheme: dark"] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] i[class*="ph-"]::before),
-:global(html[style*="color-scheme: dark"] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] i[class*="ti-"]::before) {
+:global(html[data-color-scheme=dark] [class*="navbar-root-"][class*="navbar-root-"] [class*="navbar-middle-"][class*="navbar-middle-"] i[class*="ti-"]::before) {
 	color: #fff !important;
 	-webkit-text-fill-color: #fff !important;
 	fill: #fff !important;

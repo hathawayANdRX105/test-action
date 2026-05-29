@@ -76,6 +76,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="maxTextLength - textLength < 100" :class="['_acrylic', $style.textCount, { [$style.textOver]: textLength > maxTextLength }]">{{ maxTextLength - textLength }}</div>
 	</div>
 	<input v-show="withHashtags" ref="hashtagsInputEl" v-model="hashtags" :class="$style.hashtags" :placeholder="i18n.ts.hashtags" list="hashtags">
+	<div v-if="postFormUploadings.length > 0" :class="$style.uploadingFiles" aria-live="polite">
+		<div v-for="ctx in postFormUploadings" :key="ctx.id" :class="$style.uploadingFile">
+			<div :class="$style.uploadingThumbnail" :style="{ backgroundImage: `url(${ ctx.img })` }">
+				<i class="ti ti-file-upload"></i>
+			</div>
+			<div :class="$style.uploadingBody">
+				<div :class="$style.uploadingName">{{ ctx.name }}</div>
+				<div :class="$style.uploadingStatus">
+					<span v-if="ctx.progressValue === undefined">{{ i18n.ts.uploading }}</span>
+					<span v-else>{{ Math.floor((ctx.progressValue / (ctx.progressMax || 1)) * 100) }}%</span>
+				</div>
+				<progress :value="ctx.progressValue ?? undefined" :max="ctx.progressMax ?? undefined" :class="{ [$style.uploadingProgressIndeterminate]: ctx.progressValue === undefined }"></progress>
+			</div>
+		</div>
+	</div>
 	<XPostFormAttaches v-model="files" @detach="detachFile" @changeSensitive="updateFileSensitive" @changeName="updateFileName" @replaceFile="replaceFile"/>
 	<MkPollEditor v-if="poll" v-model="poll" @destroyed="poll = null"/>
 	<MkScheduleEditor v-if="scheduleNote" v-model="scheduleNote" @destroyed="scheduleNote = null"/>
@@ -135,7 +150,7 @@ import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
 import { ensureSignin, notesCount, incNotesCount } from '@/i.js';
 import { getAccounts, openAccountMenu as openAccountMenu_ } from '@/accounts.js';
-import { uploadFile } from '@/utility/upload.js';
+import { uploadFile, uploads } from '@/utility/upload.js';
 import { deepClone } from '@/utility/clone.js';
 import MkRippleEffect from '@/components/MkRippleEffect.vue';
 import MkScheduleEditor from '@/components/MkScheduleEditor.vue';
@@ -186,6 +201,7 @@ const posting = ref(false);
 const posted = ref(false);
 const text = ref(props.initialText ?? '');
 const files = ref(props.initialFiles ?? []);
+const uploadingIds = ref<string[]>([]);
 const poll = ref<PollEditorModelValue | null>(null);
 const initialPoll = ref<PollEditorModelValue | null>(null);
 const useCw = ref<boolean>(!!props.initialCw);
@@ -270,9 +286,11 @@ const cwTextLength = computed((): number => {
 });
 
 const maxCwTextLength = computed(() => instance.maxCwLength);
+const postFormUploadings = computed(() => uploads.value.filter(ctx => uploadingIds.value.includes(ctx.id)));
 
 const canPost = computed((): boolean => {
 	return !props.mock && !posting.value && !posted.value &&
+		postFormUploadings.value.length === 0 &&
 		(
 			1 <= textLength.value ||
 			1 <= files.value.length ||
@@ -497,8 +515,14 @@ function replaceFile(file: Misskey.entities.DriveFile, newFile: Misskey.entities
 function upload(file: File, name?: string): void {
 	if (props.mock) return;
 
-	uploadFile(file, prefer.s.uploadFolder, name).then(res => {
+	const uploading = uploadFile(file, prefer.s.uploadFolder, name);
+	uploadingIds.value.push(uploading.id);
+	uploading.then(res => {
 		files.value.push(res);
+	}).catch(() => {
+		// uploadFile already shows the error dialog.
+	}).finally(() => {
+		uploadingIds.value = uploadingIds.value.filter(id => id !== uploading.id);
 	});
 }
 
@@ -942,7 +966,7 @@ async function post(ev?: MouseEvent) {
 	};
 
 	if (withHashtags.value && hashtags.value && hashtags.value.trim() !== '') {
-		postData.text = appendMissingHashtags(postData.text, hashtags.value);
+		postData.text = appendMissingHashtags(postData.text, hashtags.value, props.initialNote?.tags ?? []);
 	}
 
 	// plugin
@@ -1528,8 +1552,19 @@ defineExpose({
 	max-width: 100%;
 	min-width: 100%;
 	width: 100%;
-	min-height: 5.85em;
-	height: 100%;
+	min-height: 6.5em;
+	height: min(34vh, 18em);
+	max-height: min(45vh, 26em);
+	overflow-y: auto;
+	resize: vertical;
+	line-height: 1.55;
+	cursor: text;
+	pointer-events: auto;
+	touch-action: pan-y;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+	scroll-padding: 24px 0;
+	caret-color: var(--MI_THEME-accent);
 }
 
 .textCount {
@@ -1546,6 +1581,66 @@ defineExpose({
 	&.textOver {
 		color: #ff2a2a;
 	}
+}
+
+.uploadingFiles {
+	display: grid;
+	gap: 8px;
+	margin: 0 16px 12px;
+	padding: 10px;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 80%, transparent);
+	border-radius: var(--MI-radius-sm);
+	background: light-dark(rgb(0 0 0 / 0.035), rgb(255 255 255 / 0.06));
+}
+
+.uploadingFile {
+	display: grid;
+	grid-template-columns: 42px minmax(0, 1fr);
+	gap: 10px;
+	align-items: center;
+}
+
+.uploadingThumbnail {
+	width: 42px;
+	height: 42px;
+	display: grid;
+	place-items: center;
+	border-radius: var(--MI-radius-sm);
+	background-color: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.08));
+	background-position: center;
+	background-size: cover;
+	color: color-mix(in srgb, var(--MI_THEME-fg) 72%, transparent);
+	overflow: hidden;
+}
+
+.uploadingBody {
+	min-width: 0;
+
+	progress {
+		display: block;
+		width: 100%;
+		height: 7px;
+		margin-top: 6px;
+		accent-color: var(--MI_THEME-accent);
+	}
+}
+
+.uploadingName {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-weight: 600;
+	color: var(--MI_THEME-fg);
+}
+
+.uploadingStatus {
+	margin-top: 2px;
+	font-size: .85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.uploadingProgressIndeterminate {
+	opacity: .72;
 }
 
 .footer {
@@ -1625,7 +1720,8 @@ defineExpose({
 	}
 
 	.text {
-		min-height: 80px;
+		min-height: 96px;
+		height: min(38vh, 20em);
 	}
 
 	.footer {
