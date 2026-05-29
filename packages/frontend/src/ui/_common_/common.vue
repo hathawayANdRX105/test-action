@@ -82,6 +82,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:leaveActiveClass="$style.transition_notification_leaveActive"
 	:enterFromClass="$style.transition_notification_enterFrom"
 	:leaveToClass="$style.transition_notification_leaveTo"
+	:animate="false"
 >
 	<div v-for="notification in notifications" :key="notification.id" :class="$style.notification" :style="{ pointerEvents: getPointerEvents() }">
 		<XNotification :notification="notification"/>

@@ -16,6 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:enterFromClass="$style.transition_x_enterFrom"
 				:leaveToClass="$style.transition_x_leaveTo"
 				:moveClass=" $style.transition_x_move"
+				:animate="false"
 				tag="div"
 			>
 				<div v-for="(notification, i) in sortedByTime(notifications)" :key="notification.id">
@@ -29,7 +30,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onUnmounted, onMounted, computed, useTemplateRef, TransitionGroup } from 'vue';
+import { onUnmounted, onMounted, computed, useTemplateRef } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { notificationTypes } from '@@/js/const.js';
 import MkPagination from '@/components/MkPagination.vue';

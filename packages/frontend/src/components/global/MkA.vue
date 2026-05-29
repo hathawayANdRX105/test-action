@@ -11,6 +11,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts">
 export type MkABehavior = 'window' | 'browser' | null;
+
+let globalLastNavAt = 0;
 </script>
 
 <script lang="ts" setup>
@@ -86,6 +88,10 @@ function openWindow() {
 }
 
 function nav(ev: MouseEvent) {
+	const now = Date.now();
+	if (now - globalLastNavAt < 350) return;
+	globalLastNavAt = now;
+
 	if (behavior === 'browser') {
 		window.location.href = props.to;
 		return;
@@ -99,6 +105,7 @@ function nav(ev: MouseEvent) {
 		return openWindow();
 	}
 
+	if (router.getCurrentFullPath() === props.to) return;
 	router.push(props.to, ev.ctrlKey ? 'forcePage' : null);
 }
 </script>

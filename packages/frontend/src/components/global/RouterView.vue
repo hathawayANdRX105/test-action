@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div class="_pageContainer" :class="$style.root">
-	<KeepAlive :max="prefer.s.numberOfPageCache">
+	<KeepAlive :max="cacheLimit">
 		<Suspense :timeout="0">
 			<component :is="currentPageComponent" :key="key" v-bind="Object.fromEntries(currentPageProps)"/>
 
@@ -18,13 +18,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { inject, nextTick, onMounted, provide, ref, shallowRef, useTemplateRef } from 'vue';
+import { computed, inject, ref, shallowRef, provide } from 'vue';
 import { randomId } from '@@/js/random-id.js';
 import type { Router } from '@/router.js';
 import { prefer } from '@/preferences.js';
 import MkLoadingPage from '@/pages/_loading_.vue';
 import { DI } from '@/di.js';
 import { deepEqual } from '@/utility/deep-equal.js';
+
+const UNCACHED_ROUTES = new Set(['/', '/explore', '/my/notifications']);
 
 const props = defineProps<{
 	router?: Router;
@@ -45,18 +47,19 @@ provide(DI.routerCurrentDepth, currentDepth + 1);
 const current = router.current!;
 const currentPageComponent = shallowRef('component' in current.route ? current.route.component : MkLoadingPage);
 const currentPageProps = ref(current.props);
-let currentRoutePath = current.route.path;
+const currentRoutePath = ref(current.route.path);
 const key = ref(router.getCurrentFullPath());
+const cacheLimit = computed(() => UNCACHED_ROUTES.has(currentRoutePath.value) ? 0 : prefer.s.numberOfPageCache);
 
 router.useListener('change', ({ resolved }) => {
 	if (resolved == null || 'redirect' in resolved.route) return;
-	if (resolved.route.path === currentRoutePath && deepEqual(resolved.props, currentPageProps.value)) return;
+	if (resolved.route.path === currentRoutePath.value && deepEqual(resolved.props, currentPageProps.value)) return;
 
 	function _() {
 		currentPageComponent.value = resolved.route.component;
 		currentPageProps.value = resolved.props;
 		key.value = router.getCurrentFullPath();
-		currentRoutePath = resolved.route.path;
+		currentRoutePath.value = resolved.route.path;
 	}
 
 	_();
