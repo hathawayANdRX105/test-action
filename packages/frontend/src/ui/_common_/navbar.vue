@@ -8,20 +8,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.body">
 		<div :class="$style.top">
 			<div :class="$style.banner" :style="{ backgroundImage: `url(${ instance.bannerUrl })` }"></div>
-			<button v-tooltip.noDelay.right="instance.name ?? i18n.ts.instance" class="_button" :class="$style.instance" @click="openInstanceMenu">
+			<button v-tooltip.right="instance.name ?? i18n.ts.instance" class="_button" :class="$style.instance" @click="openInstanceMenu">
 				<img :src="instance.sidebarLogoUrl && !iconOnly ? instance.sidebarLogoUrl : instance.iconUrl || '/favicon.ico'" alt="" :class="instance.sidebarLogoUrl && !iconOnly ? $style.wideInstanceIcon : $style.instanceIcon" style="viewTransitionName: navbar-serverIcon;"/>
 			</button>
 		</div>
 		<div :class="$style.middle">
-			<MkA v-tooltip.noDelay.right="i18n.ts.timeline" :class="$style.item" :activeClass="$style.active" to="/" exact>
-				<i :class="$style.itemIcon" class="ti ti-home ti-fw" style="viewTransitionName: navbar-homeIcon;"></i><span :class="$style.itemText">{{ i18n.ts.timeline }}</span>
+			<MkA v-tooltip.right="i18n.ts.home" :class="$style.item" :activeClass="$style.active" to="/" exact>
+				<i :class="$style.itemIcon" class="ti ti-home ti-fw" style="viewTransitionName: navbar-homeIcon;"></i><span :class="$style.itemText">{{ i18n.ts.home }}</span>
 			</MkA>
-			<template v-for="(item, index) in prefer.r.menu.value" :key="`${item}-${index}`">
+			<template v-for="(item, index) in filteredMenu" :key="`${item}-${index}`">
 				<div v-if="item === '-'" :class="$style.divider"></div>
 				<component
 					:is="navbarItemDef[item].to ? 'MkA' : 'button'"
 					v-else-if="navbarItemDef[item] && (navbarItemDef[item].show !== false)"
-					v-tooltip.noDelay.right="navbarItemDef[item].title"
+					v-tooltip.right="navbarItemDef[item].title"
 					class="_button"
 					:class="[$style.item, { [$style.active]: navbarItemDef[item].active }]"
 					:activeClass="$style.active"
@@ -36,14 +36,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</component>
 			</template>
 			<div :class="$style.divider"></div>
-			<MkA v-if="$i != null && ($i.isAdmin || $i.isModerator)" v-tooltip.noDelay.right="i18n.ts.controlPanel" :class="$style.item" :activeClass="$style.active" to="/admin">
+			<MkA v-if="$i != null && ($i.isAdmin || $i.isModerator)" v-tooltip.right="i18n.ts.controlPanel" :class="$style.item" :activeClass="$style.active" to="/admin">
 				<i :class="$style.itemIcon" class="ti ti-dashboard ti-fw" style="viewTransitionName: navbar-controlPanel;"></i><span :class="$style.itemText">{{ i18n.ts.controlPanel }}</span>
 			</MkA>
 			<button class="_button" :class="$style.item" @click="more">
 				<i :class="$style.itemIcon" class="ti ti-grid-dots ti-fw" style="viewTransitionName: navbar-more;"></i><span :class="$style.itemText">{{ i18n.ts.more }}</span>
 				<span v-if="otherMenuItemIndicated" :class="$style.itemIndicator" class="_blink"><i class="_indicatorCircle"></i></span>
 			</button>
-			<MkA v-tooltip.noDelay.right="i18n.ts.settings" :class="$style.item" :activeClass="$style.active" to="/settings">
+			<MkA v-tooltip.right="i18n.ts.settings" :class="$style.item" :activeClass="$style.active" to="/settings">
 				<i :class="$style.itemIcon" class="ti ti-settings ti-fw" style="viewTransitionName: navbar-settings;"></i><span :class="$style.itemText">{{ i18n.ts.settings }}</span>
 			</MkA>
 		</div>
@@ -51,10 +51,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button v-if="showWidgetButton" class="_button" :class="[$style.widget]" @click="() => emit('widgetButtonClick')">
 				<i class="ti ti-apps ti-fw"></i>
 			</button>
-			<button v-tooltip.noDelay.right="i18n.ts.note" class="_button" :class="[$style.post]" data-cy-open-post-form @click="() => { os.post(); }">
+			<button v-tooltip.right="i18n.ts.note" class="_button" :class="[$style.post]" data-cy-open-post-form @click="() => { os.post(); }">
 				<i class="ti ti-pencil ti-fw" :class="$style.postIcon"></i><span :class="$style.postText">{{ i18n.ts.note }}</span>
 			</button>
-			<button v-if="$i != null" v-tooltip.noDelay.right="`${i18n.ts.account}: @${$i.username}`" class="_button" :class="[$style.account]" @click="openAccountMenu">
+			<button v-if="$i != null" v-tooltip.right="`${i18n.ts.account}: @${$i.username}`" class="_button" :class="[$style.account]" @click="openAccountMenu">
 				<MkAvatar :user="$i" :class="$style.avatar" style="viewTransitionName: navbar-avatar;"/><MkAcct class="_nowrap" :class="$style.acct" :user="$i"/>
 			</button>
 		</div>
@@ -92,7 +92,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { openInstanceMenu } from './common.js';
 import * as os from '@/os.js';
 import { navbarItemDef } from '@/navbar.js';
@@ -106,9 +106,19 @@ import { openAccountMenu as openAccountMenu_ } from '@/accounts.js';
 import { $i } from '@/i.js';
 
 const currentMenu = Array.isArray(prefer.s.menu) ? prefer.s.menu : [];
-if ($i != null && !currentMenu.includes('chat') && navbarItemDef.chat.show !== false) {
-	prefer.commit('menu', [...currentMenu, 'chat']);
+if ($i != null) {
+	let nextMenu = currentMenu.filter(item => item !== 'search');
+	if (!nextMenu.includes('explore')) {
+		nextMenu = ['explore', ...nextMenu];
+	}
+	if (!nextMenu.includes('chat') && navbarItemDef.chat.show !== false) {
+		nextMenu = [...nextMenu, 'chat'];
+	}
+	if (nextMenu.length !== currentMenu.length || nextMenu.some((item, index) => item !== currentMenu[index])) {
+		prefer.commit('menu', nextMenu);
+	}
 }
+const filteredMenu = computed(() => prefer.r.menu.value.filter(item => item !== 'search'));
 
 const router = useRouter();
 
@@ -127,7 +137,7 @@ const iconOnly = computed(() => {
 
 const otherMenuItemIndicated = computed(() => {
 	for (const def in navbarItemDef) {
-		if (prefer.r.menu.value.includes(def)) continue;
+		if (filteredMenu.value.includes(def)) continue;
 		if (navbarItemDef[def].indicated) return true;
 	}
 	return false;
@@ -137,7 +147,11 @@ function calcViewState() {
 	forceIconOnly.value = window.innerWidth <= 1279;
 }
 
-window.addEventListener('resize', calcViewState);
+window.addEventListener('resize', calcViewState, { passive: true });
+
+onBeforeUnmount(() => {
+	window.removeEventListener('resize', calcViewState);
+});
 
 watch(store.r.menuDisplay, () => {
 	calcViewState();

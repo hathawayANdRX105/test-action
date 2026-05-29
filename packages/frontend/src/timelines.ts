@@ -7,6 +7,7 @@ import { $i } from '@/i.js';
 import { instance } from '@/instance.js';
 
 export const basicTimelineTypes = [
+	'recommended',
 	'home',
 	'local',
 	'social',
@@ -22,6 +23,8 @@ export function isBasicTimeline(timeline: string): timeline is BasicTimelineType
 
 export function basicTimelineIconClass(timeline: BasicTimelineType): string {
 	switch (timeline) {
+		case 'recommended':
+			return 'ph-sparkle ph-bold ph-lg';
 		case 'home':
 			return 'ti ti-home';
 		case 'local':
@@ -37,6 +40,8 @@ export function basicTimelineIconClass(timeline: BasicTimelineType): string {
 
 export function isAvailableBasicTimeline(timeline: BasicTimelineType | undefined | null): boolean {
 	switch (timeline) {
+		case 'recommended':
+			return true;
 		case 'home':
 			return $i != null;
 		case 'local':

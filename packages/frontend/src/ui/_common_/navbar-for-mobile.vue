@@ -13,9 +13,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 	<div :class="$style.middle">
 		<MkA :class="$style.item" :activeClass="$style.active" to="/" exact>
-			<i :class="$style.itemIcon" class="ti ti-home ti-fw"></i><span :class="$style.itemText">{{ i18n.ts.timeline }}</span>
+			<i :class="$style.itemIcon" class="ti ti-home ti-fw"></i><span :class="$style.itemText">{{ i18n.ts.home }}</span>
 		</MkA>
-		<template v-for="(item, index) in prefer.r.menu.value" :key="`${item}-${index}`">
+		<template v-for="(item, index) in filteredMenu" :key="`${item}-${index}`">
 			<div v-if="item === '-'" :class="$style.divider"></div>
 			<component :is="navbarItemDef[item].to ? 'MkA' : 'button'" v-else-if="navbarItemDef[item] && (navbarItemDef[item].show !== false)" class="_button" :class="[$style.item, { [$style.active]: navbarItemDef[item].active }]" :activeClass="$style.active" :to="navbarItemDef[item].to" v-on="navbarItemDef[item].action ? { click: navbarItemDef[item].action } : {}">
 				<i class="ti-fw" :class="[$style.itemIcon, navbarItemDef[item].icon]"></i><span :class="$style.itemText">{{ navbarItemDef[item].title }}</span>
@@ -60,13 +60,23 @@ import { openAccountMenu as openAccountMenu_ } from '@/accounts.js';
 import { $i } from '@/i.js';
 
 const currentMenu = Array.isArray(prefer.s.menu) ? prefer.s.menu : [];
-if ($i != null && !currentMenu.includes('chat') && navbarItemDef.chat.show !== false) {
-	prefer.commit('menu', [...currentMenu, 'chat']);
+if ($i != null) {
+	let nextMenu = currentMenu.filter(item => item !== 'search');
+	if (!nextMenu.includes('explore')) {
+		nextMenu = ['explore', ...nextMenu];
+	}
+	if (!nextMenu.includes('chat') && navbarItemDef.chat.show !== false) {
+		nextMenu = [...nextMenu, 'chat'];
+	}
+	if (nextMenu.length !== currentMenu.length || nextMenu.some((item, index) => item !== currentMenu[index])) {
+		prefer.commit('menu', nextMenu);
+	}
 }
+const filteredMenu = computed(() => prefer.r.menu.value.filter(item => item !== 'search'));
 
 const otherMenuItemIndicated = computed(() => {
 	for (const def in navbarItemDef) {
-		if (prefer.r.menu.value.includes(def)) continue;
+		if (filteredMenu.value.includes(def)) continue;
 		if (navbarItemDef[def].indicated) return true;
 	}
 	return false;

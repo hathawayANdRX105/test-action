@@ -11,13 +11,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</button>
 
-	<button :class="$style.item" class="_button" @click="mainRouter.push('/')">
+	<button :class="$style.item" class="_button" @click="nav('/')">
 		<div :class="$style.itemInner">
 			<i :class="$style.itemIcon" class="ti ti-home"></i>
 		</div>
 	</button>
 
-	<button :class="$style.item" class="_button" @click="mainRouter.push('/my/notifications')">
+	<button :class="$style.item" class="_button" @click="nav('/my/notifications')">
 		<div :class="$style.itemInner">
 			<i :class="$style.itemIcon" class="ti ti-bell"></i>
 			<span v-if="$i?.hasUnreadNotification" :class="$style.itemIndicator" class="_blink">
@@ -51,6 +51,15 @@ const drawerMenuShowing = defineModel<boolean>('drawerMenuShowing');
 const widgetsShowing = defineModel<boolean>('widgetsShowing');
 
 const rootEl = useTemplateRef('rootEl');
+let lastNavAt = 0;
+
+function nav(path: string): void {
+	const now = Date.now();
+	if (now - lastNavAt < 350) return;
+	lastNavAt = now;
+	if (mainRouter.getCurrentFullPath() === path) return;
+	mainRouter.push(path);
+}
 
 const menuIndicated = computed(() => {
 	for (const def in navbarItemDef) {

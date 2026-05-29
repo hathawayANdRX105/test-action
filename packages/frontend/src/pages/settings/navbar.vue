@@ -72,7 +72,7 @@ import { PREF_DEF } from '@/preferences/def.js';
 
 const Sortable = defineAsyncComponent(() => import('vuedraggable').then(x => x.default));
 
-const items = ref(prefer.s.menu.map(x => ({
+const items = ref(prefer.s.menu.filter(x => x !== 'search').map(x => ({
 	id: Math.random().toString(),
 	type: x,
 })));
@@ -81,7 +81,8 @@ const menuDisplay = computed(store.makeGetterSetter('menuDisplay'));
 const showNavbarSubButtons = prefer.model('showNavbarSubButtons');
 
 async function addItem() {
-	const menu = Object.keys(navbarItemDef).filter(k => !prefer.s.menu.includes(k));
+	const currentMenu = items.value.map(x => x.type);
+	const menu = Object.keys(navbarItemDef).filter(k => !currentMenu.includes(k));
 	const { canceled, result: item } = await os.select({
 		title: i18n.ts.addItem,
 		items: [...menu.map(k => ({
@@ -102,7 +103,7 @@ function removeItem(index: number) {
 }
 
 async function save() {
-	prefer.commit('menu', items.value.map(x => x.type));
+	prefer.commit('menu', items.value.map(x => x.type).filter(x => x !== 'search'));
 }
 
 function reset() {

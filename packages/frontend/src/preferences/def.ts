@@ -139,8 +139,6 @@ export const PREF_DEF = {
 			'followRequests',
 			'-',
 			'announcements',
-			'search',
-			'-',
 			'favorites',
 			'drive',
 			'achievements',

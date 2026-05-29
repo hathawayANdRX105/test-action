@@ -69,7 +69,7 @@ export const store = markRaw(new Pizzax('base', {
 	tl: {
 		where: 'deviceAccount',
 		default: {
-			src: 'home' as 'home' | 'local' | 'social' | 'global' | 'bubble' | `list:${string}`,
+			src: 'recommended' as 'recommended' | 'home' | 'local' | 'social' | 'global' | 'bubble' | `list:${string}`,
 			userList: null as Misskey.entities.UserList | null,
 			filter: {
 				withReplies: true,
@@ -197,8 +197,6 @@ export const store = markRaw(new Pizzax('base', {
 			'followRequests',
 			'-',
 			'announcements',
-			'search',
-			'-',
 			'favorites',
 			'drive',
 			'achievements',
