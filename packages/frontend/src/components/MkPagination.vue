@@ -26,7 +26,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkButton>
 			<MkLoading v-else/>
 		</div>
+		<div v-if="pagination.reversed && exhausted" :class="$style.exhausted">{{ i18n.ts.noMoreHistory }}</div>
 		<slot :items="Array.from(items.values())" :fetching="fetching || moreFetching"></slot>
+		<div v-if="!pagination.reversed && exhausted" :class="$style.exhausted">{{ i18n.ts.noMoreHistory }}</div>
 		<div v-show="!pagination.reversed && more" key="_more_">
 			<MkButton v-if="!moreFetching" v-appear="(enableInfiniteScroll && !props.disableAutoLoad) ? appearFetchMore : null" :class="$style.more" :wait="moreFetching" primary rounded @click="fetchMore">
 				{{ i18n.ts.loadMore }}
@@ -125,6 +127,8 @@ const fetching = ref(true);
 
 const moreFetching = ref(false);
 const more = ref(false);
+const exhausted = ref(false);
+const fetchedItemCount = ref(0);
 const preventAppearFetchMore = ref(false);
 const preventAppearFetchMoreTimer = ref<number | null>(null);
 const isBackTop = ref(false);
@@ -200,6 +204,8 @@ function getActualValue<T>(input: T | Ref<T> | undefined, defaultValue: T) : T {
 async function init(): Promise<void> {
 	items.value = new Map();
 	queue.value = new Map();
+	exhausted.value = false;
+	fetchedItemCount.value = 0;
 	fetching.value = true;
 	const params = getActualValue<Paging['params']>(props.pagination.params, {});
 	await misskeyApi<MisskeyEntity[]>(props.pagination.endpoint, {
@@ -207,6 +213,7 @@ async function init(): Promise<void> {
 		limit: props.pagination.limit ?? 10,
 		allowPartial: true,
 	}).then(res => {
+		fetchedItemCount.value = res.length;
 		for (let i = 0; i < res.length; i++) {
 			const item = res[i];
 			if (i === 3) item._shouldInsertAd_ = true;
@@ -215,10 +222,12 @@ async function init(): Promise<void> {
 		if (res.length === 0 || props.pagination.noPaging) {
 			concatItems(res);
 			more.value = false;
+			exhausted.value = false;
 		} else {
 			if (props.pagination.reversed) moreFetching.value = true;
 			concatItems(res);
-			more.value = true;
+			more.value = res.length >= (props.pagination.limit ?? 10);
+			exhausted.value = !more.value && items.value.size > 0;
 		}
 
 		error.value = false;
@@ -245,11 +254,12 @@ const fetchMore = async (): Promise<void> => {
 			...params,
 			limit: SECOND_FETCH_LIMIT,
 			...(offsetMode ? {
-				offset: items.value.size,
+				offset: fetchedItemCount.value,
 			} : {
 				untilId: Array.from(items.value.keys()).at(-1),
 			}),
 		});
+		fetchedItemCount.value += res.length;
 		for (let i = 0; i < res.length; i++) {
 			const item = res[i];
 			if (i === 10) item._shouldInsertAd_ = true;
@@ -280,14 +290,15 @@ const fetchMore = async (): Promise<void> => {
 				items.value = concatMapWithArray(items.value, res);
 				more.value = false;
 			}
+			exhausted.value = items.value.size > 0;
 		} else {
 			if (props.pagination.reversed) {
 				await reverseConcat(res);
-				more.value = true;
 			} else {
 				items.value = concatMapWithArray(items.value, res);
-				more.value = true;
 			}
+			more.value = res.length >= SECOND_FETCH_LIMIT;
+			exhausted.value = !more.value && items.value.size > 0;
 		}
 	} finally {
 		moreFetching.value = false;
@@ -303,17 +314,20 @@ const fetchMoreAhead = async (): Promise<void> => {
 		...params,
 		limit: SECOND_FETCH_LIMIT,
 		...(offsetMode ? {
-			offset: items.value.size,
+			offset: fetchedItemCount.value,
 		} : {
 			sinceId: Array.from(items.value.keys()).at(-1),
 		}),
 	}).then(res => {
+		fetchedItemCount.value += res.length;
 		if (res.length === 0) {
 			items.value = concatMapWithArray(items.value, res);
 			more.value = false;
+			exhausted.value = items.value.size > 0;
 		} else {
 			items.value = concatMapWithArray(items.value, res);
-			more.value = true;
+			more.value = res.length >= SECOND_FETCH_LIMIT;
+			exhausted.value = !more.value && items.value.size > 0;
 		}
 		moreFetching.value = false;
 	}, err => {
@@ -392,7 +406,7 @@ function prepend(item: MisskeyEntity): void {
  */
 function unshiftItems(newItems: MisskeyEntity[]) {
 	const prevLength = items.value.size;
-	items.value = new Map([...arrayToEntries(newItems), ...items.value].slice(0, newItems.length + props.displayLimit));
+	items.value = new Map([...arrayToEntries(newItems), ...Array.from(items.value).slice(0, props.displayLimit)]);
 	// if we truncated, mark that there are more values to fetch
 	if (items.value.size < prevLength) more.value = true;
 }
@@ -403,7 +417,7 @@ function unshiftItems(newItems: MisskeyEntity[]) {
  */
 function concatItems(oldItems: MisskeyEntity[]) {
 	const prevLength = items.value.size;
-	items.value = new Map([...items.value, ...arrayToEntries(oldItems)].slice(0, oldItems.length + props.displayLimit));
+	items.value = new Map([...Array.from(items.value).slice(0, props.displayLimit), ...arrayToEntries(oldItems)]);
 	// if we truncated, mark that there are more values to fetch
 	if (items.value.size < prevLength) more.value = true;
 }
@@ -503,5 +517,12 @@ defineExpose({
 .more {
 	margin-left: auto;
 	margin-right: auto;
+}
+
+.exhausted {
+	padding: 16px;
+	text-align: center;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.9em;
 }
 </style>
