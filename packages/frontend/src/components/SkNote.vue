@@ -236,6 +236,7 @@ import { getSelfNoteIds } from '@/utility/get-self-note-ids.js';
 import { extractPreviewUrls } from '@/utility/extract-preview-urls.js';
 import SkUrlPreviewGroup from '@/components/SkUrlPreviewGroup.vue';
 import MkNoteSub from '@/components/MkNoteSub.vue';
+import { sendRecommendationFeedback } from '@/utility/recommendation-feedback.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -264,6 +265,7 @@ const note = ref(deepClone(props.note));
 function noteclick(id: string) {
 	const selection = window.document.getSelection();
 	if (selection?.toString().length === 0) {
+		sendRecommendationFeedback(id, 'click');
 		router.push(`/notes/${id}`);
 	}
 }
@@ -321,6 +323,7 @@ const pleaseLoginContext = computed<OpenOnRemoteOptions>(() => ({
 function loadConversation(): void {
 	conversationLoaded.value = true;
 	if (appearNote.value.replyId == null) return;
+	sendRecommendationFeedback(appearNote.value.id, 'expand');
 	misskeyApi('notes/conversation', {
 		noteId: appearNote.value.replyId,
 		limit: prefer.s.numberOfReplies,
@@ -494,6 +497,7 @@ function boostVisibility(forceMenu: boolean = false) {
 function renote(visibility: Visibility, localOnly: boolean = false) {
 	pleaseLogin({ openOnRemote: pleaseLoginContext.value });
 	showMovedDialog();
+	sendRecommendationFeedback(appearNote.value.id, 'renote');
 
 	renoting = true;
 
@@ -604,6 +608,7 @@ function quote() {
 
 function reply(): void {
 	pleaseLogin({ openOnRemote: pleaseLoginContext.value });
+	sendRecommendationFeedback(appearNote.value.id, 'reply');
 	if (props.mock) {
 		return;
 	}
@@ -619,6 +624,7 @@ function like(): void {
 	pleaseLogin({ openOnRemote: pleaseLoginContext.value });
 	showMovedDialog();
 	sound.playMisskeySfx('reaction');
+	sendRecommendationFeedback(appearNote.value.id, 'react');
 	if (props.mock) {
 		return;
 	}
@@ -770,6 +776,7 @@ async function clip(): Promise<void> {
 	if (props.mock) {
 		return;
 	}
+	sendRecommendationFeedback(appearNote.value.id, 'clip');
 
 	os.popupMenu(await getNoteClipMenu({ note: note.value, isDeleted, currentClip: currentClip?.value }), clipButton.value).then(focus);
 }
