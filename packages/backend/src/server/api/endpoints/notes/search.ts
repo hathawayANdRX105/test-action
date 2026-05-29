@@ -6,9 +6,8 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { fileTypeCategories, SearchService } from '@/core/SearchService.js';
+import { SearchTrendService } from '@/core/SearchTrendService.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
-import { RoleService } from '@/core/RoleService.js';
-import { ApiError } from '../../error.js';
 
 export const meta = {
 	tags: ['notes'],
@@ -22,14 +21,6 @@ export const meta = {
 			type: 'object',
 			optional: false, nullable: false,
 			ref: 'Note',
-		},
-	},
-
-	errors: {
-		unavailable: {
-			message: 'Search of notes unavailable.',
-			code: 'UNAVAILABLE',
-			id: '0b44998d-77aa-4427-80d0-d2c9b8523011',
 		},
 	},
 
@@ -71,15 +62,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(
 		private noteEntityService: NoteEntityService,
 		private searchService: SearchService,
-		private roleService: RoleService,
+		private searchTrendService: SearchTrendService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			const policies = await this.roleService.getUserPolicies(me ? me.id : null);
-			if (!policies.canSearchNotes) {
-				throw new ApiError(meta.errors.unavailable);
-			}
+			const query = ps.query.trim();
+			if (query === '') return [];
 
-			const notes = await this.searchService.searchNote(ps.query, me, {
+			const notes = await this.searchService.searchNote(query, me, {
 				userId: ps.userId,
 				channelId: ps.channelId,
 				host: ps.host,
@@ -90,6 +79,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				sinceId: ps.sinceId,
 				limit: ps.limit,
 			});
+
+			if (ps.userId == null && ps.channelId == null) {
+				this.searchTrendService.recordSearchQuery(query).catch(() => {});
+			}
 
 			return await this.noteEntityService.packMany(notes, me);
 		});

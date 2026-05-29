@@ -80,6 +80,8 @@ import { UserWebhookService } from './UserWebhookService.js';
 import { UtilityService } from './UtilityService.js';
 import { FileInfoService } from './FileInfoService.js';
 import { SearchService } from './SearchService.js';
+import { SearchTrendService } from './SearchTrendService.js';
+import { RecommendationService } from './RecommendationService.js';
 import { ClipService } from './ClipService.js';
 import { FeaturedService } from './FeaturedService.js';
 import { FanoutTimelineService } from './FanoutTimelineService.js';
@@ -230,6 +232,8 @@ const $UtilityService: Provider = { provide: 'UtilityService', useExisting: Util
 const $FileInfoService: Provider = { provide: 'FileInfoService', useExisting: FileInfoService };
 const $FlashService: Provider = { provide: 'FlashService', useExisting: FlashService };
 const $SearchService: Provider = { provide: 'SearchService', useExisting: SearchService };
+const $SearchTrendService: Provider = { provide: 'SearchTrendService', useExisting: SearchTrendService };
+const $RecommendationService: Provider = { provide: 'RecommendationService', useExisting: RecommendationService };
 const $ClipService: Provider = { provide: 'ClipService', useExisting: ClipService };
 const $FeaturedService: Provider = { provide: 'FeaturedService', useExisting: FeaturedService };
 const $FanoutTimelineService: Provider = { provide: 'FanoutTimelineService', useExisting: FanoutTimelineService };
@@ -391,6 +395,8 @@ const $Imports = [
 		FileInfoService,
 		FlashService,
 		SearchService,
+		SearchTrendService,
+		RecommendationService,
 		ClipService,
 		FeaturedService,
 		FanoutTimelineService,
@@ -549,6 +555,8 @@ const $Imports = [
 		$FileInfoService,
 		$FlashService,
 		$SearchService,
+		$SearchTrendService,
+		$RecommendationService,
 		$ClipService,
 		$FeaturedService,
 		$FanoutTimelineService,
@@ -706,6 +714,8 @@ const $Imports = [
 		FileInfoService,
 		FlashService,
 		SearchService,
+		SearchTrendService,
+		RecommendationService,
 		ClipService,
 		FeaturedService,
 		FanoutTimelineService,
@@ -862,6 +872,8 @@ const $Imports = [
 		$UtilityService,
 		$FileInfoService,
 		$SearchService,
+		$SearchTrendService,
+		$RecommendationService,
 		$ClipService,
 		$FeaturedService,
 		$FanoutTimelineService,

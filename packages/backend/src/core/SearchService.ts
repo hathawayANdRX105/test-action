@@ -12,6 +12,7 @@ import { MiNote } from '@/models/Note.js';
 import type { NotesRepository } from '@/models/_.js';
 import { MiUser } from '@/models/_.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
+import { safeForSql } from '@/misc/safe-for-sql.js';
 import { isUserRelated } from '@/misc/is-user-related.js';
 import { CacheService } from '@/core/CacheService.js';
 import { QueryService } from '@/core/QueryService.js';
@@ -276,6 +277,9 @@ export class SearchService {
 		opts: SearchOpts,
 		pagination: SearchPagination,
 	): Promise<MiNote[]> {
+		const normalizedQuery = q.trim();
+		if (normalizedQuery === '') return [];
+
 		const query = this.queryService.makePaginationQuery(this.notesRepository.createQueryBuilder('note'), pagination.sinceId, pagination.untilId);
 
 		if (opts.userId) {
@@ -292,11 +296,12 @@ export class SearchService {
 			.leftJoinAndSelect('renote.user', 'renoteUser');
 
 		if (this.config.fulltextSearch?.provider === 'sqlPgroonga') {
-			query.andWhere('note.text &@~ :q', { q });
+			if (!safeForSql(normalizedQuery)) return [];
+			query.andWhere('note.text &@~ :q', { q: normalizedQuery });
 		} else if (this.config.fulltextSearch?.provider === 'sqlTsvector') {
-			query.andWhere('note.tsvector_embedding @@ websearch_to_tsquery(:q)', { q });
+			query.andWhere('note.tsvector_embedding @@ websearch_to_tsquery(:q)', { q: normalizedQuery });
 		} else {
-			query.andWhere('note.text ILIKE :q', { q: `%${ sqlLikeEscape(q) }%` });
+			query.andWhere('note.text ILIKE :q', { q: `%${ sqlLikeEscape(normalizedQuery) }%` });
 		}
 
 		if (opts.host) {
@@ -328,6 +333,9 @@ export class SearchService {
 		opts: SearchOpts,
 		pagination: SearchPagination,
 	): Promise<MiNote[]> {
+		const normalizedQuery = q.trim();
+		if (normalizedQuery === '') return [];
+
 		if (!this.meilisearch || !this.meilisearchNoteIndex) {
 			throw new Error('MeiliSearch is not available');
 		}
@@ -361,7 +369,7 @@ export class SearchService {
 			filter.qs.push({ op: 'or', qs: filters });
 		}
 
-		const res = await this.meilisearchNoteIndex.search(q, {
+		const res = await this.meilisearchNoteIndex.search(normalizedQuery, {
 			sort: [`createdAt:${opts.order ? opts.order : 'desc'}`],
 			matchingStrategy: 'all',
 			attributesToRetrieve: ['id', 'createdAt'],

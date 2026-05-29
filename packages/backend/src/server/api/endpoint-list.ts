@@ -350,7 +350,11 @@ export * as 'notes/reactions/create' from './endpoints/notes/reactions/create.js
 export * as 'notes/reactions/delete' from './endpoints/notes/reactions/delete.js';
 export * as 'notes/renotes' from './endpoints/notes/renotes.js';
 export * as 'notes/replies' from './endpoints/notes/replies.js';
+export * as 'notes/discovery-sections' from './endpoints/notes/discovery-sections.js';
+export * as 'notes/recommendation-feedback' from './endpoints/notes/recommendation-feedback.js';
+export * as 'notes/recommended-timeline' from './endpoints/notes/recommended-timeline.js';
 export * as 'notes/search' from './endpoints/notes/search.js';
+export * as 'notes/search-trends' from './endpoints/notes/search-trends.js';
 export * as 'notes/schedule/create' from './endpoints/notes/schedule/create.js';
 export * as 'notes/schedule/delete' from './endpoints/notes/schedule/delete.js';
 export * as 'notes/schedule/list' from './endpoints/notes/schedule/list.js';

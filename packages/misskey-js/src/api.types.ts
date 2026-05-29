@@ -1,5 +1,5 @@
 import type { Endpoints as Gen } from './autogen/endpoint.js';
-import type { UserDetailed } from './autogen/models.js';
+import type { Channel, Note, UserDetailed } from './autogen/models.js';
 import type {
 	AdminChatRoomsListRequest,
 	AdminChatRoomsListResponse,
@@ -135,7 +135,59 @@ export type Endpoints = Overwrite<
 		'admin/chat/rooms/update': {
 			req: AdminChatRoomsUpdateRequest;
 			res: AdminChatRoomsUpdateResponse;
-		}
+		},
+		'notes/recommended-timeline': {
+			req: {
+				scope?: 'local' | 'social' | 'global' | 'mixed';
+				surface?: 'home' | 'explore';
+				category?: 'forYou' | 'trending' | 'messages' | 'sports' | 'entertainment' | 'tutorials' | 'resources';
+				withFiles?: boolean;
+				withRenotes?: boolean;
+				withBots?: boolean;
+				limit?: number;
+				offset?: number;
+				sinceId?: string;
+				untilId?: string;
+				sinceDate?: number;
+				untilDate?: number;
+			};
+			res: Note[];
+		},
+		'notes/discovery-sections': {
+			req: {
+				limit?: number;
+			};
+			res: {
+				trends: {
+					popularSearches: string[];
+					recentTerms: string[];
+					hashtags: string[];
+				};
+				coverNotes: Note[];
+				hotNotes: Note[];
+				tutorialNotes: Note[];
+				channels: Channel[];
+				users: UserDetailed[];
+			};
+		},
+		'notes/search-trends': {
+			req: {
+				limit?: number;
+			};
+			res: {
+				popularSearches: string[];
+				recentTerms: string[];
+				hashtags: string[];
+			};
+		},
+		'notes/recommendation-feedback': {
+			req: {
+				noteId: string;
+				event: 'impression' | 'click' | 'expand' | 'dwell' | 'react' | 'renote' | 'reply' | 'clip';
+				dwellMs?: number;
+			};
+			res: EmptyRequest;
+		},
 	}
 >;
 
