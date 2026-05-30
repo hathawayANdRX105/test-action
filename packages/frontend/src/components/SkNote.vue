@@ -179,7 +179,7 @@ Displays a note in the Sharkey style. Used to show the "main" note in a given co
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, ref, useTemplateRef, watch, provide } from 'vue';
+import { computed, inject, onMounted, onUnmounted, ref, useTemplateRef, watch, provide } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import { isLink } from '@@/js/is-link.js';
@@ -236,7 +236,7 @@ import { getSelfNoteIds } from '@/utility/get-self-note-ids.js';
 import { extractPreviewUrls } from '@/utility/extract-preview-urls.js';
 import SkUrlPreviewGroup from '@/components/SkUrlPreviewGroup.vue';
 import MkNoteSub from '@/components/MkNoteSub.vue';
-import { sendRecommendationFeedback } from '@/utility/recommendation-feedback.js';
+import { sendRecommendationFeedback, setupRecommendationVisibilityFeedback } from '@/utility/recommendation-feedback.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -310,6 +310,15 @@ const animated = computed(() => parsed.value ? checkAnimationFromMfm(parsed.valu
 const conversation = ref<Misskey.entities.Note[]>([]);
 const conversationLoaded = ref(false);
 const allowAnim = ref(prefer.s.advancedMfm && prefer.s.animatedMfm);
+let cleanupRecommendationVisibilityFeedback: (() => void) | null = null;
+
+onMounted(() => {
+	cleanupRecommendationVisibilityFeedback = setupRecommendationVisibilityFeedback(appearNote.value.id, () => rootEl.value);
+});
+
+onUnmounted(() => {
+	cleanupRecommendationVisibilityFeedback?.();
+});
 
 watch(() => prefer.s.collapseNotesRepliedTo, (value) => {
 	inReplyToCollapsed.value = value;
@@ -547,6 +556,7 @@ function renote(visibility: Visibility, localOnly: boolean = false) {
 
 function quote() {
 	pleaseLogin({ openOnRemote: pleaseLoginContext.value });
+	sendRecommendationFeedback(appearNote.value.id, 'renote');
 	showMovedDialog();
 	if (props.mock) {
 		return;
@@ -648,6 +658,7 @@ function react(viaKeyboard = false): void {
 	showMovedDialog();
 	if (appearNote.value.reactionAcceptance === 'likeOnly') {
 		sound.playMisskeySfx('reaction');
+		sendRecommendationFeedback(appearNote.value.id, 'react');
 
 		if (props.mock) {
 			return;
@@ -685,6 +696,7 @@ function react(viaKeyboard = false): void {
 				return;
 			}
 
+			sendRecommendationFeedback(appearNote.value.id, 'react');
 			misskeyApi('notes/reactions/create', {
 				noteId: appearNote.value.id,
 				reaction: reaction,

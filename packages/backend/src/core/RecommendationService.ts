@@ -6,7 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
-import type { MiNote, NotesRepository } from '@/models/_.js';
+import type { ChannelFollowingsRepository, FollowingsRepository, MiNote, MutingsRepository, NotesRepository } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { normalizeForSearch } from '@/misc/normalize-for-search.js';
 import { TimeService } from '@/global/TimeService.js';
@@ -24,6 +24,13 @@ export type RecommendationSignal = {
 	authorScore: string;
 	channelScore: string;
 	keywordScore: string;
+	eventScore: string;
+	socialAuthorScore: number;
+	socialChannelScore: number;
+	negativeAuthorScore: string;
+	negativeKeywordScore: string;
+	hotScore: string;
+	exposureCount: number;
 	seen: boolean;
 	explorationScore: number;
 };
@@ -31,8 +38,11 @@ export type RecommendationSignal = {
 const INTEREST_TTL = 1000 * 60 * 60 * 24 * 30;
 const SEEN_TTL_SECONDS = 60 * 60 * 24 * 14;
 const EVENT_TTL_SECONDS = 60 * 60 * 24 * 7;
+const EXPOSURE_TTL_SECONDS = 60 * 60 * 24 * 7;
 const MAX_PROFILE_ITEMS = 160;
-const LOW_VALUE_TERMS = new Set(['签到', '打卡']);
+const EXPOSURE_KEY = 'recommendation:exposure:notes';
+const HOT_KEY = 'recommendation:hot:notes';
+const LOW_VALUE_TERMS = new Set(['签到', '打卡', '水贴', '路过', '测试']);
 const EVENT_WEIGHTS: Record<RecommendationEventType, number> = {
 	impression: 0.05,
 	click: 1.2,
@@ -53,6 +63,15 @@ export class RecommendationService {
 		@Inject(DI.notesRepository)
 		private notesRepository: NotesRepository,
 
+		@Inject(DI.followingsRepository)
+		private followingsRepository: FollowingsRepository,
+
+		@Inject(DI.channelFollowingsRepository)
+		private channelFollowingsRepository: ChannelFollowingsRepository,
+
+		@Inject(DI.mutingsRepository)
+		private mutingsRepository: MutingsRepository,
+
 		private readonly timeService: TimeService,
 	) {
 	}
@@ -68,17 +87,42 @@ export class RecommendationService {
 		const eventScore = this.getEventScore(feedback);
 		const aggregateKey = `recommendation:note:${feedback.noteId}:events`;
 		const pipeline = this.redisClient.pipeline();
-		pipeline.zincrby('recommendation:hot:notes', eventScore, feedback.noteId);
+		pipeline.zincrby(HOT_KEY, eventScore, feedback.noteId);
 		pipeline.hincrbyfloat(aggregateKey, feedback.event, eventScore);
 		pipeline.expire(aggregateKey, EVENT_TTL_SECONDS, 'NX');
-		pipeline.expire('recommendation:hot:notes', EVENT_TTL_SECONDS, 'NX');
+		pipeline.expire(HOT_KEY, EVENT_TTL_SECONDS, 'NX');
+
+		// Track how many times this note has actually been surfaced to a viewer.
+		// Visibility impressions are the closest proxy to "served to an audience"
+		// and feed the traffic-pool / engagement-rate ranking.
+		if (feedback.event === 'impression') {
+			pipeline.zincrby(EXPOSURE_KEY, 1, feedback.noteId);
+			pipeline.expire(EXPOSURE_KEY, EXPOSURE_TTL_SECONDS, 'NX');
+		}
 
 		if (userId != null) {
 			pipeline.set(`recommendation:seen:${userId}:${feedback.noteId}`, '1', 'EX', SEEN_TTL_SECONDS);
-			this.addInterestUpdates(pipeline, userId, note, eventScore);
+			this.addInterestUpdates(pipeline, userId, note, eventScore, feedback.event);
 		}
 
 		await pipeline.exec();
+	}
+
+	/**
+	 * Record that a batch of notes was served in a recommended response.
+	 * This is the "delivery" side of the traffic pool: every note that gets
+	 * surfaced accrues exposure, so ranking can divide engagement by exposure
+	 * (engagement rate) instead of rewarding absolute counts. Fire-and-forget.
+	 */
+	@bindThis
+	public recordExposure(noteIds: string[]): void {
+		if (noteIds.length === 0) return;
+		const pipeline = this.redisClient.pipeline();
+		for (const noteId of noteIds) {
+			pipeline.zincrby(EXPOSURE_KEY, 1, noteId);
+		}
+		pipeline.expire(EXPOSURE_KEY, EXPOSURE_TTL_SECONDS, 'NX');
+		pipeline.exec().catch(() => { /* best-effort, never block the response */ });
 	}
 
 	@bindThis
@@ -87,43 +131,77 @@ export class RecommendationService {
 		if (notes.length === 0) return result;
 
 		const ids = notes.map(note => note.id);
-		let hotScores: (string | null)[] = [];
+		const [hotScores, exposureScores] = await Promise.all([
+			this.redisClient.zmscore(HOT_KEY, ...ids),
+			this.redisClient.zmscore(EXPOSURE_KEY, ...ids),
+		]);
 		if (userId == null) {
-			hotScores = await this.redisClient.zmscore('recommendation:hot:notes', ...ids);
-		} else {
-			const pipeline = this.redisClient.pipeline();
-			for (const note of notes) {
-				pipeline.zscore(`recommendation:profile:${userId}:authors`, note.userId);
-				pipeline.zscore(`recommendation:profile:${userId}:channels`, note.channelId ?? '');
-				pipeline.zscore(`recommendation:profile:${userId}:keywords`, this.getPrimaryKeyword(note) ?? '');
-				pipeline.exists(`recommendation:seen:${userId}:${note.id}`);
-			}
-			const rows = await pipeline.exec();
 			for (let i = 0; i < notes.length; i++) {
 				result.set(notes[i].id, {
-					authorScore: String(rows?.[i * 4]?.[1] ?? '0'),
-					channelScore: String(rows?.[i * 4 + 1]?.[1] ?? '0'),
-					keywordScore: String(rows?.[i * 4 + 2]?.[1] ?? '0'),
-					seen: Number(rows?.[i * 4 + 3]?.[1] ?? 0) > 0,
+					authorScore: '0',
+					channelScore: '0',
+					keywordScore: '0',
+					eventScore: '0',
+					socialAuthorScore: 0,
+					socialChannelScore: 0,
+					negativeAuthorScore: '0',
+					negativeKeywordScore: '0',
+					hotScore: String(hotScores[i] ?? '0'),
+					exposureCount: Number(exposureScores[i] ?? 0),
+					seen: false,
 					explorationScore: this.getExplorationScore(notes[i].id, userId),
 				});
 			}
 			return result;
 		}
 
+		const [followingAuthorIds, followingChannelIds, mutedAuthorIds] = await Promise.all([
+			this.getFollowingAuthorIds(userId),
+			this.getFollowingChannelIds(userId),
+			this.getMutedAuthorIds(userId),
+		]);
+		const pipeline = this.redisClient.pipeline();
+		for (let i = 0; i < notes.length; i++) {
+			const note = notes[i];
+			pipeline.zscore(`recommendation:profile:${userId}:authors`, note.userId);
+			pipeline.zscore(`recommendation:profile:${userId}:channels`, note.channelId ?? '');
+			pipeline.zscore(`recommendation:profile:${userId}:keywords`, this.getPrimaryKeyword(note) ?? '');
+			pipeline.zscore(`recommendation:profile:${userId}:events`, note.id);
+			pipeline.zscore(`recommendation:negative:${userId}:authors`, note.userId);
+			pipeline.zscore(`recommendation:negative:${userId}:keywords`, this.getPrimaryKeyword(note) ?? '');
+			pipeline.exists(`recommendation:seen:${userId}:${note.id}`);
+		}
+		const rows = await pipeline.exec();
 		for (let i = 0; i < notes.length; i++) {
 			result.set(notes[i].id, {
-				authorScore: '0',
-				channelScore: '0',
-				keywordScore: String(hotScores[i] ?? '0'),
-				seen: false,
+				authorScore: String(rows?.[i * 7]?.[1] ?? '0'),
+				channelScore: String(rows?.[i * 7 + 1]?.[1] ?? '0'),
+				keywordScore: String(rows?.[i * 7 + 2]?.[1] ?? '0'),
+				eventScore: String(rows?.[i * 7 + 3]?.[1] ?? '0'),
+				socialAuthorScore: followingAuthorIds.has(notes[i].userId) ? 12 : mutedAuthorIds.has(notes[i].userId) ? -36 : 0,
+				socialChannelScore: notes[i].channelId != null && followingChannelIds.has(notes[i].channelId) ? 10 : 0,
+				negativeAuthorScore: String(rows?.[i * 7 + 4]?.[1] ?? '0'),
+				negativeKeywordScore: String(rows?.[i * 7 + 5]?.[1] ?? '0'),
+				hotScore: String(hotScores[i] ?? '0'),
+				exposureCount: Number(exposureScores[i] ?? 0),
+				seen: Number(rows?.[i * 7 + 6]?.[1] ?? 0) > 0,
 				explorationScore: this.getExplorationScore(notes[i].id, userId),
 			});
 		}
 		return result;
 	}
 
-	private addInterestUpdates(pipeline: Redis.ChainableCommander, userId: string, note: MiNote, score: number): void {
+	private addInterestUpdates(pipeline: Redis.ChainableCommander, userId: string, note: MiNote, score: number, event: RecommendationEventType): void {
+		if (event === 'impression') return;
+		if (event === 'dwell' && score < 0.6) {
+			this.bumpInterest(pipeline, `recommendation:negative:${userId}:authors`, note.userId, 0.25);
+			for (const keyword of this.extractKeywords(note).slice(0, 4)) {
+				this.bumpInterest(pipeline, `recommendation:negative:${userId}:keywords`, keyword, 0.2);
+			}
+			return;
+		}
+
+		this.bumpInterest(pipeline, `recommendation:profile:${userId}:events`, note.id, score);
 		this.bumpInterest(pipeline, `recommendation:profile:${userId}:authors`, note.userId, score * 0.55);
 		if (note.channelId != null) this.bumpInterest(pipeline, `recommendation:profile:${userId}:channels`, note.channelId, score * 0.8);
 		for (const keyword of this.extractKeywords(note)) {
@@ -143,6 +221,33 @@ export class RecommendationService {
 		if (feedback.dwellMs == null || feedback.dwellMs < 1200) return 0.25;
 		if (feedback.dwellMs > 20000) return 2.2;
 		return 0.6 + feedback.dwellMs / 10000;
+	}
+
+	private async getFollowingAuthorIds(userId: string): Promise<Set<string>> {
+		const followings = await this.followingsRepository.find({
+			where: { followerId: userId },
+			select: { followeeId: true },
+			take: 500,
+		});
+		return new Set(followings.map(following => following.followeeId));
+	}
+
+	private async getFollowingChannelIds(userId: string): Promise<Set<string>> {
+		const followings = await this.channelFollowingsRepository.find({
+			where: { followerId: userId },
+			select: { followeeId: true },
+			take: 500,
+		});
+		return new Set(followings.map(following => following.followeeId));
+	}
+
+	private async getMutedAuthorIds(userId: string): Promise<Set<string>> {
+		const mutings = await this.mutingsRepository.find({
+			where: { muterId: userId },
+			select: { muteeId: true },
+			take: 500,
+		});
+		return new Set(mutings.map(muting => muting.muteeId));
 	}
 
 	private extractKeywords(note: MiNote): string[] {
