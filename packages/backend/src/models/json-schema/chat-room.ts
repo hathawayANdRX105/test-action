@@ -45,6 +45,14 @@ export const packedChatRoomSchema = {
 			type: 'integer',
 			optional: true, nullable: true,
 		},
+		canManage: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		messageRetentionDays: {
+			type: 'integer',
+			optional: true, nullable: true,
+		},
 		memberCount: {
 			type: 'integer',
 			optional: false, nullable: false,

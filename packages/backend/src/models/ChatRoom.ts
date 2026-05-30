@@ -52,4 +52,9 @@ export class MiChatRoom {
 		nullable: true,
 	})
 	public memberLimitOverride: number | null;
+
+	@Column('integer', {
+		nullable: true,
+	})
+	public messageRetentionDays: number | null;
 }

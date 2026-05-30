@@ -255,6 +255,11 @@ export type Channels = {
 		events: {
 			message: (payload: ChatMessageLite) => void;
 			deleted: (payload: ChatMessageLite['id']) => void;
+			deletedMany: (payload: ChatMessageLite['id'][]) => void;
+			cleared: () => void;
+			pruned: (payload: {
+				cutoffId: ChatMessageLite['id'];
+			}) => void;
 			react: (payload: {
 				reaction: string;
 				user?: UserLite;
@@ -279,6 +284,11 @@ export type Channels = {
 		events: {
 			message: (payload: ChatMessageLite) => void;
 			deleted: (payload: ChatMessageLite['id']) => void;
+			deletedMany: (payload: ChatMessageLite['id'][]) => void;
+			cleared: () => void;
+			pruned: (payload: {
+				cutoffId: ChatMessageLite['id'];
+			}) => void;
 			react: (payload: {
 				reaction: string;
 				user?: UserLite;

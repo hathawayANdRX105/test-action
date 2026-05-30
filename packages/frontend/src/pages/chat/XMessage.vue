@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="[$style.root, { [$style.isMe]: isMe }]">
-	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="!isMe" :preview="false"/>
+	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="!isMe" :preview="false" @contextmenu.prevent.stop="onAvatarContextmenu"/>
 	<div v-else :class="[$style.avatar, $style.avatarFallback]"><i class="ti ti-user-question"></i></div>
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
 		<div :class="$style.header">
@@ -110,12 +110,15 @@ const props = defineProps<{
 	message: NormalizedChatMessage | Misskey.entities.ChatMessage;
 	isSearchResult?: boolean;
 	enableReferenceActions?: boolean;
+	canDeleteAnyMessage?: boolean;
+	canManageRoomUsers?: boolean;
 }>();
 
 const emit = defineEmits<{
 	(ev: 'reply', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
 	(ev: 'quote', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
 	(ev: 'openReference', messageId: string): void;
+	(ev: 'deletedMany', messageIds: string[]): void;
 }>();
 
 type MessageReaction = NormalizedChatMessage['reactions'][number] | Misskey.entities.ChatMessage['reactions'][number];
@@ -132,6 +135,8 @@ type MessageWithMentionState = typeof props.message & {
 };
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
+const canDelete = computed(() => (isMe.value || props.canDeleteAnyMessage === true) && $i.policies.chatAvailability === 'available');
+const canManageSender = computed(() => props.canManageRoomUsers === true && !isMe.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
 const messageWithReferenceState = computed<MessageWithReferenceState>(() => props.message);
 const isMentionedMe = computed(() => {
@@ -200,6 +205,15 @@ function onContextmenu(ev: MouseEvent) {
 	showMenu(ev, true);
 }
 
+function onAvatarContextmenu(ev: MouseEvent) {
+	if (!canManageSender.value) {
+		showMenu(ev, true);
+		return;
+	}
+
+	os.contextMenu(getAvatarMenu(), ev);
+}
+
 function openReference(messageId: string) {
 	emit('openReference', messageId);
 }
@@ -251,7 +265,7 @@ function showMenu(ev: MouseEvent, contextmenu = false) {
 		type: 'divider',
 	});
 
-	if (isMe.value && $i.policies.chatAvailability === 'available') {
+	if (canDelete.value) {
 		menu.push({
 			text: i18n.ts.delete,
 			icon: 'ti ti-trash',
@@ -285,6 +299,97 @@ function showMenu(ev: MouseEvent, contextmenu = false) {
 	} else {
 		os.popupMenu(menu, ev.currentTarget ?? ev.target);
 	}
+}
+
+function getAvatarMenu(): MenuItem[] {
+	const user = props.message.fromUser!;
+	const roomId = props.message.toRoomId!;
+
+	return [{
+		type: 'label',
+		text: user.name ?? user.username,
+		caption: `@${user.username}`,
+	}, {
+		text: i18n.ts._chat.deleteThisMessage,
+		icon: 'ti ti-trash',
+		danger: true,
+		action: async () => {
+			const confirm = await os.confirm({
+				type: 'warning',
+				text: i18n.ts._chat.deleteThisMessageConfirm,
+			});
+			if (confirm.canceled) return;
+
+			await os.apiWithDialog('chat/messages/delete', {
+				messageId: props.message.id,
+			});
+		},
+	}, {
+		text: i18n.ts._chat.deleteUserMessagesInRoom,
+		icon: 'ti ti-messages-off',
+		danger: true,
+		action: async () => {
+			const confirm = await os.confirm({
+				type: 'warning',
+				text: i18n.ts._chat.deleteUserMessagesInRoomConfirm,
+			});
+			if (confirm.canceled) return;
+
+			const res = await os.apiWithDialog('chat/rooms/manage/delete-user-messages', {
+				roomId,
+				userId: user.id,
+			});
+			emit('deletedMany', res.deletedIds);
+		},
+	}, { type: 'divider' }, {
+		text: i18n.ts.suspend,
+		icon: 'ti ti-user-off',
+		danger: true,
+		action: async () => {
+			const confirm = await os.confirm({
+				type: 'warning',
+				text: i18n.ts.suspendConfirm,
+			});
+			if (confirm.canceled) return;
+
+			await os.apiWithDialog('admin/suspend-user', {
+				userId: user.id,
+			});
+		},
+	}, {
+		text: i18n.ts.silence,
+		icon: 'ti ti-volume-off',
+		danger: true,
+		action: async () => {
+			const confirm = await os.confirm({
+				type: 'warning',
+				text: i18n.ts.silenceConfirm,
+			});
+			if (confirm.canceled) return;
+
+			await os.apiWithDialog('admin/silence-user', {
+				userId: user.id,
+			});
+		},
+	}, {
+		text: i18n.ts.moderation,
+		icon: 'ti ti-user-exclamation',
+		action: () => {
+			window.location.href = `/admin/user/${user.id}`;
+		},
+	}, { type: 'divider' }, {
+		text: i18n.ts.reportAbuse,
+		icon: 'ti ti-exclamation-circle',
+		action: () => {
+			const localUrl = `${url}/chat/messages/${props.message.id}`;
+			const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkAbuseReportWindow.vue')), {
+				user,
+				initialComment: `${localUrl}\n-----\n`,
+			}, {
+				closed: () => dispose(),
+			});
+		},
+	}];
 }
 
 function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage) {

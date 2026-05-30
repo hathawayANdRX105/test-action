@@ -159,6 +159,11 @@ export interface AdminEventTypes {
 export interface ChatEventTypes {
 	message: Packed<'ChatMessageLite'>;
 	deleted: Packed<'ChatMessageLite'>['id'];
+	deletedMany: Packed<'ChatMessageLite'>['id'][];
+	cleared: null;
+	pruned: {
+		cutoffId: MiChatMessage['id'];
+	};
 	react: {
 		reaction: string;
 		user?: Packed<'UserLite'>;

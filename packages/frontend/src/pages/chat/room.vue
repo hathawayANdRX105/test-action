@@ -81,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					tag="div" :class="$style.messageList"
 				>
 					<div v-for="item in timeline.toReversed()" :key="item.id" :class="[$style.messageItem, { [$style.contextTarget]: item.type === 'item' && item.id === contextTargetMessageId }]" :data-scroll-anchor="item.type === 'item' ? item.id : undefined">
-						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)" @openReference="openReferenceMessage"/>
+						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" :canDeleteAnyMessage="canDeleteAnyMessage" :canManageRoomUsers="canManageRoomUsers" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)" @openReference="openReferenceMessage" @deletedMany="onDeletedMany"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 							<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -115,6 +115,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated"/>
 	</div>
 
+	<div v-else-if="tab === 'management'" class="_spacer" style="--MI_SPACER-w: 700px;">
+		<XManagement v-if="room != null && room.canManage" :room="room" @updated="onRoomUpdated" @cleared="onCleared"/>
+	</div>
+
 	<div v-if="tab === 'chat'" :class="$style.footer">
 		<div class="_gaps">
 			<Transition name="fade">
@@ -139,6 +143,7 @@ import XForm from './room.form.vue';
 import XSearch from './room.search.vue';
 import XMembers from './room.members.vue';
 import XInfo from './room.info.vue';
+import XManagement from './room.management.vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import * as os from '@/os.js';
@@ -214,6 +219,11 @@ let scrollRestorationDepth = 0;
 const isRestoringHistoryScroll = ref(false);
 const isRoomChat = computed(() => props.roomId != null);
 const isContextMode = computed(() => contextTargetMessageId.value != null);
+const canDeleteAnyMessage = computed(() => {
+	if (room.value != null) return room.value.canManage === true;
+	return $i.isAdmin || $i.isModerator;
+});
+const canManageRoomUsers = computed(() => room.value?.canManage === true);
 
 type ScrollAnchor = {
 	id: string;
@@ -558,6 +568,9 @@ function connectStream() {
 
 	connection.value.on('message', onMessage);
 	connection.value.on('deleted', onDeleted);
+	connection.value.on('deletedMany', onDeletedMany);
+	connection.value.on('cleared', onCleared);
+	connection.value.on('pruned', onPruned);
 	connection.value.on('react', onReact);
 	connection.value.on('unreact', onUnreact);
 }
@@ -912,6 +925,30 @@ function onDeleted(id: string) {
 	}
 }
 
+function onDeletedMany(ids: string[]) {
+	const idSet = new Set(ids);
+	messages.value = messages.value.filter(message => !idSet.has(message.id));
+}
+
+function onCleared() {
+	messages.value = [];
+	canFetchMore.value = false;
+	canFetchNewer.value = false;
+	replyTarget.value = null;
+	quoteTarget.value = null;
+	contextTargetMessageId.value = null;
+	pendingContextScrollId.value = null;
+	clearNewMessageIndicator();
+}
+
+function onPruned(ctx: Parameters<Misskey.Channels['chatRoom']['events']['pruned']>[0]) {
+	messages.value = messages.value.filter(message => message.id >= ctx.cutoffId);
+	if (messages.value.length === 0) {
+		canFetchMore.value = false;
+		canFetchNewer.value = false;
+	}
+}
+
 function onReact(ctx: Parameters<Misskey.Channels['chatUser']['events']['react']>[0] | Parameters<Misskey.Channels['chatRoom']['events']['react']>[0]) {
 	const message = messages.value.find(m => m.id === ctx.messageId);
 	if (message) {
@@ -1061,7 +1098,11 @@ const headerTabs = computed(() => room.value ? room.value.isJoined ? [{
 	key: 'info',
 	title: i18n.ts.info,
 	icon: 'ti ti-info-circle',
-}] : [{
+}, ...(room.value.canManage ? [{
+	key: 'management',
+	title: i18n.ts._chat.management,
+	icon: 'ti ti-shield-cog',
+}] : [])] : [{
 	key: 'chat',
 	title: i18n.ts.chat,
 	icon: 'ti ti-messages',

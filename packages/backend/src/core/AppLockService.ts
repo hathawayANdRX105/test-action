@@ -46,6 +46,28 @@ export class AppLockService {
 	public getChatRoomJoinLock(roomId: string, timeout = 10 * 1000): Promise<Unlock> {
 		return this.lock(`chat-room-join:${roomId}`, timeout);
 	}
+
+	@bindThis
+	public getChatRetentionLock(timeout = 60 * 60 * 1000): Promise<Unlock> {
+		return this.lock('chat-retention', timeout);
+	}
+
+	@bindThis
+	public async tryGetChatRetentionLock(timeout = 60 * 60 * 1000): Promise<Unlock | null> {
+		const key = 'lock:chat-retention';
+		const token = `${Date.now()}:${Math.random()}`;
+		const result = await this.redisClient.set(key, token, 'PX', timeout, 'NX');
+		if (result !== 'OK') return null;
+
+		return async () => {
+			await this.redisClient.eval(
+				'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end',
+				1,
+				key,
+				token,
+			);
+		};
+	}
 }
 
 /**

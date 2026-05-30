@@ -87,6 +87,7 @@ import { FeaturedService } from './FeaturedService.js';
 import { FanoutTimelineService } from './FanoutTimelineService.js';
 import { ChannelFollowingService } from './ChannelFollowingService.js';
 import { ChatService } from './ChatService.js';
+import { ChatRetentionService } from './ChatRetentionService.js';
 import { RegistryApiService } from './RegistryApiService.js';
 import { ReversiService } from './ReversiService.js';
 
@@ -240,6 +241,7 @@ const $FanoutTimelineService: Provider = { provide: 'FanoutTimelineService', use
 const $FanoutTimelineEndpointService: Provider = { provide: 'FanoutTimelineEndpointService', useExisting: FanoutTimelineEndpointService };
 const $ChannelFollowingService: Provider = { provide: 'ChannelFollowingService', useExisting: ChannelFollowingService };
 const $ChatService: Provider = { provide: 'ChatService', useExisting: ChatService };
+const $ChatRetentionService: Provider = { provide: 'ChatRetentionService', useExisting: ChatRetentionService };
 const $RegistryApiService: Provider = { provide: 'RegistryApiService', useExisting: RegistryApiService };
 const $ReversiService: Provider = { provide: 'ReversiService', useExisting: ReversiService };
 const $InstanceStatsService = { provide: 'InstanceStatsService', useExisting: InstanceStatsService };
@@ -403,6 +405,7 @@ const $Imports = [
 		FanoutTimelineEndpointService,
 		ChannelFollowingService,
 		ChatService,
+		ChatRetentionService,
 		RegistryApiService,
 		ReversiService,
 		InstanceStatsService,
@@ -563,6 +566,7 @@ const $Imports = [
 		$FanoutTimelineEndpointService,
 		$ChannelFollowingService,
 		$ChatService,
+		$ChatRetentionService,
 		$RegistryApiService,
 		$ReversiService,
 		$InstanceStatsService,
@@ -722,6 +726,7 @@ const $Imports = [
 		FanoutTimelineEndpointService,
 		ChannelFollowingService,
 		ChatService,
+		ChatRetentionService,
 		RegistryApiService,
 		ReversiService,
 		InstanceStatsService,
@@ -880,6 +885,7 @@ const $Imports = [
 		$FanoutTimelineEndpointService,
 		$ChannelFollowingService,
 		$ChatService,
+		$ChatRetentionService,
 		$RegistryApiService,
 		$ReversiService,
 		$InstanceStatsService,

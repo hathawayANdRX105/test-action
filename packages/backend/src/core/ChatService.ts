@@ -42,6 +42,9 @@ import { promiseMap } from '@/misc/promise-map.js';
 export const MIN_CHAT_ROOM_MEMBER_LIMIT = 1;
 export const MAX_CHAT_ROOM_MEMBER_LIMIT = 10000;
 export const LARGE_CHAT_ROOM_MEMBER_THRESHOLD = 500;
+export const MIN_CHAT_ROOM_MESSAGE_RETENTION_DAYS = 1;
+export const MAX_CHAT_ROOM_MESSAGE_RETENTION_DAYS = 3650;
+export const CHAT_ROOM_RETENTION_BATCH_SIZE = 1000;
 const ROOM_MEMBER_COUNT_CACHE_TTL = 60;
 const MAX_REACTIONS_PER_MESSAGE = 100;
 const isCustomEmojiRegexp = /^:([\w+-]+)(?:@\.)?:$/;
@@ -511,6 +514,25 @@ export class ChatService {
 	}
 
 	@bindThis
+	public async hasPermissionToManageRoom(me: MiUser, room: MiChatRoom) {
+		return await this.roleService.isModerator(me);
+	}
+
+	@bindThis
+	public async hasPermissionToDeleteMessage(me: MiUser, message: MiChatMessage) {
+		if (message.fromUserId === me.id) return true;
+		if (message.toRoomId != null) {
+			const room = await this.chatRoomsRepository.findOneBy({ id: message.toRoomId });
+			if (room == null) return false;
+			return await this.hasPermissionToManageRoom(me, room);
+		}
+		if (message.toUserId != null) {
+			return await this.roleService.isModerator(me);
+		}
+		return false;
+	}
+
+	@bindThis
 	public findMyMessageById(userId: MiUser['id'], messageId: MiChatMessage['id']) {
 		return this.chatMessagesRepository.findOneBy({ id: messageId, fromUserId: userId });
 	}
@@ -549,6 +571,165 @@ export class ChatService {
 		} else if (message.toRoomId) {
 			this.globalEventService.publishChatRoomStream(message.toRoomId, 'deleted', message.id);
 		}
+	}
+
+	@bindThis
+	private assertValidRoomMessageRetentionDays(days: number) {
+		if (!Number.isInteger(days) || days < MIN_CHAT_ROOM_MESSAGE_RETENTION_DAYS || days > MAX_CHAT_ROOM_MESSAGE_RETENTION_DAYS) {
+			throw new Error('invalid chat room message retention days');
+		}
+	}
+
+	@bindThis
+	public async updateRoomMessageRetentionDays(room: MiChatRoom, messageRetentionDays: number | null): Promise<MiChatRoom> {
+		if (messageRetentionDays != null) {
+			this.assertValidRoomMessageRetentionDays(messageRetentionDays);
+		}
+
+		return this.chatRoomsRepository.createQueryBuilder().update()
+			.set({ messageRetentionDays })
+			.where('id = :id', { id: room.id })
+			.returning('*')
+			.execute()
+			.then((response) => {
+				return response.raw[0];
+			});
+	}
+
+	@bindThis
+	public async deleteAllRoomMessages(room: MiChatRoom): Promise<void> {
+		await this.chatMessagesRepository.delete({ toRoomId: room.id });
+
+		const redisPipeline = this.redisClient.pipeline();
+		const memberships = await this.chatRoomMembershipsRepository.findBy({ roomId: room.id });
+		const memberUserIds = Array.from(new Set([...memberships.map(membership => membership.userId), room.ownerId]));
+		for (const userId of memberUserIds) {
+			redisPipeline.del(`newRoomChatMessageExists:${userId}:${room.id}`);
+			redisPipeline.del(`newRoomChatMentionExists:${userId}:${room.id}`);
+			redisPipeline.del(`readRoomChatMessage:${userId}:${room.id}`);
+			redisPipeline.srem(`newChatMessagesExists:${userId}`, `room:${room.id}`);
+		}
+		redisPipeline.del(`latestRoomChatMessage:${room.id}`);
+		await redisPipeline.exec();
+
+		this.globalEventService.publishChatRoomStream(room.id, 'cleared', null);
+	}
+
+	@bindThis
+	public async deleteRoomMessagesByUser(room: MiChatRoom, userId: MiUser['id']): Promise<MiChatMessage['id'][]> {
+		const targets = await this.chatMessagesRepository
+			.createQueryBuilder('message')
+			.select('message.id', 'id')
+			.where('message.toRoomId = :roomId', { roomId: room.id })
+			.andWhere('message.fromUserId = :userId', { userId })
+			.orderBy('message.id', 'ASC')
+			.getRawMany<{ id: MiChatMessage['id']; }>();
+
+		const ids = targets.map(target => target.id);
+		if (ids.length === 0) return [];
+
+		await this.chatMessagesRepository.delete(ids);
+
+		const redisPipeline = this.redisClient.pipeline();
+		const memberships = await this.chatRoomMembershipsRepository.findBy({ roomId: room.id });
+		const memberUserIds = Array.from(new Set([...memberships.map(membership => membership.userId), room.ownerId]));
+		for (const memberUserId of memberUserIds) {
+			redisPipeline.del(`newRoomChatMessageExists:${memberUserId}:${room.id}`);
+			redisPipeline.del(`newRoomChatMentionExists:${memberUserId}:${room.id}`);
+			redisPipeline.del(`readRoomChatMessage:${memberUserId}:${room.id}`);
+			redisPipeline.srem(`newChatMessagesExists:${memberUserId}`, `room:${room.id}`);
+		}
+
+		const latestRoomMessageId = await this.chatMessagesRepository
+			.createQueryBuilder('message')
+			.select('message.id', 'id')
+			.where('message.toRoomId = :roomId', { roomId: room.id })
+			.orderBy('message.id', 'DESC')
+			.limit(1)
+			.getRawOne<{ id: MiChatMessage['id']; }>();
+		if (latestRoomMessageId == null) {
+			redisPipeline.del(`latestRoomChatMessage:${room.id}`);
+		} else {
+			redisPipeline.set(`latestRoomChatMessage:${room.id}`, latestRoomMessageId.id, 'EX', 60 * 60 * 24 * 30);
+		}
+		await redisPipeline.exec();
+
+		this.globalEventService.publishChatRoomStream(room.id, 'deletedMany', ids);
+		return ids;
+	}
+
+	@bindThis
+	public async pruneRoomMessages(room: MiChatRoom, cutoffId: MiChatMessage['id'], limit = CHAT_ROOM_RETENTION_BATCH_SIZE): Promise<number> {
+		const targets = await this.chatMessagesRepository
+			.createQueryBuilder('message')
+			.select('message.id', 'id')
+			.where('message.toRoomId = :roomId', { roomId: room.id })
+			.andWhere('message.id < :cutoffId', { cutoffId })
+			.orderBy('message.id', 'ASC')
+			.limit(limit)
+			.getRawMany<{ id: MiChatMessage['id']; }>();
+
+		if (targets.length === 0) return 0;
+
+		const deleteResult = await this.chatMessagesRepository.delete(targets.map(target => target.id));
+		const deleted = deleteResult.affected ?? targets.length;
+		if (deleted > 0) {
+			this.globalEventService.publishChatRoomStream(room.id, 'pruned', { cutoffId });
+		}
+		return deleted;
+	}
+
+	@bindThis
+	public async getRoomMessageStats(room: MiChatRoom, days: number): Promise<{
+		total: number;
+		oldestAt: string | null;
+		newestAt: string | null;
+		daily: { date: string; count: number; }[];
+	}> {
+		const totalPromise = this.chatMessagesRepository.countBy({ toRoomId: room.id });
+		const newestPromise = this.chatMessagesRepository.findOne({
+			select: { id: true },
+			where: { toRoomId: room.id },
+			order: { id: 'DESC' },
+		});
+		const oldestPromise = this.chatMessagesRepository.findOne({
+			select: { id: true },
+			where: { toRoomId: room.id },
+			order: { id: 'ASC' },
+		});
+
+		const daily: { date: string; count: number; }[] = [];
+		const today = new Date(this.timeService.now);
+		today.setUTCHours(0, 0, 0, 0);
+
+		for (let i = days - 1; i >= 0; i--) {
+			const start = new Date(today);
+			start.setUTCDate(today.getUTCDate() - i);
+			const end = new Date(start);
+			end.setUTCDate(start.getUTCDate() + 1);
+			const sinceId = this.idService.gen(start.getTime());
+			const untilId = this.idService.gen(end.getTime());
+			const count = await this.chatMessagesRepository
+				.createQueryBuilder('message')
+				.where('message.toRoomId = :roomId', { roomId: room.id })
+				.andWhere('message.id >= :sinceId', { sinceId })
+				.andWhere('message.id < :untilId', { untilId })
+				.getCount();
+
+			daily.push({
+				date: start.toISOString().slice(0, 10),
+				count,
+			});
+		}
+
+		const [total, newest, oldest] = await Promise.all([totalPromise, newestPromise, oldestPromise]);
+
+		return {
+			total,
+			oldestAt: oldest == null ? null : this.idService.parse(oldest.id).date.toISOString(),
+			newestAt: newest == null ? null : this.idService.parse(newest.id).date.toISOString(),
+			daily,
+		};
 	}
 
 	@bindThis

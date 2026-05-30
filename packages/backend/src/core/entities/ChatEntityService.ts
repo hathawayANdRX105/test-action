@@ -334,11 +334,13 @@ export class ChatEntityService {
 
 		const membership = me && me.id !== room.ownerId ? (options?._hint_?.memberships?.get(room.id) ?? await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
 		const isJoined = me != null && (me.id === room.ownerId || membership != null);
-		const [memberCount, isAdministrator] = await Promise.all([
+		const [memberCount, isAdministrator, isModerator] = await Promise.all([
 			this.chatRoomMembershipsRepository.countBy({ roomId: room.id }).then(count => count + 1),
 			me != null ? this.roleService.isAdministrator(me) : false,
+			me != null ? this.roleService.isModerator(me) : false,
 		]);
 		const canSeeOverride = me != null && (me.id === room.ownerId || isAdministrator);
+		const canManage = me != null && isModerator;
 
 		return {
 			id: room.id,
@@ -348,6 +350,8 @@ export class ChatEntityService {
 			joinMode: room.joinMode,
 			memberLimit: room.memberLimitOverride ?? this.meta.chatRoomDefaultMemberLimit,
 			memberLimitOverride: canSeeOverride ? room.memberLimitOverride : undefined,
+			canManage,
+			messageRetentionDays: canManage ? room.messageRetentionDays : undefined,
 			memberCount,
 			isJoined,
 			ownerId: room.ownerId,
