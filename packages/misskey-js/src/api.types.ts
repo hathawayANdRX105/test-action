@@ -1,5 +1,5 @@
 import type { Endpoints as Gen } from './autogen/endpoint.js';
-import type { Channel, Note, UserDetailed } from './autogen/models.js';
+import type { Channel, ChatRoom, Note, UserDetailed } from './autogen/models.js';
 import type {
 	AdminChatRoomsListRequest,
 	AdminChatRoomsListResponse,
@@ -13,6 +13,7 @@ import type {
 	AdminRolesCreateResponse,
 	UsersShowRequest,
 	EmptyRequest,
+	EmptyResponse,
 } from './autogen/entities.js';
 import type {
 	PartialRolePolicyOverride,
@@ -136,11 +137,50 @@ export type Endpoints = Overwrite<
 			req: AdminChatRoomsUpdateRequest;
 			res: AdminChatRoomsUpdateResponse;
 		},
+		'chat/rooms/manage/update': {
+			req: {
+				roomId: string;
+				messageRetentionDays: number | null;
+			};
+			res: ChatRoom;
+		},
+		'chat/rooms/manage/delete-all-messages': {
+			req: {
+				roomId: string;
+			};
+			res: EmptyResponse;
+		},
+		'chat/rooms/manage/delete-user-messages': {
+			req: {
+				roomId: string;
+				userId: string;
+			};
+			res: {
+				deletedIds: string[];
+			};
+		},
+		'chat/rooms/manage/stats': {
+			req: {
+				roomId: string;
+				days?: number;
+			};
+			res: {
+				total: number;
+				oldestAt: string | null;
+				newestAt: string | null;
+				daily: {
+					date: string;
+					count: number;
+				}[];
+			};
+		},
 		'notes/recommended-timeline': {
 			req: {
 				scope?: 'local' | 'social' | 'global' | 'mixed';
 				surface?: 'home' | 'explore';
 				category?: 'forYou' | 'trending' | 'messages' | 'sports' | 'entertainment' | 'tutorials' | 'resources';
+				sort?: 'personalized' | 'latestReply';
+				rankMode?: 'personalized' | 'trending';
 				withFiles?: boolean;
 				withRenotes?: boolean;
 				withBots?: boolean;

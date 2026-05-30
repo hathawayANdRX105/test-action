@@ -11991,6 +11991,8 @@ export type components = {
             joinMode: 'inviteOnly' | 'open' | 'closed';
             memberLimit: number;
             memberLimitOverride?: number | null;
+            canManage: boolean;
+            messageRetentionDays?: number | null;
             memberCount: number;
             isJoined: boolean;
             isMuted?: boolean;

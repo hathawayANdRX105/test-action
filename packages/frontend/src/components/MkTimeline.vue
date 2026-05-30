@@ -62,6 +62,8 @@ const props = withDefaults(defineProps<{
 	discoveryMode?: boolean;
 	recommendationSurface?: 'home' | 'explore';
 	recommendationCategory?: 'forYou' | 'trending' | 'messages' | 'sports' | 'entertainment' | 'tutorials' | 'resources';
+	recommendationSort?: 'personalized' | 'latestReply';
+	recommendationRankMode?: 'personalized' | 'trending';
 }>(), {
 	withRenotes: true,
 	withReplies: false,
@@ -72,6 +74,8 @@ const props = withDefaults(defineProps<{
 	discoveryMode: false,
 	recommendationSurface: 'home',
 	recommendationCategory: 'forYou',
+	recommendationSort: 'personalized',
+	recommendationRankMode: 'personalized',
 });
 
 const emit = defineEmits<{
@@ -233,6 +237,8 @@ function updatePaginationQuery() {
 			scope: recommendationScope,
 			surface: props.recommendationSurface,
 			category: props.recommendationCategory,
+			sort: props.recommendationSort,
+			rankMode: props.recommendationRankMode,
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
 			withBots: props.withBots,
@@ -336,7 +342,7 @@ function refreshEndpointAndChannel() {
 
 // デッキのリストカラムでwithRenotesを変更した場合に自動的に更新されるようにさせる
 // IDが切り替わったら切り替え先のTLを表示させたい
-watch(() => [props.list, props.antenna, props.channel, props.role, props.withRenotes, props.withBots, props.withReplies, props.onlyFiles, props.localTimelineMode, props.recommendationSurface, props.recommendationCategory], refreshEndpointAndChannel);
+watch(() => [props.list, props.antenna, props.channel, props.role, props.withRenotes, props.withBots, props.withReplies, props.onlyFiles, props.localTimelineMode, props.recommendationSurface, props.recommendationCategory, props.recommendationSort, props.recommendationRankMode], refreshEndpointAndChannel);
 
 // withSensitiveはクライアントで完結する処理のため、単にリロードするだけでOK
 watch(() => props.withSensitive, reloadTimeline);

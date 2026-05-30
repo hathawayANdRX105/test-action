@@ -121,7 +121,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 			</MkReactionsViewer>
 			<footer :class="$style.footer" class="_gaps _h_gaps" tabindex="0" role="group" :aria-label="i18n.ts.noteFooterLabel">
-				<button :class="$style.footerButton" class="_button" @click.stop @click="reply()">
+				<button :class="[$style.footerButton, $style.replyButton]" class="_button" @click.stop @click="reply()">
 					<i class="ti ti-arrow-back-up"></i>
 					<p v-if="appearNote.repliesCount > 0" :class="$style.footerButtonCount">{{ number(appearNote.repliesCount) }}</p>
 				</button>
@@ -129,9 +129,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					v-if="canRenote"
 					ref="renoteButton"
 					v-tooltip="renoteTooltip"
-					:class="$style.footerButton"
+					:class="[$style.footerButton, $style.renoteButton]"
 					class="_button"
-					:style="appearNote.isRenoted ? 'color: var(--MI_THEME-accent) !important;' : ''"
+					:style="appearNote.isRenoted ? 'color: var(--MI_THEME-renote) !important;' : ''"
 					@click.stop
 					@mousedown.prevent="appearNote.isRenoted ? undoRenote(appearNote) : boostVisibility($event.shiftKey)"
 				>
@@ -144,30 +144,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button
 					v-if="canRenote && !props.mock && !$i?.rejectQuotes"
 					ref="quoteButton"
-					:class="$style.footerButton"
+					:class="[$style.footerButton, $style.renoteButton]"
 					class="_button"
 					@click.stop
 					@mousedown="quote()"
 				>
 					<i class="ph-quotes ph-bold ph-lg"></i>
 				</button>
-				<button v-if="appearNote.myReaction == null && appearNote.reactionAcceptance !== 'likeOnly'" ref="likeButton" :class="$style.footerButton" class="_button" @click.stop @click="like()">
+				<button v-if="appearNote.myReaction == null && appearNote.reactionAcceptance !== 'likeOnly'" ref="likeButton" :class="[$style.footerButton, $style.likeButton]" class="_button" @click.stop @click="like()">
 					<i class="ph-heart ph-bold ph-lg"></i>
 				</button>
-				<button ref="reactButton" :class="$style.footerButton" class="_button" @click="toggleReact()" @click.stop>
+				<button ref="reactButton" :class="[$style.footerButton, $style.likeButton]" class="_button" @click="toggleReact()" @click.stop>
 					<i v-if="appearNote.reactionAcceptance === 'likeOnly' && appearNote.myReaction != null" class="ti ti-heart-filled" style="color: var(--MI_THEME-love);"></i>
 					<i v-else-if="appearNote.myReaction != null" class="ti ti-minus" style="color: var(--MI_THEME-accent);"></i>
 					<i v-else-if="appearNote.reactionAcceptance === 'likeOnly'" class="ti ti-heart"></i>
 					<i v-else class="ph-smiley ph-bold ph-lg"></i>
 					<p v-if="(appearNote.reactionAcceptance === 'likeOnly' || prefer.s.showReactionsCount) && appearNote.reactionCount > 0" :class="$style.footerButtonCount">{{ number(appearNote.reactionCount) }}</p>
 				</button>
-				<button v-if="prefer.s.showClipButtonInNoteFooter" ref="clipButton" :class="$style.footerButton" class="_button" @click.stop="clip()">
+				<button v-if="prefer.s.showClipButtonInNoteFooter" ref="clipButton" :class="[$style.footerButton, $style.utilityButton]" class="_button" @click.stop="clip()">
 					<i class="ti ti-paperclip"></i>
 				</button>
-				<button v-if="prefer.s.showTranslationButtonInNoteFooter && policies.canUseTranslator && instance.translatorAvailable" ref="translationButton" class="_button" :class="$style.footerButton" :disabled="translating || !!translation" @click.stop="translate()">
+				<button v-if="prefer.s.showTranslationButtonInNoteFooter && policies.canUseTranslator && instance.translatorAvailable" ref="translationButton" class="_button" :class="[$style.footerButton, $style.utilityButton]" :disabled="translating || !!translation" @click.stop="translate()">
 					<i class="ti ti-language-hiragana"></i>
 				</button>
-				<button ref="menuButton" :class="$style.footerButton" class="_button" @click.stop="showMenu()">
+				<button ref="menuButton" :class="[$style.footerButton, $style.utilityButton]" class="_button" @click.stop="showMenu()">
 					<i class="ti ti-dots"></i>
 				</button>
 			</footer>
@@ -177,7 +177,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, ref, useTemplateRef, watch, provide } from 'vue';
+import { computed, inject, onMounted, onUnmounted, ref, useTemplateRef, watch, provide } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import { isLink } from '@@/js/is-link.js';
@@ -234,7 +234,7 @@ import SkNoteTranslation from '@/components/SkNoteTranslation.vue';
 import { getSelfNoteIds } from '@/utility/get-self-note-ids.js';
 import { extractPreviewUrls } from '@/utility/extract-preview-urls.js';
 import SkUrlPreviewGroup from '@/components/SkUrlPreviewGroup.vue';
-import { sendRecommendationFeedback } from '@/utility/recommendation-feedback.js';
+import { sendRecommendationFeedback, setupRecommendationVisibilityFeedback } from '@/utility/recommendation-feedback.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -308,6 +308,15 @@ const animated = computed(() => parsed.value ? checkAnimationFromMfm(parsed.valu
 const conversation = ref<Misskey.entities.Note[]>([]);
 const conversationLoaded = ref(false);
 const allowAnim = ref(prefer.s.advancedMfm && prefer.s.animatedMfm);
+let cleanupRecommendationVisibilityFeedback: (() => void) | null = null;
+
+onMounted(() => {
+	cleanupRecommendationVisibilityFeedback = setupRecommendationVisibilityFeedback(appearNote.value.id, () => rootEl.value);
+});
+
+onUnmounted(() => {
+	cleanupRecommendationVisibilityFeedback?.();
+});
 
 watch(() => prefer.s.collapseNotesRepliedTo, (value) => {
 	inReplyToCollapsed.value = value;
@@ -545,6 +554,7 @@ function renote(visibility: Visibility, localOnly: boolean = false) {
 
 function quote() {
 	pleaseLogin({ openOnRemote: pleaseLoginContext.value });
+	sendRecommendationFeedback(appearNote.value.id, 'renote');
 	showMovedDialog();
 	if (props.mock) {
 		return;
@@ -646,6 +656,7 @@ function react(viaKeyboard = false): void {
 	showMovedDialog();
 	if (appearNote.value.reactionAcceptance === 'likeOnly') {
 		sound.playMisskeySfx('reaction');
+		sendRecommendationFeedback(appearNote.value.id, 'react');
 
 		if (props.mock) {
 			return;
@@ -683,6 +694,7 @@ function react(viaKeyboard = false): void {
 				return;
 			}
 
+			sendRecommendationFeedback(appearNote.value.id, 'react');
 			misskeyApi('notes/reactions/create', {
 				noteId: appearNote.value.id,
 				reaction: reaction,
@@ -1205,18 +1217,51 @@ function emitUpdReaction(emoji: string, delta: number) {
 }
 
 .footerButton {
+	--actionColor: var(--MI_THEME-fgTransparentWeak);
+	--actionBg: color-mix(in srgb, var(--actionColor) 14%, transparent);
 	margin: 0;
-	padding: 8px;
+	padding: 0;
+	min-width: 34px;
+	height: 34px;
+	border-radius: 999px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
 	opacity: 0.7;
+	color: var(--MI_THEME-fgTransparentWeak);
+	transition: color .12s ease, background .12s ease, opacity .12s ease, transform .12s ease;
 
 	&:hover {
-		color: var(--MI_THEME-fgHighlighted);
+		opacity: 1;
+		color: var(--actionColor);
+		background: var(--actionBg);
 	}
+
+	&:active {
+		transform: scale(0.96);
+	}
+}
+
+.replyButton {
+	--actionColor: #1d9bf0;
+}
+
+.renoteButton {
+	--actionColor: #00ba7c;
+}
+
+.likeButton {
+	--actionColor: var(--MI_THEME-love);
+}
+
+.utilityButton {
+	--actionColor: var(--MI_THEME-accent);
 }
 
 .footerButtonCount {
 	display: inline;
-	margin: 0 0 0 8px;
+	margin: 0;
 	opacity: 0.7;
 }
 

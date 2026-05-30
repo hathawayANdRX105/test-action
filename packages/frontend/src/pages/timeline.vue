@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</button>
 			</header>
 
-			<section v-if="$i" :class="$style.composer">
+			<section v-if="$i && !composerExpanded" :class="$style.composer">
 				<MkAvatar :user="$i" :class="$style.composerAvatar"/>
 				<button class="_button" :class="$style.composerInput" @click="openPostForm">
 					{{ i18n.ts.whatsHappening }}
@@ -37,6 +37,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 					{{ i18n.ts.note }}
 				</button>
 			</section>
+
+			<MkPostForm
+				v-if="$i && composerExpanded"
+				:class="$style.composerForm"
+				:autofocus="true"
+				@posted="onComposerPosted"
+				@esc="onComposerCancel"
+				@cancel="onComposerCancel"
+			/>
 
 			<button v-if="queue > 0" class="_button" :class="$style.newPosts" @click="top">
 				{{ i18n.tsx.showNPosts({ n: queue }) }}
@@ -55,6 +64,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:discoveryMode="homeTab === 'forYou'"
 				recommendationSurface="home"
 				recommendationCategory="forYou"
+				:recommendationSort="homeTab === 'latestReplies' ? 'latestReply' : 'personalized'"
 				:sound="homeTab === 'following'"
 				@queue="queueUpdated"
 			/>
@@ -69,27 +79,31 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<section v-if="discoverySections.channels.length > 0" :class="$style.sideCard">
 				<div :class="$style.sideCardTitle">{{ i18n.ts.recommendedChannels }}</div>
-				<MkA v-for="channel in discoverySections.channels.slice(0, 3)" :key="channel.id" :to="`/channels/${channel.id}`" :class="$style.channelRow">
-					<span :class="$style.channelIcon" :style="{ background: channel.color }"><i class="ti ti-device-tv"></i></span>
-					<span :class="$style.channelBody">
-						<span :class="$style.channelName">{{ channel.name }}</span>
-						<span :class="$style.channelMeta">{{ i18n.tsx.channelStats({ notes: channel.notesCount, users: channel.usersCount }) }}</span>
-					</span>
-				</MkA>
+				<div :class="[$style.sideScrollList, $style.channelList]">
+					<MkA v-for="channel in discoverySections.channels.slice(0, 12)" :key="channel.id" :to="`/channels/${channel.id}`" :class="$style.channelRow">
+						<span :class="$style.channelIcon" :style="{ background: channel.color }"><i class="ti ti-device-tv"></i></span>
+						<span :class="$style.channelBody">
+							<span :class="$style.channelName">{{ channel.name }}</span>
+							<span :class="$style.channelMeta">{{ i18n.tsx.channelStats({ notes: channel.notesCount, users: channel.usersCount }) }}</span>
+						</span>
+					</MkA>
+				</div>
 			</section>
 
 			<section v-if="trendRows.length > 0" :class="$style.sideCard">
 				<div :class="$style.sideCardTitle">{{ i18n.ts.hotDiscussions }}</div>
-				<button
-					v-for="trend in trendRows"
-					:key="`${trend.type}:${trend.term}`"
-					class="_button"
-					:class="$style.trendRow"
-					@click="openTrend(trend.type, trend.term)"
-				>
-					<span :class="$style.trendTitle">{{ trend.type === 'tag' ? `#${trend.term}` : trend.term }}</span>
-					<span :class="$style.trendMeta">{{ trend.label }}</span>
-				</button>
+				<div :class="[$style.sideScrollList, $style.trendList]">
+					<button
+						v-for="trend in trendRows"
+						:key="`${trend.type}:${trend.term}`"
+						class="_button"
+						:class="$style.trendRow"
+						@click="openTrend(trend.type, trend.term)"
+					>
+						<span :class="$style.trendTitle">{{ trend.type === 'tag' ? `#${trend.term}` : trend.term }}</span>
+						<span :class="$style.trendMeta">{{ trend.label }}</span>
+					</button>
+				</div>
 			</section>
 
 			<section v-if="discoverySections.tutorialNotes.length > 0" :class="$style.sideCard">
@@ -122,6 +136,7 @@ import type * as Misskey from 'misskey-js';
 import MkTimeline from '@/components/MkTimeline.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkFollowButton from '@/components/MkFollowButton.vue';
+import MkPostForm from '@/components/MkPostForm.vue';
 import * as os from '@/os.js';
 import { store } from '@/store.js';
 import { i18n } from '@/i18n.js';
@@ -133,7 +148,7 @@ import { userPage } from '@/filters/user.js';
 
 provide('shouldOmitHeaderTitle', true);
 
-type HomeTab = 'forYou' | 'following';
+type HomeTab = 'forYou' | 'following' | 'latestReplies';
 type DiscoverySections = Misskey.Endpoints['notes/discovery-sections']['res'];
 
 const router = useRouter();
@@ -142,7 +157,9 @@ const pageComponent = useTemplateRef('pageComponent');
 
 const homeTab = ref<HomeTab>('forYou');
 const queue = ref(0);
+const composerExpanded = ref(false);
 const sidebarSearchQuery = ref('');
+
 const searchTrends = ref<{
 	popularSearches: string[];
 	recentTerms: string[];
@@ -172,9 +189,12 @@ const homeTabs = computed(() => [{
 }, {
 	key: 'following' as const,
 	title: i18n.ts.homeTimelineFollowing,
+}, {
+	key: 'latestReplies' as const,
+	title: i18n.ts.homeTimelineLatestReplies,
 }]);
 
-const timelineSrc = computed(() => homeTab.value === 'forYou' ? 'recommended' : 'home');
+const timelineSrc = computed(() => homeTab.value === 'following' ? 'home' : 'recommended');
 const withRenotes = computed(() => store.r.tl.value.filter.withRenotes);
 const withReplies = computed(() => store.r.tl.value.filter.withReplies);
 const withBots = computed(() => store.r.tl.value.filter.withBots);
@@ -187,17 +207,18 @@ const timelineKey = computed(() => [
 	withBots.value,
 	onlyFiles.value,
 	withSensitive.value,
+	homeTab.value === 'latestReplies' ? 'latestReply' : 'personalized',
 ].join(':'));
 
 const trendRows = computed(() => {
 	const rows: { type: 'search' | 'tag'; term: string; label: string }[] = [];
-	for (const term of searchTrends.value.popularSearches.slice(0, 3)) {
+	for (const term of searchTrends.value.popularSearches.slice(0, 5)) {
 		rows.push({ type: 'search', term, label: i18n.ts.popularSearches });
 	}
-	for (const term of searchTrends.value.recentTerms.slice(0, Math.max(0, 5 - rows.length))) {
+	for (const term of searchTrends.value.recentTerms.slice(0, Math.max(0, 10 - rows.length))) {
 		rows.push({ type: 'search', term, label: i18n.ts.recentContentTerms });
 	}
-	for (const term of searchTrends.value.hashtags.slice(0, Math.max(0, 6 - rows.length))) {
+	for (const term of searchTrends.value.hashtags.slice(0, Math.max(0, 14 - rows.length))) {
 		rows.push({ type: 'tag', term, label: i18n.ts.popularTags });
 	}
 	return rows;
@@ -226,7 +247,16 @@ function top(): void {
 }
 
 function openPostForm(): void {
-	os.post();
+	composerExpanded.value = true;
+}
+
+function onComposerPosted(): void {
+	composerExpanded.value = false;
+	tlComponent.value?.reloadTimeline();
+}
+
+function onComposerCancel(): void {
+	composerExpanded.value = false;
 }
 
 function submitSidebarSearch(): void {
@@ -276,10 +306,11 @@ definePage(() => ({
 
 <style lang="scss" module>
 .homeShell {
-	width: min(100%, 980px);
+	width: min(100%, 990px);
 	margin: 0 auto;
 	display: grid;
-	grid-template-columns: minmax(0, 600px) 350px;
+	grid-template-columns: minmax(0, 600px) 360px;
+	column-gap: 30px;
 	align-items: start;
 	min-height: 100%;
 }
@@ -289,6 +320,7 @@ definePage(() => ({
 	border-left: solid 1px var(--MI_THEME-divider);
 	border-right: solid 1px var(--MI_THEME-divider);
 	background: var(--MI_THEME-bg);
+	min-height: 100cqh;
 }
 
 .homeTabs {
@@ -296,8 +328,8 @@ definePage(() => ({
 	top: 0;
 	z-index: 10;
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	min-height: 54px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	min-height: 53px;
 	background: color-mix(in srgb, var(--MI_THEME-bg) 88%, transparent);
 	backdrop-filter: blur(16px);
 	border-bottom: solid 1px var(--MI_THEME-divider);
@@ -308,7 +340,10 @@ definePage(() => ({
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	min-width: 0;
+	padding: 0 8px;
 	font-weight: 700;
+	font-size: 15px;
 	color: var(--MI_THEME-fg);
 }
 
@@ -321,7 +356,7 @@ definePage(() => ({
 	position: absolute;
 	left: 50%;
 	bottom: 0;
-	width: 56px;
+	width: 58px;
 	height: 4px;
 	border-radius: 999px;
 	background: var(--MI_THEME-accent);
@@ -332,7 +367,7 @@ definePage(() => ({
 	display: grid;
 	grid-template-columns: 48px minmax(0, 1fr) auto;
 	gap: 10px 12px;
-	padding: 16px;
+	padding: 16px 16px 14px;
 	border-bottom: solid 1px var(--MI_THEME-divider);
 }
 
@@ -345,7 +380,7 @@ definePage(() => ({
 .composerInput {
 	min-height: 44px;
 	text-align: left;
-	font-size: 1.15em;
+	font-size: 20px;
 	color: var(--MI_THEME-fgTransparentWeak);
 }
 
@@ -359,8 +394,13 @@ definePage(() => ({
 .composeButton {
 	align-self: center;
 	border-radius: 999px;
-	padding: 9px 20px;
+	min-height: 36px;
+	padding: 0 18px;
 	font-weight: 700;
+}
+
+.composerForm {
+	border-bottom: solid 1px var(--MI_THEME-divider);
 }
 
 .newPosts {
@@ -375,15 +415,27 @@ definePage(() => ({
 	background: var(--MI_THEME-bg);
 }
 
+// Twitter-like feed rhythm: subtle hover highlight on each post row.
+.timeline :deep([data-scroll-anchor]) {
+	transition: background .1s;
+}
+
+.timeline :deep([data-scroll-anchor]):hover {
+	background: var(--MI_THEME-panelHighlight);
+}
+
 .rightRail {
 	position: sticky;
-	top: 0;
+	top: var(--MI-stickyTop, 0px);
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
-	max-height: 100cqh;
-	overflow: auto;
-	padding: 10px 0 24px 30px;
+	min-height: 0;
+	max-height: calc(100dvh - var(--MI-stickyTop, 0px) - var(--MI-stickyBottom, 0px) - var(--MI-visualViewportBottom, 0px));
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	padding: 10px 0 24px;
 }
 
 .searchBox :global(.root) {
@@ -395,13 +447,43 @@ definePage(() => ({
 	border-radius: 16px;
 	padding: 16px;
 	background: var(--MI_THEME-panel);
+	overflow: hidden;
+}
+
+.trendRow,
+.channelRow,
+.noteTeaser {
+	transition: background .1s;
+}
+
+.trendRow:hover,
+.channelRow:hover,
+.noteTeaser:hover {
+	background: var(--MI_THEME-panelHighlight);
 }
 
 .sideCardTitle {
 	margin-bottom: 12px;
-	font-size: 1.15em;
+	font-size: 20px;
 	font-weight: 800;
 	color: var(--MI_THEME-fg);
+}
+
+.sideScrollList {
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding-right: 4px;
+	margin-right: -4px;
+	scrollbar-gutter: stable;
+}
+
+.channelList {
+	max-height: 300px;
+}
+
+.trendList {
+	max-height: 360px;
 }
 
 .followButton {
@@ -504,6 +586,13 @@ definePage(() => ({
 .userBody {
 	min-width: 0;
 	color: inherit;
+}
+
+@media (max-width: 1200px) {
+	.homeShell {
+		grid-template-columns: minmax(0, 600px) 320px;
+		width: min(100%, 950px);
+	}
 }
 
 @media (max-width: 1000px) {
