@@ -27,39 +27,15 @@ import { miLocalStorage } from '@/local-storage.js';
 import { fetchCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
 import { $i } from '@/i.js';
+import { repairFrontendRuntimeCaches, restoreDisplayStateNow } from '@/utility/frontend-consistency.js';
 
 export async function common(createVue: () => Promise<App<Element>>) {
 	console.info(`hhhl v${version}`);
 
 	async function repairStartupCache(reason: unknown): Promise<void> {
-		const repairKey = `sharkey:frontend-repair:${version}:${langsVersion}`;
-		const repairAttempts = Number(window.sessionStorage.getItem(repairKey) ?? '0');
-		if (repairAttempts >= 2) {
-			throw reason instanceof Error ? reason : new Error(String(reason));
-		}
-		window.sessionStorage.setItem(repairKey, String(repairAttempts + 1));
 		console.warn('Frontend startup failed. Clearing stale client caches and reloading once.', reason);
-		miLocalStorage.removeItem('localeVersion');
-		miLocalStorage.removeItem('locale');
-		try {
-			if ('caches' in window) {
-				await Promise.all((await window.caches.keys()).map(key => window.caches.delete(key)));
-			}
-		} catch (err) {
-			console.warn('Failed to clear caches during frontend startup repair.', err);
-		}
-		try {
-			if ('serviceWorker' in navigator) {
-				const registrations = await navigator.serviceWorker.getRegistrations();
-				await Promise.all(registrations.map(registration => registration.unregister()));
-			}
-		} catch (err) {
-			console.warn('Failed to unregister service workers during frontend startup repair.', err);
-		}
-		const url = new URL(window.location.href);
-		url.searchParams.set('_frontendRepair', Date.now().toString());
-		window.location.replace(url.toString());
-		await new Promise<never>(() => {});
+		await repairFrontendRuntimeCaches(reason, `startup:${langsVersion}`);
+		throw reason instanceof Error ? reason : new Error(String(reason));
 	}
 
 	if (_DEV_) {
@@ -170,20 +146,7 @@ export async function common(createVue: () => Promise<App<Element>>) {
 	}
 
 	function applyDisplayPreferenceVars() {
-		const html = window.document.documentElement;
-		const fontSize = prefer.s.fontSize;
-
-		html.classList.toggle('f-1', fontSize === '1');
-		html.classList.toggle('f-2', fontSize === '2');
-		html.classList.toggle('f-3', fontSize === '3');
-		html.classList.toggle('useSystemFont', prefer.s.useSystemFont);
-		html.classList.toggle('radius-misskey', prefer.s.cornerRadius === 'misskey');
-
-		if (fontSize === 'custom') {
-			html.style.fontSize = `${prefer.s.customFontSize}px`;
-		} else {
-			html.style.removeProperty('font-size');
-		}
+		restoreDisplayStateNow();
 	}
 
 	applyDisplayPreferenceVars();

@@ -18,13 +18,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, ref, shallowRef, provide } from 'vue';
+import { computed, inject, ref, shallowRef, provide, nextTick } from 'vue';
+import type { Component } from 'vue';
 import { randomId } from '@@/js/random-id.js';
 import type { Router } from '@/router.js';
 import { prefer } from '@/preferences.js';
 import MkLoadingPage from '@/pages/_loading_.vue';
 import { DI } from '@/di.js';
 import { deepEqual } from '@/utility/deep-equal.js';
+import { assertFrontendAssetsCurrent, queueDisplayStateRestore } from '@/utility/frontend-consistency.js';
 
 const UNCACHED_ROUTES = new Set(['/', '/explore', '/my/notifications']);
 
@@ -54,15 +56,23 @@ const cacheLimit = computed(() => UNCACHED_ROUTES.has(currentRoutePath.value) ? 
 router.useListener('change', ({ resolved }) => {
 	if (resolved == null || 'redirect' in resolved.route) return;
 	if (resolved.route.path === currentRoutePath.value && deepEqual(resolved.props, currentPageProps.value)) return;
+	const resolvedComponent: Component = 'component' in resolved.route ? resolved.route.component : MkLoadingPage;
+	const currentRouter = router;
 
 	function _() {
-		currentPageComponent.value = resolved.route.component;
+		currentPageComponent.value = resolvedComponent;
 		currentPageProps.value = resolved.props;
-		key.value = router.getCurrentFullPath();
+		key.value = currentRouter.getCurrentFullPath();
 		currentRoutePath.value = resolved.route.path;
 	}
 
 	_();
+	queueDisplayStateRestore();
+	nextTick(() => {
+		assertFrontendAssetsCurrent().catch(err => {
+			console.warn('Frontend consistency check failed.', err);
+		});
+	});
 });
 </script>
 

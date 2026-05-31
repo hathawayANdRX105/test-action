@@ -126,6 +126,12 @@ html._themeChanging_ {
 	}
 }
 
+html._sharkeyDisplayRepair_ {
+	&, * {
+		transition: none !important;
+	}
+}
+
 html,
 body,
 #misskey_app {

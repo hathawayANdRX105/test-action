@@ -41,13 +41,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { inject, provide, shallowRef } from 'vue';
+import { inject, provide, shallowRef, nextTick } from 'vue';
+import type { Component } from 'vue';
 import type { Router } from '@/router.js';
 import { prefer } from '@/preferences.js';
 import MkLoadingPage from '@/pages/_loading_.vue';
 import { DI } from '@/di.js';
 import { deepEqual } from '@/utility/deep-equal.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
+import { assertFrontendAssetsCurrent, queueDisplayStateRestore } from '@/utility/frontend-consistency.js';
 
 const props = defineProps<{
 	router?: Router;
@@ -59,14 +61,23 @@ if (router == null) {
 	throw new Error('no router provided');
 }
 
+type Tab = {
+	fullPath: string;
+	routePath: string;
+	component: Component;
+	props: Map<string, string | boolean>;
+};
+
+const activeRouter = router;
+
 const currentDepth = inject(DI.routerCurrentDepth, 0);
 provide(DI.routerCurrentDepth, currentDepth + 1);
 
-const tabs = shallowRef([{
-	fullPath: router.getCurrentFullPath(),
-	routePath: router.current.route.path,
-	component: 'component' in router.current.route ? router.current.route.component : MkLoadingPage,
-	props: router.current.props,
+const tabs = shallowRef<Tab[]>([{
+	fullPath: activeRouter.getCurrentFullPath(),
+	routePath: activeRouter.current.route.path,
+	component: 'component' in activeRouter.current.route ? activeRouter.current.route.component : MkLoadingPage,
+	props: activeRouter.current.props,
 }]);
 
 function mount() {
@@ -77,18 +88,18 @@ function mount() {
 function back() {
 	const prev = tabs.value[tabs.value.length - 2];
 	tabs.value = [...tabs.value.slice(0, tabs.value.length - 1)];
-	router.replace(prev.fullPath);
+	activeRouter.replace(prev.fullPath);
 }
 
-router.useListener('change', ({ resolved }) => {
+activeRouter.useListener('change', ({ resolved }) => {
 	const currentTab = tabs.value[tabs.value.length - 1];
 	const routePath = resolved.route.path;
 	if (resolved == null || 'redirect' in resolved.route) return;
 	if (resolved.route.path === currentTab.routePath && deepEqual(resolved.props, currentTab.props)) return;
-	const fullPath = router.getCurrentFullPath();
+	const fullPath = activeRouter.getCurrentFullPath();
 
 	if (tabs.value.some(tab => tab.routePath === routePath && deepEqual(resolved.props, tab.props))) {
-		const newTabs = [];
+		const newTabs: Tab[] = [];
 		for (const tab of tabs.value) {
 			newTabs.push(tab);
 
@@ -105,21 +116,28 @@ router.useListener('change', ({ resolved }) => {
 		{
 			fullPath: fullPath,
 			routePath,
-			component: resolved.route.component,
+			component: 'component' in resolved.route ? resolved.route.component : MkLoadingPage,
 			props: resolved.props,
 		},
 	] : [...tabs.value, {
 		fullPath: fullPath,
 		routePath,
-		component: resolved.route.component,
+		component: 'component' in resolved.route ? resolved.route.component : MkLoadingPage,
 		props: resolved.props,
 	}];
+	queueDisplayStateRestore();
+	nextTick(() => {
+		assertFrontendAssetsCurrent().catch(err => {
+			console.warn('Frontend consistency check failed.', err);
+		});
+	});
 });
 
-router.useListener('replace', ({ fullPath }) => {
+activeRouter.useListener('replace', ({ fullPath }) => {
 	const currentTab = tabs.value[tabs.value.length - 1];
 	currentTab.fullPath = fullPath;
 	tabs.value = [...tabs.value.slice(0, tabs.value.length - 1), currentTab];
+	queueDisplayStateRestore();
 });
 </script>
 

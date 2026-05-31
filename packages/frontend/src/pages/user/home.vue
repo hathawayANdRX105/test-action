@@ -66,7 +66,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkFukidashi>
 					</div>
 					<div v-if="user.roles.length > 0" class="roles">
-						<span v-for="role in user.roles" :key="role.id" v-tooltip="role.description" class="role" :style="{ '--color': role.color }">
+						<span v-for="role in user.roles" :key="role.id" v-tooltip="role.description" class="role" :style="{ '--color': role.color ?? undefined }">
 							<MkA v-adaptive-bg :to="`/roles/${role.id}`">
 								<img v-if="role.iconUrl" style="height: 1.3em; vertical-align: -22%;" :src="role.iconUrl"/>
 								{{ role.name }}
@@ -290,7 +290,7 @@ const bannerEl = ref<null | HTMLElement>(null);
 const memoTextareaEl = ref<null | HTMLElement>(null);
 const memoDraft = ref(props.user.memo);
 const isEditingMemo = ref(false);
-const moderationNote = ref(props.user.moderationNote);
+const moderationNote = ref(props.user.moderationNote ?? '');
 const editModerationNote = ref(false);
 const noteview = ref<string | null>(props.user.pinnedNotes.length ? 'pinned' : null);
 
@@ -364,9 +364,7 @@ const style = computed(() => {
 	}
 });
 
-const age = computed(() => {
-	return calcAge(props.user.birthday);
-});
+const age = computed(() => props.user.birthday != null ? calcAge(props.user.birthday) : 0);
 
 function menu(ev: MouseEvent) {
 	const { menu, cleanup } = getUserMenu(user.value, router);
@@ -528,19 +526,6 @@ onUnmounted(() => {
 
 			:deep(span + span) {
 				opacity: 0.82 !important;
-			}
-		}
-	}
-}
-
-:global(html[data-color-scheme=dark]) .ftskorzw {
-	> .main {
-		> .profile {
-			> .main {
-				> .banner-container > .title,
-				> .title {
-					@include readableUserTitleOnDark;
-				}
 			}
 		}
 	}
@@ -932,6 +917,81 @@ onUnmounted(() => {
 			}
 		}
 	}
+}
+</style>
+
+<style lang="scss">
+html[data-color-scheme=dark] .ftskorzw,
+html[style*="color-scheme: dark"] .ftskorzw,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .followedMessage,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .followedMessage,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .roles,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .roles,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .moderationNote,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .moderationNote,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .memo,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .memo,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .description,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .description,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .fields,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .fields,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .status,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .status {
+	color: var(--MI_THEME-fg) !important;
+	-webkit-text-fill-color: currentColor !important;
+}
+
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .banner-container > .title,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .banner-container > .title,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .title,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .title {
+	color: #fff !important;
+	-webkit-text-fill-color: #fff !important;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.55);
+}
+
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .banner-container > .title > .name,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .banner-container > .title > .name,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .title > .name,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .title > .name {
+	color: #fff !important;
+	-webkit-text-fill-color: #fff !important;
+}
+
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .banner-container > .title > .bottom,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .banner-container > .title > .bottom,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .title > .bottom,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .title > .bottom {
+	color: color-mix(in srgb, #fff 88%, transparent) !important;
+	-webkit-text-fill-color: currentColor !important;
+}
+
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .banner-container > .title > .bottom > *,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .banner-container > .title > .bottom > *,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .title > .bottom > *,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .title > .bottom > * {
+	color: inherit !important;
+	-webkit-text-fill-color: currentColor !important;
+	opacity: 1 !important;
+}
+
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .banner-container > .title > .bottom > .username,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .banner-container > .title > .bottom > .username,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .title > .bottom > .username,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .title > .bottom > .username {
+	color: color-mix(in srgb, #fff 92%, transparent) !important;
+	-webkit-text-fill-color: currentColor !important;
+}
+
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .banner-container > .title > .bottom > .username span,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .banner-container > .title > .bottom > .username span,
+html[data-color-scheme=dark] .ftskorzw > .main > .profile > .main > .title > .bottom > .username span,
+html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .title > .bottom > .username span {
+	color: inherit !important;
+	-webkit-text-fill-color: currentColor !important;
+	opacity: 1 !important;
 }
 </style>
 
