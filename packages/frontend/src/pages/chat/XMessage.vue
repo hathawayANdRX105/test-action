@@ -11,13 +11,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.header">
 			<MkUserName v-if="message.fromUser != null" :user="message.fromUser" :class="$style.sender"/>
 			<div :class="$style.headerMeta" @click.stop>
-				<button class="_button" :class="$style.menuButton" @click="showMenu">
+				<button v-if="!isPending" class="_button" :class="$style.menuButton" @click="showMenu">
 					<i class="ti ti-dots-circle-horizontal"></i>
 				</button>
 				<MkA v-if="isSearchResult && 'toRoom' in message && message.toRoom != null" :class="$style.contextLink" :to="`/chat/room/${message.toRoomId}`">{{ message.toRoom.name }}</MkA>
 				<MkA v-if="isSearchResult && 'toUser' in message && message.toUser != null && isMe" :class="$style.contextLink" :to="`/chat/user/${message.toUserId}`">@{{ message.toUser.username }}</MkA>
 				<MkTime :class="$style.time" :time="message.createdAt" mode="absolute"/>
-				<i v-if="isMe" class="ti ti-checks" :class="$style.sentIcon"></i>
+				<MkLoading v-if="isPending" :class="$style.pendingIcon" :em="true"/>
+				<i v-else-if="isMe" class="ti ti-checks" :class="$style.sentIcon"></i>
 			</div>
 		</div>
 		<div :class="[$style.bubble, { [$style.mentionedBubble]: isMentionedMe }]">
@@ -129,14 +130,18 @@ type MessageWithReferenceState = typeof props.message & {
 	replyUnavailable?: boolean;
 	quoteUnavailable?: boolean;
 };
+type MessageWithSendState = typeof props.message & {
+	sendStatus?: 'pending';
+};
 type MessageWithMentionState = typeof props.message & {
 	mentionedUserIds?: string[];
 	hasMentionForMe?: boolean;
 };
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
-const canDelete = computed(() => (isMe.value || props.canDeleteAnyMessage === true) && $i.policies.chatAvailability === 'available');
-const canManageSender = computed(() => props.canManageRoomUsers === true && !isMe.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
+const isPending = computed(() => (props.message as MessageWithSendState).sendStatus === 'pending');
+const canDelete = computed(() => !isPending.value && (isMe.value || props.canDeleteAnyMessage === true) && $i.policies.chatAvailability === 'available');
+const canManageSender = computed(() => !isPending.value && props.canManageRoomUsers === true && !isMe.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
 const messageWithReferenceState = computed<MessageWithReferenceState>(() => props.message);
 const isMentionedMe = computed(() => {
@@ -155,7 +160,7 @@ const visibleReactions = computed<VisibleReaction[]>(() => {
 });
 
 provide(DI.mfmEmojiReactCallback, (reaction) => {
-	if ($i.policies.chatAvailability !== 'available') return;
+	if (isPending.value || $i.policies.chatAvailability !== 'available') return;
 
 	sound.playMisskeySfx('reaction');
 	misskeyApi('chat/messages/react', {
@@ -165,7 +170,7 @@ provide(DI.mfmEmojiReactCallback, (reaction) => {
 });
 
 function react(ev: MouseEvent) {
-	if ($i.policies.chatAvailability !== 'available') return;
+	if (isPending.value || $i.policies.chatAvailability !== 'available') return;
 
 	const targetEl = getHTMLElementOrNull(ev.currentTarget ?? ev.target);
 	if (!targetEl) return;
@@ -219,6 +224,8 @@ function openReference(messageId: string) {
 }
 
 function showMenu(ev: MouseEvent, contextmenu = false) {
+	if (isPending.value) return;
+
 	const menu: MenuItem[] = [];
 
 	if (props.enableReferenceActions && $i.policies.chatAvailability === 'available') {
@@ -541,7 +548,8 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 }
 
 .time,
-.sentIcon {
+.sentIcon,
+.pendingIcon {
 	flex: 0 0 auto;
 }
 

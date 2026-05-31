@@ -44,7 +44,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onMounted, watch, ref, shallowRef, computed, nextTick, readonly, onBeforeUnmount } from 'vue';
+import { onMounted, watch, ref, shallowRef, computed, nextTick, onBeforeUnmount } from 'vue';
 import * as Misskey from 'misskey-js';
 //import insertTextAtCursor from 'insert-text-at-cursor';
 import { formatTimeString } from '@@/js/format-time-string.js';
@@ -58,6 +58,9 @@ import { misskeyApi, printError } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
+import { ensureSignin } from '@/i.js';
+
+const $i = ensureSignin();
 
 const props = defineProps<{
 	user?: Misskey.entities.UserDetailed | null;
@@ -67,10 +70,26 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-	(ev: 'sent', message: Misskey.entities.ChatMessageLite): void;
+	(ev: 'sending', message: NormalizedChatMessage): void;
+	(ev: 'sent', message: Misskey.entities.ChatMessageLite, clientId: string): void;
+	(ev: 'sendFailed', clientId: string): void;
+	(ev: 'restoreReferences', payload: { replyTarget: NormalizedChatMessage | null; quoteTarget: NormalizedChatMessage | null }): void;
 	(ev: 'clearReply'): void;
 	(ev: 'clearQuote'): void;
 }>();
+
+type SendTarget =
+	| { type: 'user'; user: Misskey.entities.UserDetailed }
+	| { type: 'room'; room: Misskey.entities.ChatRoom };
+
+type SendSnapshot = {
+	clientId: string;
+	target: SendTarget;
+	text: string;
+	file: Misskey.entities.DriveFile | null;
+	replyTarget: NormalizedChatMessage | null;
+	quoteTarget: NormalizedChatMessage | null;
+};
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
 const fileEl = shallowRef<HTMLInputElement>();
@@ -81,11 +100,14 @@ const sending = ref(false);
 const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
 let focusScrollTimers: number[] = [];
+let sendSerial = 0;
 
 const canSend = computed(() => (text.value != null && text.value !== '') || file.value != null);
 
-function getDraftKey() {
-	return props.user ? 'user:' + props.user.id : 'room:' + props.room?.id;
+function getDraftKey(): string | null {
+	if (props.user) return 'user:' + props.user.id;
+	if (props.room) return 'room:' + props.room.id;
+	return null;
 }
 
 watch([text, file], saveDraft);
@@ -227,51 +249,84 @@ function upload(fileToUpload: File, name?: string) {
 	});
 }
 
-function send() {
-	if (!canSend.value) return;
+function getSendTarget(): SendTarget | null {
+	if (props.user) return { type: 'user', user: props.user };
+	if (props.room) return { type: 'room', room: props.room };
+	return null;
+}
 
+function createSendSnapshot(target: SendTarget): SendSnapshot {
+	return {
+		clientId: `${Date.now()}-${++sendSerial}`,
+		target,
+		text: text.value,
+		file: file.value,
+		replyTarget: props.replyTarget ?? null,
+		quoteTarget: props.quoteTarget ?? null,
+	};
+}
+
+function createOptimisticMessage(snapshot: SendSnapshot): NormalizedChatMessage {
+	return {
+		id: `~chat-pending-${snapshot.clientId}`,
+		clientId: snapshot.clientId,
+		sendStatus: 'pending',
+		createdAt: new Date().toISOString(),
+		fromUserId: $i.id,
+		fromUser: $i,
+		toUserId: snapshot.target.type === 'user' ? snapshot.target.user.id : null,
+		toRoomId: snapshot.target.type === 'room' ? snapshot.target.room.id : null,
+		text: snapshot.text !== '' ? snapshot.text : null,
+		fileId: snapshot.file?.id ?? null,
+		file: snapshot.file,
+		replyId: snapshot.replyTarget?.id ?? null,
+		reply: snapshot.replyTarget,
+		quoteId: snapshot.quoteTarget?.id ?? null,
+		quote: snapshot.quoteTarget,
+		replyUnavailable: false,
+		quoteUnavailable: false,
+		reactions: [],
+	};
+}
+
+async function send() {
+	if (sending.value || !canSend.value) return;
+
+	const target = getSendTarget();
+	if (target == null) return;
+
+	const snapshot = createSendSnapshot(target);
 	sending.value = true;
+	emit('sending', createOptimisticMessage(snapshot));
+	clear();
 
-	if (props.user) {
-		misskeyApi('chat/messages/create-to-user', {
-			toUserId: props.user.id,
-			text: text.value ? text.value : undefined,
-			fileId: file.value ? file.value.id : undefined,
-			replyId: props.replyTarget?.id,
-			quoteId: props.quoteTarget?.id,
-		}).then(message => {
-			emit('sent', message);
-			clear();
-		}).catch(err => {
-			console.error('Error in chat:', err);
-			return os.alert({
-				type: 'error',
-				title: i18n.ts.error,
-				text: printError(err),
-			});
-		}).finally(() => {
-			sending.value = false;
+	try {
+		const message = target.type === 'user' ? await misskeyApi('chat/messages/create-to-user', {
+			toUserId: target.user.id,
+			text: snapshot.text !== '' ? snapshot.text : undefined,
+			fileId: snapshot.file?.id,
+			replyId: snapshot.replyTarget?.id,
+			quoteId: snapshot.quoteTarget?.id,
+		}) : await misskeyApi('chat/messages/create-to-room', {
+			toRoomId: target.room.id,
+			text: snapshot.text !== '' ? snapshot.text : undefined,
+			fileId: snapshot.file?.id,
+			replyId: snapshot.replyTarget?.id,
+			quoteId: snapshot.quoteTarget?.id,
 		});
-	} else if (props.room) {
-		misskeyApi('chat/messages/create-to-room', {
-			toRoomId: props.room.id,
-			text: text.value ? text.value : undefined,
-			fileId: file.value ? file.value.id : undefined,
-			replyId: props.replyTarget?.id,
-			quoteId: props.quoteTarget?.id,
-		}).then(message => {
-			emit('sent', message);
-			clear();
-		}).catch(err => {
-			console.error('Error in chat:', err);
-			return os.alert({
-				type: 'error',
-				title: i18n.ts.error,
-				text: printError(err),
-			});
-		}).finally(() => {
-			sending.value = false;
+
+		emit('sent', message, snapshot.clientId);
+	} catch (err) {
+		console.error('Error in chat:', err);
+		emit('sendFailed', snapshot.clientId);
+		restoreSnapshotIfIdle(snapshot);
+		void os.alert({
+			type: 'error',
+			title: i18n.ts.error,
+			text: printError(err),
 		});
+	} finally {
+		sending.value = false;
 	}
 }
 
@@ -283,28 +338,49 @@ function clear() {
 	deleteDraft();
 }
 
+function restoreSnapshotIfIdle(snapshot: SendSnapshot) {
+	if (text.value !== '' || file.value != null) return;
+
+	text.value = snapshot.text;
+	file.value = snapshot.file;
+	emit('restoreReferences', {
+		replyTarget: snapshot.replyTarget,
+		quoteTarget: snapshot.quoteTarget,
+	});
+}
+
 function getReferenceText(message: NormalizedChatMessage | Misskey.entities.ChatMessageLite) {
 	return message.text ?? message.file?.name ?? i18n.ts.file;
 }
 
 function saveDraft() {
+	const draftKey = getDraftKey();
+	if (draftKey == null) return;
+
 	const drafts = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}');
 
-	drafts[getDraftKey()] = {
-		updatedAt: new Date(),
-		data: {
-			text: text.value,
-			file: file.value,
-		},
-	};
+	if (!canSend.value) {
+		delete drafts[draftKey];
+	} else {
+		drafts[draftKey] = {
+			updatedAt: new Date(),
+			data: {
+				text: text.value,
+				file: file.value,
+			},
+		};
+	}
 
 	miLocalStorage.setItem('chatMessageDrafts', JSON.stringify(drafts));
 }
 
 function deleteDraft() {
+	const draftKey = getDraftKey();
+	if (draftKey == null) return;
+
 	const drafts = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}');
 
-	delete drafts[getDraftKey()];
+	delete drafts[draftKey];
 
 	miLocalStorage.setItem('chatMessageDrafts', JSON.stringify(drafts));
 }
@@ -352,7 +428,8 @@ onMounted(() => {
 	window.visualViewport?.addEventListener('scroll', onVisualViewportChange);
 
 	// 書きかけの投稿を復元
-	const draft = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}')[getDraftKey()];
+	const draftKey = getDraftKey();
+	const draft = draftKey == null ? null : JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}')[draftKey];
 	if (draft) {
 		text.value = draft.data.text;
 		file.value = draft.data.file;

@@ -128,7 +128,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</button>
 				</div>
 			</Transition>
-			<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" ref="formEl" :user="user" :room="room" :replyTarget="replyTarget" :quoteTarget="quoteTarget" :class="$style.form" @sent="onSentMessage" @clearReply="replyTarget = null" @clearQuote="quoteTarget = null"/>
+			<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" ref="formEl" :user="user" :room="room" :replyTarget="replyTarget" :quoteTarget="quoteTarget" :class="$style.form" @sending="onSendingMessage" @sent="onSentMessage" @sendFailed="onSendMessageFailed" @restoreReferences="onRestoreReferences" @clearReply="replyTarget = null" @clearQuote="quoteTarget = null"/>
 		</div>
 	</div>
 </div>
@@ -177,6 +177,8 @@ export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'from
 	quote: NormalizedChatMessage | null;
 	replyUnavailable?: boolean;
 	quoteUnavailable?: boolean;
+	clientId?: string;
+	sendStatus?: 'pending';
 	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
 		user: Misskey.entities.UserLite | null;
 	})[];
@@ -485,6 +487,23 @@ function sortMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
 	return [...items].sort((a, b) => a.id > b.id ? -1 : a.id < b.id ? 1 : 0);
 }
 
+function isPendingMessage(message: NormalizedChatMessage): boolean {
+	return message.sendStatus === 'pending';
+}
+
+function findNewestPersistedMessageId(): string | undefined {
+	return messages.value.find(message => !isPendingMessage(message))?.id;
+}
+
+function findOldestPersistedMessageId(): string | undefined {
+	for (let i = messages.value.length - 1; i >= 0; i--) {
+		const message = messages.value[i];
+		if (!isPendingMessage(message)) return message.id;
+	}
+
+	return undefined;
+}
+
 function trimMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
 	if (!isRoomChat.value || isContextMode.value || items.length <= MAX_ROOM_MESSAGES) return items;
 	return items.slice(0, MAX_ROOM_MESSAGES);
@@ -526,11 +545,52 @@ function replaceMessages(fetched: (Misskey.entities.ChatMessageLite | Misskey.en
 	messages.value = mergeMessages(fetched.map(x => normalizeMessage(x)));
 }
 
-function onSentMessage(message: Misskey.entities.ChatMessageLite) {
-	prependMessage(normalizeMessage(message));
+function isSameOutgoingMessage(a: NormalizedChatMessage, b: NormalizedChatMessage): boolean {
+	return a.fromUserId === b.fromUserId &&
+		(a.toUserId ?? null) === (b.toUserId ?? null) &&
+		(a.toRoomId ?? null) === (b.toRoomId ?? null) &&
+		(a.text ?? null) === (b.text ?? null) &&
+		(a.fileId ?? null) === (b.fileId ?? null) &&
+		(a.replyId ?? null) === (b.replyId ?? null) &&
+		(a.quoteId ?? null) === (b.quoteId ?? null);
+}
+
+function removePendingMessage(clientId: string) {
+	messages.value = messages.value.filter(message => message.clientId !== clientId);
+}
+
+function removeMatchingPendingMessage(message: NormalizedChatMessage) {
+	const pending = messages.value.find(item => isPendingMessage(item) && isSameOutgoingMessage(item, message));
+	if (pending != null && pending.clientId != null) {
+		removePendingMessage(pending.clientId);
+	}
+}
+
+function onSendingMessage(message: NormalizedChatMessage) {
+	prependMessage(message);
+	nextTick(() => scrollToLatest('instant'));
+}
+
+function onSentMessage(message: Misskey.entities.ChatMessageLite, clientId?: string) {
+	if (clientId != null) {
+		removePendingMessage(clientId);
+	}
+
+	const normalized = normalizeMessage(message);
+	removeMatchingPendingMessage(normalized);
+	prependMessage(normalized);
 	replyTarget.value = null;
 	quoteTarget.value = null;
 	nextTick(() => scrollToLatest('instant'));
+}
+
+function onSendMessageFailed(clientId: string) {
+	removePendingMessage(clientId);
+}
+
+function onRestoreReferences(payload: { replyTarget: NormalizedChatMessage | null; quoteTarget: NormalizedChatMessage | null }) {
+	replyTarget.value = payload.replyTarget;
+	quoteTarget.value = payload.quoteTarget;
 }
 
 async function waitChannelConnected() {
@@ -576,7 +636,7 @@ function connectStream() {
 }
 
 async function fetchLatestGap() {
-	const sinceId = messages.value[0]?.id;
+	const sinceId = findNewestPersistedMessageId();
 	const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
 		userId: user.value!.id,
 		limit: TIMELINE_LIMIT,
@@ -812,7 +872,8 @@ onDeactivated(() => {
 
 async function fetchMore() {
 	const LIMIT = 30;
-	if (!canFetchMore.value || moreFetching.value || messages.value.length === 0) return;
+	const untilId = findOldestPersistedMessageId();
+	if (!canFetchMore.value || moreFetching.value || untilId == null) return;
 
 	const anchor = getVisibleMessageAnchor();
 	beginScrollRestoration();
@@ -822,11 +883,11 @@ async function fetchMore() {
 		const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
 			userId: user.value!.id,
 			limit: LIMIT,
-			untilId: messages.value[messages.value.length - 1].id,
+			untilId,
 		}) : await misskeyApi('chat/messages/room-timeline', {
 			roomId: room.value!.id,
 			limit: LIMIT,
-			untilId: messages.value[messages.value.length - 1].id,
+			untilId,
 		});
 
 		appendFetchedMessages(newMessages);
@@ -849,7 +910,8 @@ async function fetchMore() {
 
 async function fetchNewer() {
 	const LIMIT = 30;
-	if (!canFetchNewer.value || newerFetching.value || messages.value.length === 0) return;
+	const sinceId = findNewestPersistedMessageId();
+	if (!canFetchNewer.value || newerFetching.value || sinceId == null) return;
 
 	const anchor = getVisibleMessageAnchor();
 	beginScrollRestoration();
@@ -859,11 +921,11 @@ async function fetchNewer() {
 		const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
 			userId: user.value!.id,
 			limit: LIMIT,
-			sinceId: messages.value[0].id,
+			sinceId,
 		}) : await misskeyApi('chat/messages/room-timeline', {
 			roomId: room.value!.id,
 			limit: LIMIT,
-			sinceId: messages.value[0].id,
+			sinceId,
 		});
 
 		appendFetchedMessages(newMessages);
@@ -893,7 +955,9 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 		sound.playMisskeySfx('chatMessage');
 	}
 
-	prependMessage(normalizeMessage(message));
+	const normalized = normalizeMessage(message);
+	removeMatchingPendingMessage(normalized);
+	prependMessage(normalized);
 	if (!wasAtLatest) {
 		void restoreVisibleMessageAnchorAfterLayout(anchor).finally(() => {
 			historyFetchArmed = true;
