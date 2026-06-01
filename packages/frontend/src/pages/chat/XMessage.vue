@@ -441,10 +441,18 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 }
 
 .avatar {
-	flex: 0 0 36px;
+	--chat-message-avatar-size: 36px;
+	--mk-avatar-size: var(--chat-message-avatar-size);
+
+	flex: 0 0 var(--chat-message-avatar-size);
 	display: block;
-	width: 36px;
-	height: 36px;
+	width: var(--chat-message-avatar-size);
+	height: var(--chat-message-avatar-size);
+	min-width: var(--chat-message-avatar-size);
+	min-height: var(--chat-message-avatar-size);
+	max-width: var(--chat-message-avatar-size);
+	max-height: var(--chat-message-avatar-size);
+	aspect-ratio: 1 / 1;
 	margin-top: 24px;
 }
 
@@ -466,8 +474,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	}
 
 	.avatar {
-		width: 42px;
-		height: 42px;
+		--chat-message-avatar-size: 42px;
 	}
 
 	.body {
@@ -566,7 +573,12 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	text-align: left;
 	overflow-wrap: break-word;
 	word-break: break-word;
-	background: light-dark(#ffffff, #182533);
+	// Use theme vars (not CSS light-dark()) so the bubble background always
+	// tracks the SAME active theme as the text color. light-dark() resolves on
+	// the element's `color-scheme`, which can disagree with the app theme (e.g.
+	// app=light but OS prefers-dark) → dark bubble + light-theme dark text =
+	// unreadable. Theme vars never desync from --MI_THEME-fg.
+	background: var(--MI_THEME-panel);
 	color: var(--MI_THEME-fg);
 	box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
 
@@ -588,7 +600,11 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 
 .isMe .bubble {
 	border-radius: 18px 18px 6px 18px;
-	background: light-dark(#effdde, #2b5278);
+	// Accent-tinted own-message bubble that works in any theme; text stays
+	// --MI_THEME-fg (set on .bubble above), so it's always readable.
+	background:
+		linear-gradient(0deg, color(from var(--MI_THEME-accent) srgb r g b / 0.16), color(from var(--MI_THEME-accent) srgb r g b / 0.16)),
+		var(--MI_THEME-panel);
 
 	&::before {
 		left: auto;
@@ -601,7 +617,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	border: solid 1px color(from var(--MI_THEME-accent) srgb r g b / 0.45);
 	background:
 		linear-gradient(0deg, color(from var(--MI_THEME-accent) srgb r g b / 0.12), color(from var(--MI_THEME-accent) srgb r g b / 0.12)),
-		light-dark(#ffffff, #182533);
+		var(--MI_THEME-panel);
 	box-shadow: 0 0 0 3px color(from var(--MI_THEME-accent) srgb r g b / 0.12), 0 1px 2px rgb(0 0 0 / 0.16);
 }
 
