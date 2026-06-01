@@ -10,6 +10,9 @@ import {
 	MiAbuseUserReport,
 	MiAccessToken,
 	MiAd,
+	MiAiConversation,
+	MiAiMessage,
+	MiAiProvider,
 	MiAnnouncement,
 	MiAnnouncementRead,
 	MiAntenna,
@@ -100,6 +103,24 @@ const $usersRepository: Provider = {
 const $notesRepository: Provider = {
 	provide: DI.notesRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiNote).extend(miRepository as MiRepository<MiNote>),
+	inject: [DI.db],
+};
+
+const $aiProvidersRepository: Provider = {
+	provide: DI.aiProvidersRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAiProvider).extend(miRepository as MiRepository<MiAiProvider>),
+	inject: [DI.db],
+};
+
+const $aiConversationsRepository: Provider = {
+	provide: DI.aiConversationsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAiConversation).extend(miRepository as MiRepository<MiAiConversation>),
+	inject: [DI.db],
+};
+
+const $aiMessagesRepository: Provider = {
+	provide: DI.aiMessagesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAiMessage).extend(miRepository as MiRepository<MiAiMessage>),
 	inject: [DI.db],
 };
 
@@ -575,6 +596,9 @@ export const repositoryProviders: Provider[] = [
 	[
 		$usersRepository,
 		$notesRepository,
+		$aiProvidersRepository,
+		$aiConversationsRepository,
+		$aiMessagesRepository,
 		$announcementsRepository,
 		$announcementReadsRepository,
 		$appsRepository,

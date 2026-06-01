@@ -26,6 +26,7 @@ import { ServerStatsService } from '@/core/ServerStatsService.js';
 import { GlobalModule } from '@/GlobalModule.js';
 import { AccountMoveService } from './AccountMoveService.js';
 import { AccountUpdateService } from './AccountUpdateService.js';
+import { AiService } from './AiService.js';
 import { AnnouncementService } from './AnnouncementService.js';
 import { AntennaService } from './AntennaService.js';
 import { AppLockService } from './AppLockService.js';
@@ -170,6 +171,7 @@ const $AbuseReportService: Provider = { provide: 'AbuseReportService', useExisti
 const $AbuseReportNotificationService: Provider = { provide: 'AbuseReportNotificationService', useExisting: AbuseReportNotificationService };
 const $AccountMoveService: Provider = { provide: 'AccountMoveService', useExisting: AccountMoveService };
 const $AccountUpdateService: Provider = { provide: 'AccountUpdateService', useExisting: AccountUpdateService };
+const $AiService: Provider = { provide: 'AiService', useExisting: AiService };
 const $AnnouncementService: Provider = { provide: 'AnnouncementService', useExisting: AnnouncementService };
 const $AntennaService: Provider = { provide: 'AntennaService', useExisting: AntennaService };
 const $ApLogService: Provider = { provide: 'ApLogService', useExisting: ApLogService };
@@ -337,6 +339,7 @@ const $Imports = [
 		AbuseReportNotificationService,
 		AccountMoveService,
 		AccountUpdateService,
+		AiService,
 		AnnouncementService,
 		AntennaService,
 		ApLogService,
@@ -495,6 +498,7 @@ const $Imports = [
 		$AbuseReportNotificationService,
 		$AccountMoveService,
 		$AccountUpdateService,
+		$AiService,
 		$AnnouncementService,
 		$AntennaService,
 		$ApLogService,
@@ -658,6 +662,7 @@ const $Imports = [
 		AbuseReportNotificationService,
 		AccountMoveService,
 		AccountUpdateService,
+		AiService,
 		AnnouncementService,
 		AntennaService,
 		ApLogService,
@@ -815,6 +820,7 @@ const $Imports = [
 		$AbuseReportNotificationService,
 		$AccountMoveService,
 		$AccountUpdateService,
+		$AiService,
 		$AnnouncementService,
 		$AntennaService,
 		$ApLogService,

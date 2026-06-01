@@ -138,6 +138,8 @@ export class MetaEntityService {
 			notesPerOneAd: instance.notesPerOneAd,
 			enableEmail: instance.enableEmail,
 			enableServiceWorker: instance.enableServiceWorker,
+			enableAi: instance.enableAi,
+			showAiInNavbar: instance.showAiInNavbar,
 
 			translatorAvailable: instance.deeplAuthKey != null || instance.libreTranslateURL != null || instance.deeplFreeMode && instance.deeplFreeInstance != null,
 
@@ -193,4 +195,3 @@ export class MetaEntityService {
 		return packDetailed;
 	}
 }
-

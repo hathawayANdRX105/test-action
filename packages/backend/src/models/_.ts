@@ -7,6 +7,9 @@ import { MiAbuseReportNotificationRecipient } from '@/models/AbuseReportNotifica
 import { MiAbuseUserReport } from '@/models/AbuseUserReport.js';
 import { MiAccessToken } from '@/models/AccessToken.js';
 import { MiAd } from '@/models/Ad.js';
+import { MiAiConversation } from '@/models/AiConversation.js';
+import { MiAiMessage } from '@/models/AiMessage.js';
+import { MiAiProvider } from '@/models/AiProvider.js';
 import { MiAnnouncement } from '@/models/Announcement.js';
 import { MiAnnouncementRead } from '@/models/AnnouncementRead.js';
 import { MiAntenna } from '@/models/Antenna.js';
@@ -155,6 +158,9 @@ export {
 	MiAbuseReportNotificationRecipient,
 	MiAccessToken,
 	MiAd,
+	MiAiConversation,
+	MiAiMessage,
+	MiAiProvider,
 	MiAnnouncement,
 	MiAnnouncementRead,
 	MiAntenna,
@@ -235,6 +241,9 @@ export type AbuseReportNotificationRecipientRepository =
 	& MiRepository<MiAbuseReportNotificationRecipient>;
 export type AccessTokensRepository = Repository<MiAccessToken> & MiRepository<MiAccessToken>;
 export type AdsRepository = Repository<MiAd> & MiRepository<MiAd>;
+export type AiConversationsRepository = Repository<MiAiConversation> & MiRepository<MiAiConversation>;
+export type AiMessagesRepository = Repository<MiAiMessage> & MiRepository<MiAiMessage>;
+export type AiProvidersRepository = Repository<MiAiProvider> & MiRepository<MiAiProvider>;
 export type AnnouncementsRepository = Repository<MiAnnouncement> & MiRepository<MiAnnouncement>;
 export type AnnouncementReadsRepository = Repository<MiAnnouncementRead> & MiRepository<MiAnnouncementRead>;
 export type AntennasRepository = Repository<MiAntenna> & MiRepository<MiAntenna>;

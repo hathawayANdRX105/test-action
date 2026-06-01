@@ -157,6 +157,10 @@ export const paramDef = {
 		enableServerMachineStats: { type: 'boolean' },
 		enableAchievements: { type: 'boolean' },
 		chatRoomDefaultMemberLimit: { type: 'integer', minimum: MIN_CHAT_ROOM_MEMBER_LIMIT, maximum: MAX_CHAT_ROOM_MEMBER_LIMIT },
+		enableAi: { type: 'boolean' },
+		showAiInNavbar: { type: 'boolean' },
+		aiDefaultProviderId: { type: 'string', format: 'misskey:id', nullable: true },
+		aiMaxContextMessages: { type: 'integer', minimum: 1, maximum: 100 },
 		robotsTxt: { type: 'string', nullable: true },
 		enableIdenticonGeneration: { type: 'boolean' },
 		serverRules: { type: 'array', items: { type: 'string' } },
@@ -692,6 +696,22 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.chatRoomDefaultMemberLimit !== undefined) {
 				set.chatRoomDefaultMemberLimit = ps.chatRoomDefaultMemberLimit;
+			}
+
+			if (ps.enableAi !== undefined) {
+				set.enableAi = ps.enableAi;
+			}
+
+			if (ps.showAiInNavbar !== undefined) {
+				set.showAiInNavbar = ps.showAiInNavbar;
+			}
+
+			if (ps.aiDefaultProviderId !== undefined) {
+				set.aiDefaultProviderId = ps.aiDefaultProviderId;
+			}
+
+			if (ps.aiMaxContextMessages !== undefined) {
+				set.aiMaxContextMessages = ps.aiMaxContextMessages;
 			}
 
 			if (ps.robotsTxt !== undefined) {

@@ -43,6 +43,83 @@ type SwitchCase<Condition = unknown, Result = unknown> = {
 type IsNeverType<T> = [T] extends [never] ? true : false;
 type StrictExtract<Union, Cond> = Cond extends Union ? Union : never;
 
+type AiProvider = {
+	id: string;
+	name: string;
+	baseUrl: string;
+	isEnabled: boolean;
+	models: string[];
+	defaultModel: string | null;
+	allowedModels: string[];
+	timeoutMs: number;
+	maxTokens: number;
+	temperature: number;
+	maskedApiKey: string | null;
+	hasApiKey: boolean;
+	createdAt: string;
+	updatedAt: string;
+};
+
+type AiSettings = {
+	enableAi: boolean;
+	showAiInNavbar: boolean;
+	aiDefaultProviderId: string | null;
+	aiMaxContextMessages: number;
+};
+
+type AiProviderTestResult = {
+	ok: boolean;
+	models: string[];
+	elapsedMs: number;
+	error: string | null;
+};
+
+type AiStatus = {
+	enabled: boolean;
+	providers: {
+		id: string;
+		name: string;
+		defaultModel: string | null;
+		allowedModels: string[];
+	}[];
+	defaultProviderId: string | null;
+	maxContextMessages: number;
+};
+
+type AiConversation = {
+	id: string;
+	title: string;
+	providerId: string | null;
+	model: string;
+	systemPrompt: string | null;
+	createdAt: string;
+	updatedAt: string;
+};
+
+type AiMessage = {
+	id: string;
+	conversationId: string;
+	userId: string;
+	role: 'system' | 'user' | 'assistant';
+	content: string | null;
+	attachments: {
+		fileId?: string;
+		name?: string;
+		type?: string;
+		url?: string;
+	}[];
+	usage: Record<string, unknown> | null;
+	error: string | null;
+	createdAt: string;
+};
+
+type AiChatResult = {
+	conversation: AiConversation;
+	userMessage: AiMessage;
+	assistantMessage: AiMessage;
+	content: string;
+};
+
 type IsCaseMatched<E extends keyof Endpoints, P extends Endpoints[E]['req'], C extends number> =
 	Endpoints[E]['res'] extends SwitchCase
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,6 +213,127 @@ export type Endpoints = Overwrite<
 		'admin/chat/rooms/update': {
 			req: AdminChatRoomsUpdateRequest;
 			res: AdminChatRoomsUpdateResponse;
+		},
+		'admin/ai/providers/list': {
+			req: EmptyRequest;
+			res: AiProvider[];
+		},
+		'admin/ai/providers/create': {
+			req: {
+				name: string;
+				baseUrl: string;
+				apiKey: string;
+				isEnabled?: boolean;
+				models?: string[];
+				defaultModel?: string | null;
+				allowedModels?: string[];
+				timeoutMs?: number;
+				maxTokens?: number;
+				temperature?: number;
+			};
+			res: AiProvider;
+		},
+		'admin/ai/providers/update': {
+			req: {
+				id: string;
+				name?: string;
+				baseUrl?: string;
+				apiKey?: string | null;
+				isEnabled?: boolean;
+				models?: string[];
+				defaultModel?: string | null;
+				allowedModels?: string[];
+				timeoutMs?: number;
+				maxTokens?: number;
+				temperature?: number;
+			};
+			res: AiProvider;
+		},
+		'admin/ai/providers/delete': {
+			req: {
+				id: string;
+			};
+			res: EmptyResponse;
+		},
+		'admin/ai/providers/test': {
+			req: {
+				id: string;
+			};
+			res: AiProviderTestResult;
+		},
+		'admin/ai/providers/fetch-models': {
+			req: {
+				id: string;
+			};
+			res: AiProviderTestResult & { provider: AiProvider };
+		},
+		'admin/ai/settings/show': {
+			req: EmptyRequest;
+			res: AiSettings;
+		},
+		'admin/ai/settings/update': {
+			req: Partial<AiSettings>;
+			res: AiSettings;
+		},
+		'ai/status': {
+			req: EmptyRequest;
+			res: AiStatus;
+		},
+		'ai/conversations/list': {
+			req: EmptyRequest;
+			res: AiConversation[];
+		},
+		'ai/conversations/create': {
+			req: {
+				providerId?: string | null;
+				model?: string | null;
+				title?: string | null;
+				systemPrompt?: string | null;
+			};
+			res: AiConversation;
+		},
+		'ai/conversations/show': {
+			req: {
+				conversationId: string;
+			};
+			res: AiConversation;
+		},
+		'ai/conversations/update': {
+			req: {
+				conversationId: string;
+				title?: string | null;
+				systemPrompt?: string | null;
+			};
+			res: AiConversation;
+		},
+		'ai/conversations/delete': {
+			req: {
+				conversationId: string;
+			};
+			res: EmptyResponse;
+		},
+		'ai/messages/list': {
+			req: {
+				conversationId: string;
+			};
+			res: AiMessage[];
+		},
+		'ai/messages/delete': {
+			req: {
+				messageId: string;
+			};
+			res: EmptyResponse;
+		},
+		'ai/chat': {
+			req: {
+				conversationId?: string | null;
+				providerId?: string | null;
+				model?: string | null;
+				content?: string;
+				fileIds?: string[];
+				systemPrompt?: string | null;
+			};
+			res: AiChatResult;
 		},
 		'chat/rooms/manage/update': {
 			req: {

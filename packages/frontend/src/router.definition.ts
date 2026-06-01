@@ -57,6 +57,10 @@ export const ROUTE_DEF = [{
 	component: chatPage(() => import('@/pages/chat/home.vue')),
 	loginRequired: true,
 }, {
+	path: '/ai',
+	component: page(() => import('@/pages/ai.vue')),
+	loginRequired: true,
+}, {
 	path: '/chat/user/:userId',
 	component: chatPage(() => import('@/pages/chat/room.vue')),
 	loginRequired: true,
@@ -520,6 +524,10 @@ export const ROUTE_DEF = [{
 		path: '/external-services',
 		name: 'external-services',
 		component: page(() => import('@/pages/admin/external-services.vue')),
+	}, {
+		path: '/ai',
+		name: 'ai',
+		component: page(() => import('@/pages/admin/ai.vue')),
 	}, {
 		path: '/performance',
 		name: 'performance',

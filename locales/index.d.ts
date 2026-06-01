@@ -12232,6 +12232,224 @@ export interface Locale extends ILocale {
          */
         "serverHostPlaceholder": string;
     };
+    "_ai": {
+        /**
+         * AI
+         */
+        "title": string;
+        /**
+         * プロバイダー
+         */
+        "provider": string;
+        /**
+         * モデル
+         */
+        "model": string;
+        /**
+         * ペルソナ
+         */
+        "persona": string;
+        /**
+         * カスタム…
+         */
+        "personaCustom": string;
+        /**
+         * なし
+         */
+        "personaNone": string;
+        /**
+         * 汎用アシスタント
+         */
+        "personaGeneral": string;
+        /**
+         * 翻訳
+         */
+        "personaTranslate": string;
+        /**
+         * コーディング支援
+         */
+        "personaCoding": string;
+        /**
+         * ライティング
+         */
+        "personaCopywriting": string;
+        /**
+         * ブレインストーミング
+         */
+        "personaBrainstorm": string;
+        /**
+         * システムプロンプト
+         */
+        "systemPrompt": string;
+        /**
+         * この会話でAIを導くペルソナ・指示を設定します。
+         */
+        "systemPromptCaption": string;
+        /**
+         * AIにメッセージを送る…
+         */
+        "messagePlaceholder": string;
+        /**
+         * AIとの会話を始める
+         */
+        "startConversation": string;
+        /**
+         * ある概念を分かりやすく説明して
+         */
+        "suggestion1": string;
+        /**
+         * コードの作成とデバッグを手伝って
+         */
+        "suggestion2": string;
+        /**
+         * プロジェクトのアイデアを出して
+         */
+        "suggestion3": string;
+        /**
+         * あなた
+         */
+        "you": string;
+        /**
+         * AI
+         */
+        "assistant": string;
+        /**
+         * 停止
+         */
+        "stop": string;
+        /**
+         * 停止しました
+         */
+        "stopped": string;
+        /**
+         * このサーバーではAIが無効になっています。
+         */
+        "disabledOnServer": string;
+        /**
+         * 利用可能なAIプロバイダーがありません。
+         */
+        "noProviderAvailable": string;
+        /**
+         * {count} トークン
+         */
+        "usageTokens": ParameterizedString<"count">;
+        /**
+         * {prompt} + {completion} = {total} トークン
+         */
+        "usageDetail": ParameterizedString<"prompt" | "completion" | "total">;
+        /**
+         * AI設定
+         */
+        "settings": string;
+        /**
+         * AIを有効にする
+         */
+        "enable": string;
+        /**
+         * ユーザーがAIチャットAPIを利用できるかどうかを制御します。
+         */
+        "enableDescription": string;
+        /**
+         * ナビゲーションバーにAIを表示
+         */
+        "showInNavbar": string;
+        /**
+         * AIが有効な場合に、サインイン済みのユーザーにのみサイドバー項目が表示されます。
+         */
+        "showInNavbarDescription": string;
+        /**
+         * デフォルトプロバイダー
+         */
+        "defaultProvider": string;
+        /**
+         * ユーザーがプロバイダーを選択していない場合に使用されます。
+         */
+        "defaultProviderDescription": string;
+        /**
+         * コンテキストメッセージ数
+         */
+        "contextMessages": string;
+        /**
+         * リクエストごとにプロバイダーへ送信する直近のメッセージ数。
+         */
+        "contextMessagesDescription": string;
+        /**
+         * プロバイダーを追加
+         */
+        "addProvider": string;
+        /**
+         * ベースURL
+         */
+        "baseUrl": string;
+        /**
+         * APIキー
+         */
+        "apiKey": string;
+        /**
+         * 空欄のままにすると既存のキーを保持します。
+         */
+        "apiKeyKeepBlank": string;
+        /**
+         * 新しいキー
+         */
+        "newKey": string;
+        /**
+         * タイムアウト (ms)
+         */
+        "timeout": string;
+        /**
+         * 最大トークン数
+         */
+        "maxTokens": string;
+        /**
+         * Temperature
+         */
+        "temperature": string;
+        /**
+         * デフォルトモデル
+         */
+        "defaultModel": string;
+        /**
+         * 許可するモデル
+         */
+        "allowedModels": string;
+        /**
+         * 1行に1つ、またはカンマ区切り。空欄の場合は取得した全モデルを許可します。
+         */
+        "allowedModelsDescription": string;
+        /**
+         * プロバイダーを有効にする
+         */
+        "providerEnabled": string;
+        /**
+         * AIプロバイダーがまだありません。
+         */
+        "noProviders": string;
+        /**
+         * 自動
+         */
+        "automatic": string;
+        /**
+         * テスト
+         */
+        "test": string;
+        /**
+         * モデルを取得
+         */
+        "fetchModels": string;
+        /**
+         * {ms}msで接続しました
+         */
+        "connectedIn": ParameterizedString<"ms">;
+        /**
+         * {ms}msで失敗: {error}
+         */
+        "testFailedIn": ParameterizedString<"ms" | "error">;
+        /**
+         * プロバイダーのキーはサーバー上に保持されます。ユーザー向けAPIには有効なプロバイダーと許可されたモデルのみが公開されます。
+         */
+        "adminPrivacyNote": string;
+    };
     /**
      * Approvals
      */

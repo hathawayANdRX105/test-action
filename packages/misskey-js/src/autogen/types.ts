@@ -11798,6 +11798,8 @@ export type components = {
             notesPerOneAd: number;
             enableEmail: boolean;
             enableServiceWorker: boolean;
+            enableAi: boolean;
+            showAiInNavbar: boolean;
             translatorAvailable: boolean;
             sentryForFrontend: {
                 options: {

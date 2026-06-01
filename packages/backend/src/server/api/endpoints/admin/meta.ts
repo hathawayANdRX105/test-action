@@ -400,6 +400,22 @@ export const meta = {
 				minimum: 1,
 				maximum: 10000,
 			},
+			enableAi: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			showAiInNavbar: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			aiDefaultProviderId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			aiMaxContextMessages: {
+				type: 'integer',
+				optional: false, nullable: false,
+			},
 			robotsTxt: {
 				type: 'string',
 				optional: false, nullable: true,
@@ -784,6 +800,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				enableServerMachineStats: instance.enableServerMachineStats,
 				enableAchievements: instance.enableAchievements,
 				chatRoomDefaultMemberLimit: instance.chatRoomDefaultMemberLimit,
+				enableAi: instance.enableAi,
+				showAiInNavbar: instance.showAiInNavbar,
+				aiDefaultProviderId: instance.aiDefaultProviderId,
+				aiMaxContextMessages: instance.aiMaxContextMessages,
 				robotsTxt: instance.robotsTxt,
 				enableIdenticonGeneration: instance.enableIdenticonGeneration,
 				bannedEmailDomains: instance.bannedEmailDomains,

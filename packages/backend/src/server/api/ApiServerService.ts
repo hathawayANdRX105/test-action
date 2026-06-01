@@ -12,14 +12,28 @@ import type { Config } from '@/config.js';
 import type { InstancesRepository, AccessTokensRepository, UserProfilesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { AiService, AiServiceError } from '@/core/AiService.js';
 import { InternalEventService } from '@/global/InternalEventService.js';
+import { getIpHash } from '@/misc/get-ip-hash.js';
+import { sendRateLimitHeaders } from '@/misc/rate-limit-utils.js';
 import { bindThis } from '@/decorators.js';
+import { SkRateLimiterService } from '@/server/SkRateLimiterService.js';
+import { ServerUtilityService } from '@/server/ServerUtilityService.js';
 import endpoints from './endpoints.js';
 import { ApiCallService } from './ApiCallService.js';
 import { SignupApiService } from './SignupApiService.js';
 import { SigninApiService } from './SigninApiService.js';
 import { SigninWithPasskeyApiService } from './SigninWithPasskeyApiService.js';
+import { ApiError } from './error.js';
+import { AuthenticateService, AuthenticationError } from './AuthenticateService.js';
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
+
+const aiChatStreamRateLimit = {
+	key: 'ai/chat-stream',
+	type: 'bucket' as const,
+	size: 10,
+	dripRate: 5000,
+};
 
 @Injectable()
 export class ApiServerService {
@@ -39,13 +53,64 @@ export class ApiServerService {
 		private userProfilesRepository: UserProfilesRepository,
 
 		private userEntityService: UserEntityService,
+		private aiService: AiService,
 		private apiCallService: ApiCallService,
+		private authenticateService: AuthenticateService,
+		private rateLimiterService: SkRateLimiterService,
+		private serverUtilityService: ServerUtilityService,
 		private signupApiService: SignupApiService,
 		private signinApiService: SigninApiService,
 		private signinWithPasskeyApiService: SigninWithPasskeyApiService,
 		private readonly internalEventService: InternalEventService,
 	) {
 		//this.createServer = this.createServer.bind(this);
+	}
+
+	@bindThis
+	private formatAiStreamError(err: unknown): {
+		message: string;
+		code: string;
+		id: string;
+		kind: string;
+		statusCode: number;
+	} {
+		if (err instanceof AiServiceError) {
+			return {
+				message: err.message,
+				code: err.code,
+				id: err.id,
+				kind: err.kind,
+				statusCode: err.statusCode,
+			};
+		}
+
+		if (err instanceof ApiError) {
+			return {
+				message: err.message,
+				code: err.code,
+				id: err.id,
+				kind: err.kind,
+				statusCode: err.httpStatusCode ?? (err.kind === 'permission' ? 403 : 400),
+			};
+		}
+
+		if (err instanceof AuthenticationError) {
+			return {
+				message: 'Authentication failed. Please ensure your token is correct.',
+				code: 'AUTHENTICATION_FAILED',
+				id: 'b0a7f5f8-dc2f-4171-b91f-de88ad238e14',
+				kind: 'client',
+				statusCode: 401,
+			};
+		}
+
+		return {
+			message: 'AI request failed.',
+			code: 'AI_REQUEST_FAILED',
+			id: 'f0c9f6ad-98b4-4f09-bc9f-16269b6442c9',
+			kind: 'server',
+			statusCode: 500,
+		};
 	}
 
 	@bindThis
@@ -150,6 +215,108 @@ export class ApiServerService {
 		}>('/signin-with-passkey', (request, reply) => this.signinWithPasskeyApiService.signin(request, reply));
 
 		fastify.post<{ Body: { code: string; } }>('/signup-pending', (request, reply) => this.signupApiService.signupPending(request, reply));
+
+		fastify.post<{
+			Body: {
+				i?: string;
+				conversationId?: string | null;
+				providerId?: string | null;
+				model?: string | null;
+				content?: string;
+				fileIds?: string[];
+				systemPrompt?: string | null;
+			};
+		}>('/ai/chat-stream', async (request, reply) => {
+			const token = request.headers.authorization?.startsWith('Bearer ')
+				? request.headers.authorization.slice(7)
+				: request.body?.i;
+
+			if (token != null && typeof token !== 'string') {
+				reply.code(400);
+				reply.send({
+					error: {
+						message: 'Invalid token.',
+						code: 'INVALID_TOKEN',
+						id: '4a4a4c3e-bb6d-4874-9898-2e9899065d1b',
+					},
+				});
+				return reply;
+			}
+
+			try {
+				const [user, tokenInfo] = await this.authenticateService.authenticate(token);
+				const userError = this.serverUtilityService.assertClientUser(user);
+				if (userError) throw new ApiError(userError);
+				if (user == null) throw new AuthenticationError('user not found');
+				if (tokenInfo && !tokenInfo.permission.some(permission => permission === 'write:account')) {
+					throw new ApiError({
+						message: 'Your app does not have the necessary permissions to use this endpoint.',
+						code: 'PERMISSION_DENIED',
+						kind: 'permission',
+						id: '1370e5b7-d4eb-4566-bb1d-7748ee6a1838',
+					});
+				}
+
+				const rateLimit = await this.rateLimiterService.limit(aiChatStreamRateLimit, user ?? getIpHash(request.ip));
+				sendRateLimitHeaders(reply, rateLimit);
+				if (rateLimit.blocked) {
+					throw new ApiError({
+						message: 'Rate limit exceeded. Please try again later.',
+						code: 'RATE_LIMIT_EXCEEDED',
+						id: 'd5826d14-3982-4d2e-8011-b9e9f02499ef',
+						httpStatusCode: 429,
+					}, rateLimit);
+				}
+
+				reply.raw.writeHead(200, {
+					'Content-Type': 'text/event-stream; charset=utf-8',
+					'Cache-Control': 'no-cache, no-transform',
+					Connection: 'keep-alive',
+					'X-Accel-Buffering': 'no',
+				});
+
+				const abortController = new AbortController();
+				reply.raw.on('close', () => abortController.abort());
+				const body = request.body ?? {};
+				const getNullableString = (value: unknown) => typeof value === 'string' ? value : null;
+				const content = typeof body.content === 'string' ? body.content.slice(0, 20000) : '';
+				const fileIds = Array.isArray(body.fileIds)
+					? body.fileIds.filter((id): id is string => typeof id === 'string').slice(0, 8)
+					: [];
+
+				const writeEvent = (event: string, data: unknown) => {
+					reply.raw.write(`event: ${event}\n`);
+					reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+				};
+
+				try {
+					const result = await this.aiService.streamChat({
+						user,
+						conversationId: getNullableString(body.conversationId),
+						providerId: getNullableString(body.providerId),
+						model: getNullableString(body.model),
+						content,
+						fileIds,
+						systemPrompt: getNullableString(body.systemPrompt),
+						abortSignal: abortController.signal,
+						onDelta: (text) => writeEvent('delta', { text }),
+					});
+					writeEvent('done', result);
+				} catch (err) {
+					writeEvent('error', this.formatAiStreamError(err));
+				} finally {
+					reply.raw.end();
+				}
+			} catch (err) {
+				const error = this.formatAiStreamError(err);
+				reply.code(error.statusCode);
+				reply.send({
+					error,
+				});
+			}
+
+			return reply;
+		});
 
 		// POST unsubscribes (and is sent by compatible MUAs), GET redirects to the interactive user-facing non-API page
 		fastify.get<{ Params: { user: string, token: string; } }>('/unsubscribe/:user/:token', (request, reply) => {

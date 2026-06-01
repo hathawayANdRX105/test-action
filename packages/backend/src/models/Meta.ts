@@ -628,6 +628,27 @@ export class MiMeta {
 	})
 	public chatRoomDefaultMemberLimit: number;
 
+	@Column('boolean', {
+		default: false,
+	})
+	public enableAi: boolean;
+
+	@Column('boolean', {
+		default: false,
+	})
+	public showAiInNavbar: boolean;
+
+	@Column({
+		...id(),
+		nullable: true,
+	})
+	public aiDefaultProviderId: string | null;
+
+	@Column('integer', {
+		default: 20,
+	})
+	public aiMaxContextMessages: number;
+
 	@Column('text', {
 		nullable: true,
 	})

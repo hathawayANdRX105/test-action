@@ -245,6 +245,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		to: '/admin/external-services',
 		active: currentPage.value?.route.name === 'external-services',
 	}, {
+		icon: 'ti ti-robot',
+		text: 'AI',
+		to: '/admin/ai',
+		active: currentPage.value?.route.name === 'ai',
+	}, {
 		icon: 'ti ti-webhook',
 		text: 'Webhook',
 		to: '/admin/system-webhook',

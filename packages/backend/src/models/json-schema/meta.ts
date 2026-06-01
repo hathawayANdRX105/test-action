@@ -269,6 +269,14 @@ export const packedMetaLiteSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		enableAi: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		showAiInNavbar: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		translatorAvailable: {
 			type: 'boolean',
 			optional: false, nullable: false,

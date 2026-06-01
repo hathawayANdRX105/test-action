@@ -132,6 +132,12 @@ export const navbarItemDef = reactive({
 		show: computed(() => $i != null && $i.policies.chatAvailability !== 'unavailable'),
 		indicated: computed(() => $i != null && $i.hasUnreadChatMessages),
 	},
+	ai: {
+		title: 'AI',
+		icon: 'ti ti-robot',
+		to: '/ai',
+		show: computed(() => $i != null && Boolean(instance.enableAi) && Boolean(instance.showAiInNavbar)),
+	},
 	achievements: {
 		title: i18n.ts.achievements,
 		icon: 'ti ti-medal',
