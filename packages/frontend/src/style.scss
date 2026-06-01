@@ -908,3 +908,25 @@ bdi.block { display: block }
 	  opacity: 1;
 	}
 }
+
+/* Twitter/X-blue navbar Post button. Overrides the legacy "post-after-settings"
+   custom CSS (injected in the page head) that paints it dark — matched
+   specificity + !important + later source order so X blue wins in every mode. */
+[class*="navbar-middle-"] button[data-cy-open-post-form][data-cy-open-post-form],
+[class*="navbar-root-"][class*="navbar-root-"] button[data-cy-open-post-form][data-cy-open-post-form] {
+	background: #1d9bf0 !important;
+	color: #fff !important;
+}
+
+[class*="navbar-middle-"] button[data-cy-open-post-form][data-cy-open-post-form]:hover,
+[class*="navbar-root-"][class*="navbar-root-"] button[data-cy-open-post-form][data-cy-open-post-form]:hover {
+	background: #1a8cd8 !important;
+}
+
+[class*="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form][data-cy-open-post-form]::before {
+	background: #1d9bf0 !important;
+}
+
+[class*="navbar-root-"][class*="navbar-iconOnly-"] button[data-cy-open-post-form][data-cy-open-post-form]:hover::before {
+	background: #1a8cd8 !important;
+}

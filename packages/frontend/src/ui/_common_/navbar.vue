@@ -8,12 +8,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.body">
 		<div :class="$style.top">
 			<div :class="$style.banner" :style="{ backgroundImage: `url(${ instance.bannerUrl })` }"></div>
-			<button v-tooltip.right="instance.name ?? i18n.ts.instance" class="_button" :class="$style.instance" @click="openInstanceMenu">
+			<button v-tooltip.right="iconOnly ? instance.name ?? i18n.ts.instance : null" class="_button" :class="$style.instance" @click="openInstanceMenu">
 				<img :src="instance.sidebarLogoUrl && !iconOnly ? instance.sidebarLogoUrl : instance.iconUrl || '/favicon.ico'" alt="" :class="instance.sidebarLogoUrl && !iconOnly ? $style.wideInstanceIcon : $style.instanceIcon" style="viewTransitionName: navbar-serverIcon;"/>
 			</button>
 		</div>
 		<div :class="$style.middle">
-			<MkA v-tooltip.right="i18n.ts.home" :class="$style.item" :activeClass="$style.active" to="/" exact>
+			<MkA v-tooltip.right="iconOnly ? i18n.ts.home : null" :class="$style.item" :activeClass="$style.active" to="/" exact>
 				<i :class="$style.itemIcon" class="ti ti-home ti-fw" style="viewTransitionName: navbar-homeIcon;"></i><span :class="$style.itemText">{{ i18n.ts.home }}</span>
 			</MkA>
 			<template v-for="(item, index) in filteredMenu" :key="`${item}-${index}`">
@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<component
 					:is="navbarItemDef[item].to ? 'MkA' : 'button'"
 					v-else-if="navbarItemDef[item] && (navbarItemDef[item].show !== false)"
-					v-tooltip.right="navbarItemDef[item].title"
+					v-tooltip.right="iconOnly ? navbarItemDef[item].title : null"
 					class="_button"
 					:class="[$style.item, { [$style.active]: navbarItemDef[item].active }]"
 					:activeClass="$style.active"
@@ -36,14 +36,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</component>
 			</template>
 			<div :class="$style.divider"></div>
-			<MkA v-if="$i != null && ($i.isAdmin || $i.isModerator)" v-tooltip.right="i18n.ts.controlPanel" :class="$style.item" :activeClass="$style.active" to="/admin">
+			<MkA v-if="$i != null && ($i.isAdmin || $i.isModerator)" v-tooltip.right="iconOnly ? i18n.ts.controlPanel : null" :class="$style.item" :activeClass="$style.active" to="/admin">
 				<i :class="$style.itemIcon" class="ti ti-dashboard ti-fw" style="viewTransitionName: navbar-controlPanel;"></i><span :class="$style.itemText">{{ i18n.ts.controlPanel }}</span>
 			</MkA>
 			<button class="_button" :class="$style.item" @click="more">
 				<i :class="$style.itemIcon" class="ti ti-grid-dots ti-fw" style="viewTransitionName: navbar-more;"></i><span :class="$style.itemText">{{ i18n.ts.more }}</span>
 				<span v-if="otherMenuItemIndicated" :class="$style.itemIndicator" class="_blink"><i class="_indicatorCircle"></i></span>
 			</button>
-			<MkA v-tooltip.right="i18n.ts.settings" :class="$style.item" :activeClass="$style.active" to="/settings">
+			<MkA v-tooltip.right="iconOnly ? i18n.ts.settings : null" :class="$style.item" :activeClass="$style.active" to="/settings">
 				<i :class="$style.itemIcon" class="ti ti-settings ti-fw" style="viewTransitionName: navbar-settings;"></i><span :class="$style.itemText">{{ i18n.ts.settings }}</span>
 			</MkA>
 		</div>
@@ -51,10 +51,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button v-if="showWidgetButton" class="_button" :class="[$style.widget]" @click="() => emit('widgetButtonClick')">
 				<i class="ti ti-apps ti-fw"></i>
 			</button>
-			<button v-tooltip.right="i18n.ts.note" class="_button" :class="[$style.post]" data-cy-open-post-form @click="() => { os.post(); }">
+			<button v-tooltip.right="iconOnly ? i18n.ts.note : null" class="_button" :class="[$style.post]" data-cy-open-post-form @click="() => { os.post(); }">
 				<i class="ti ti-pencil ti-fw" :class="$style.postIcon"></i><span :class="$style.postText">{{ i18n.ts.note }}</span>
 			</button>
-			<button v-if="$i != null" v-tooltip.right="`${i18n.ts.account}: @${$i.username}`" class="_button" :class="[$style.account]" @click="openAccountMenu">
+			<button v-if="$i != null" v-tooltip.right="iconOnly ? `${i18n.ts.account}: @${$i.username}` : null" class="_button" :class="[$style.account]" @click="openAccountMenu">
 				<MkAvatar :user="$i" :class="$style.avatar" style="viewTransitionName: navbar-avatar;"/><MkAcct class="_nowrap" :class="$style.acct" :user="$i"/>
 			</button>
 		</div>
@@ -113,6 +113,9 @@ if ($i != null) {
 	}
 	if (!nextMenu.includes('chat') && navbarItemDef.chat.show !== false) {
 		nextMenu = [...nextMenu, 'chat'];
+	}
+	if (!nextMenu.includes('ai') && navbarItemDef.ai.show !== false) {
+		nextMenu = [...nextMenu, 'ai'];
 	}
 	if (nextMenu.length !== currentMenu.length || nextMenu.some((item, index) => item !== currentMenu[index])) {
 		prefer.commit('menu', nextMenu);
@@ -429,7 +432,10 @@ function menuEdit() {
 	.bottom {
 		position: sticky;
 		bottom: 0;
-		padding-top: 20px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 16px 14px 20px;
 		background: var(--nav-bg-transparent);
 		-webkit-backdrop-filter: var(--MI-blur, blur(8px));
 		backdrop-filter: var(--MI-blur, blur(8px));
@@ -437,67 +443,69 @@ function menuEdit() {
 
 	.post {
 		position: relative;
-		display: block;
+		display: flex;
+		align-items: center;
 		width: 100%;
-		height: 40px;
+		height: 44px;
+		padding: 0 16px;
 		color: var(--MI_THEME-fgOnAccent);
 		font-weight: bold;
 		text-align: left;
-
-		&::before {
-			content: "";
-			display: block;
-			width: calc(100% - 38px);
-			height: 100%;
-			margin: auto;
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			bottom: 0;
-			border-radius: var(--MI-radius-ellipse);
-			background: linear-gradient(90deg, var(--MI_THEME-buttonGradateA), var(--MI_THEME-buttonGradateB));
-		}
+		box-sizing: border-box;
+		border-radius: var(--MI-radius-ellipse);
+		background: #1d9bf0;
+		color: #fff;
+		overflow: clip;
 
 		&:focus-visible {
 			outline: none;
-
-			&::before {
-				outline: 2px solid var(--MI_THEME-fgOnAccent);
-				outline-offset: -4px;
-			}
+			box-shadow: 0 0 0 2px var(--MI_THEME-fgOnAccent) inset;
 		}
 
 		&:hover, &.active {
-			&::before {
-				background: hsl(from var(--MI_THEME-accent) h s calc(l + 10));
-			}
+			background: #1a8cd8;
 		}
 	}
 
 	.postIcon {
 		position: relative;
-		margin-left: 30px;
-		margin-right: 8px;
 		width: 32px;
+		margin-right: 8px;
+		text-align: center;
+		flex-shrink: 0;
+		z-index: 1;
 	}
 
 	.postText {
 		position: relative;
+		z-index: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.account {
 		position: relative;
 		display: flex;
 		align-items: center;
-		padding: 20px 0 20px 30px;
 		width: 100%;
+		min-height: 44px;
+		padding: 6px 16px;
 		text-align: left;
 		box-sizing: border-box;
+		border-radius: var(--MI-radius-ellipse);
+		background: var(--MI_THEME-navBg);
 		overflow: clip;
+		z-index: 1;
+
+		&:hover, &:focus {
+			background: var(--MI_THEME-accentedBg);
+		}
 
 		&:focus-visible {
 			outline: none;
+			background: var(--MI_THEME-accentedBg);
 
 			> .avatar {
 				box-shadow: 0 0 0 4px var(--MI_THEME-focus);
@@ -517,29 +525,35 @@ function menuEdit() {
 	.acct {
 		display: block;
 		flex-shrink: 1;
-		padding-right: 8px;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.middle {
 		flex: 1;
+		padding: 4px 0;
 	}
 
 	.divider {
-		margin: 16px 16px;
+		margin: 10px 14px;
 		border-top: solid 0.5px var(--MI_THEME-divider);
 	}
 
 	.item {
 		position: relative;
-		display: block;
-		padding-left: 30px;
-		line-height: 2.85rem;
+		display: flex;
+		align-items: center;
+		height: 44px;
+		margin: 2px 14px;
+		padding: 0 16px;
 		text-overflow: ellipsis;
 		overflow: hidden;
 		white-space: nowrap;
-		width: 100%;
+		width: calc(100% - 28px);
 		text-align: left;
 		box-sizing: border-box;
+		border-radius: var(--MI-radius-ellipse);
 		color: var(--navbar-readable-fg, var(--MI_THEME-navFg));
 
 		&:hover {
@@ -553,37 +567,22 @@ function menuEdit() {
 
 		&:focus-visible {
 			outline: none;
-
-			&::before {
-				outline: 2px solid var(--MI_THEME-focus);
-				outline-offset: -2px;
-			}
+			box-shadow: 0 0 0 2px var(--MI_THEME-focus) inset;
 		}
 
 		&:hover, &.active, &:focus {
 			color: var(--navbar-readable-fg, var(--MI_THEME-navActive));
-
-			&::before {
-				content: "";
-				display: block;
-				width: calc(100% - 34px);
-				height: 100%;
-				margin: auto;
-				position: absolute;
-				top: 0;
-				left: 0;
-				right: 0;
-				bottom: 0;
-				border-radius: var(--MI-radius-ellipse);
-				background: var(--MI_THEME-accentedBg);
-			}
+			background: var(--MI_THEME-accentedBg);
 		}
 	}
 
 	.itemIcon {
 		position: relative;
+		display: inline-flex;
+		justify-content: center;
 		width: 32px;
 		margin-right: 8px;
+		flex-shrink: 0;
 		color: var(--navbar-readable-fg, inherit) !important;
 		-webkit-text-fill-color: var(--navbar-readable-fg, currentColor) !important;
 		opacity: 1;
@@ -598,21 +597,26 @@ function menuEdit() {
 
 	.itemIndicator {
 		position: absolute;
-		top: 0;
-		left: 20px;
+		top: 6px;
+		left: 36px;
 		color: var(--MI_THEME-navIndicator);
 		font-size: 8px;
 
 		&:has(.itemIndicateValueIcon) {
 			animation: none;
 			left: auto;
-			right: 40px;
+			right: 16px;
 			font-size: 10px;
 		}
 	}
 
 	.itemText {
 		position: relative;
+		display: block;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-size: 0.9em;
 	}
 
@@ -697,7 +701,7 @@ function menuEdit() {
 			width: 52px;
 			aspect-ratio: 1/1;
 			border-radius: var(--MI-radius-full);
-			background: linear-gradient(90deg, var(--MI_THEME-buttonGradateA), var(--MI_THEME-buttonGradateB));
+			background: #1d9bf0;
 		}
 
 		&:focus-visible {
@@ -711,7 +715,7 @@ function menuEdit() {
 
 		&:hover, &.active {
 			&::before {
-				background: hsl(from var(--MI_THEME-accent) h s calc(l + 10));
+				background: #1a8cd8;
 			}
 		}
 	}

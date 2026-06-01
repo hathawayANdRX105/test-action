@@ -539,7 +539,7 @@ customHtml:
         width: 40px !important;
         height: 40px !important;
         border-radius: 999px !important;
-        color: #0f1419 !important;
+        color: var(--MI_THEME-pageHeaderFg, var(--MI_THEME-fg, #0f1419)) !important;
       }
 
       [class^="MkPageHeader-buttonsLeft-"] > button > i.ph-caret-left,
@@ -1465,13 +1465,15 @@ customHtml:
       }
     </style>
     <style id="codex-x-theme-colors">
-      :root {
+      html:not([data-color-scheme="dark"]) {
         --MI_THEME-accent: #1d9bf0 !important;
         --MI_THEME-accentedBg: rgba(29, 155, 240, 0.12) !important;
         --MI_THEME-focus: rgba(29, 155, 240, 0.3) !important;
         --MI_THEME-bg: #ffffff !important;
         --MI_THEME-fg: #0f1419 !important;
         --MI_THEME-fgHighlighted: #0f1419 !important;
+        --MI_THEME-fgTransparent: #0f1419 !important;
+        --MI_THEME-fgTransparentWeak: #536471 !important;
         --MI_THEME-fgOnAccent: #ffffff !important;
         --MI_THEME-fgOnWhite: #0f1419 !important;
         --MI_THEME-divider: #eff3f4 !important;
@@ -1535,7 +1537,7 @@ customHtml:
       }
     </style>
     <style id="codex-x-common-pages-polish">
-      :root {
+      html:not([data-color-scheme="dark"]) {
         --codex-x-fg: #0f1419;
         --codex-x-muted: #536471;
         --codex-x-border: #eff3f4;
@@ -1647,6 +1649,39 @@ customHtml:
       body.codex-route-settings .vvcocwet .nav a,
       body.codex-route-settings .vvcocwet .nav button {
         border-radius: 0 !important;
+      }
+
+      html[data-color-scheme="dark"] {
+        --codex-x-fg: var(--MI_THEME-fg);
+        --codex-x-muted: color-mix(in srgb, var(--MI_THEME-fg) 68%, transparent);
+        --codex-x-border: var(--MI_THEME-divider);
+        --codex-x-border-strong: var(--MI_THEME-divider);
+        --codex-x-soft: var(--MI_THEME-panelHighlight);
+        --codex-x-accent: var(--MI_THEME-accent);
+      }
+
+      html[data-color-scheme="dark"] [class^="MkTab-root-"],
+      html[data-color-scheme="dark"] [class*=" MkTab-root-"],
+      html[data-color-scheme="dark"] [class^="MkPageHeader-tabs-tabs-"],
+      html[data-color-scheme="dark"] [class*=" MkPageHeader-tabs-tabs-"] {
+        background: var(--MI_THEME-bg) !important;
+      }
+
+      html[data-color-scheme="dark"] body.codex-route-user .ftskorzw .banner-container {
+        background: var(--MI_THEME-panelHighlight) !important;
+      }
+
+      html[data-color-scheme="dark"] body.codex-route-user .ftskorzw .avatar {
+        border-color: var(--MI_THEME-panel) !important;
+      }
+
+      html[data-color-scheme="dark"] body.codex-route-user .ftskorzw .title .name,
+      html[data-color-scheme="dark"] body.codex-route-user .ftskorzw .title .bottom,
+      html[data-color-scheme="dark"] body.codex-route-user .ftskorzw .description,
+      html[data-color-scheme="dark"] body.codex-route-user .ftskorzw .fields,
+      html[data-color-scheme="dark"] body.codex-route-user .ftskorzw .status {
+        color: var(--MI_THEME-fg) !important;
+        -webkit-text-fill-color: currentColor !important;
       }
     </style>
     <style id="codex-x-home-nav-icon-style">
@@ -1955,15 +1990,15 @@ customHtml:
         [class*=" mobile-footer-menu-root-"] {
           min-height: calc(54px + env(safe-area-inset-bottom, 0px)) !important;
           padding: 0 max(8px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(8px, env(safe-area-inset-left, 0px)) !important;
-          border-top: 1px solid #eff3f4 !important;
-          background: rgba(255, 255, 255, 0.96) !important;
+          border-top: 1px solid var(--MI_THEME-divider, #eff3f4) !important;
+          background: var(--MI_THEME-navBg, #ffffff) !important;
           box-shadow: none !important;
         }
 
         @supports ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
           [class^="mobile-footer-menu-root-"],
           [class*=" mobile-footer-menu-root-"] {
-            background: rgba(255, 255, 255, 0.86) !important;
+            background: color-mix(in srgb, var(--MI_THEME-navBg, #ffffff) 86%, transparent) !important;
             -webkit-backdrop-filter: blur(12px);
             backdrop-filter: blur(12px);
           }
@@ -1975,7 +2010,7 @@ customHtml:
           min-height: 54px !important;
           padding: 0 !important;
           border-radius: 0 !important;
-          color: #536471 !important;
+          color: var(--codex-x-muted, var(--MI_THEME-navFg, #536471)) !important;
           background: transparent !important;
           display: grid !important;
           place-items: center !important;
@@ -1989,7 +2024,7 @@ customHtml:
         body.codex-route-notifications [class*=" mobile-footer-menu-root-"] > button:has(i.ph-bell),
         body.codex-route-notifications [class^="mobile-footer-menu-root-"] > button:has(i.ti-bell),
         body.codex-route-notifications [class*=" mobile-footer-menu-root-"] > button:has(i.ti-bell) {
-          color: #0f1419 !important;
+          color: var(--MI_THEME-navActive, var(--MI_THEME-navFg, #0f1419)) !important;
         }
 
         [class^="mobile-footer-menu-root-"] > button:not([class*="mobile-footer-menu-post-"]):not(:has(i.ph-pencil-simple)):not(:has(i.ti-pencil)) > [class*="mobile-footer-menu-itemInner-"],
@@ -2008,7 +2043,7 @@ customHtml:
         [class*=" mobile-footer-menu-root-"] > button:not([class*="mobile-footer-menu-post-"]):not(:has(i.ph-pencil-simple)):not(:has(i.ti-pencil)):hover > [class*="mobile-footer-menu-itemInner-"],
         [class^="mobile-footer-menu-root-"] > button:not([class*="mobile-footer-menu-post-"]):not(:has(i.ph-pencil-simple)):not(:has(i.ti-pencil)):active > [class*="mobile-footer-menu-itemInner-"],
         [class*=" mobile-footer-menu-root-"] > button:not([class*="mobile-footer-menu-post-"]):not(:has(i.ph-pencil-simple)):not(:has(i.ti-pencil)):active > [class*="mobile-footer-menu-itemInner-"] {
-          background: rgba(15, 20, 25, 0.08) !important;
+          background: var(--MI_THEME-panelHighlight, rgba(15, 20, 25, 0.08)) !important;
         }
 
         .codex-mobile-header-drawer-button {
@@ -2179,7 +2214,7 @@ customHtml:
           padding: 0 !important;
           border-radius: 0 !important;
           background: transparent !important;
-          color: #536471 !important;
+          color: var(--codex-x-muted, var(--MI_THEME-navFg, #536471)) !important;
           box-shadow: none !important;
           transform: none !important;
         }
@@ -2202,7 +2237,7 @@ customHtml:
         body.codex-route-home [class*=" mobile-footer-menu-root-"] > button:has(i.ph-house),
         body.codex-route-notifications [class^="mobile-footer-menu-root-"] > button:has(i.ph-bell),
         body.codex-route-notifications [class*=" mobile-footer-menu-root-"] > button:has(i.ph-bell) {
-          color: #0f1419 !important;
+          color: var(--MI_THEME-navActive, var(--MI_THEME-navFg, #0f1419)) !important;
         }
 
       }
@@ -3098,6 +3133,60 @@ customHtml:
       html[data-color-scheme="dark"] [class^="navbar-root-"] [class*="navbar-item-"]::before,
       html[data-color-scheme="dark"] [class*=" navbar-root-"] [class*="navbar-item-"]::before {
         background: rgba(239, 243, 244, 0.1) !important;
+      }
+
+      html[data-color-scheme="dark"] [class^="MkPageHeader-buttonsLeft-"] > button,
+      html[data-color-scheme="dark"] [class*=" MkPageHeader-buttonsLeft-"] > button,
+      html[data-color-scheme="dark"] [class^="MkPageHeader-buttonsLeft-"] > button > i,
+      html[data-color-scheme="dark"] [class*=" MkPageHeader-buttonsLeft-"] > button > i {
+        color: var(--MI_THEME-pageHeaderFg, var(--MI_THEME-fg)) !important;
+        -webkit-text-fill-color: currentColor !important;
+      }
+
+      html[data-color-scheme="dark"] [class^="mobile-footer-menu-root-"],
+      html[data-color-scheme="dark"] [class*=" mobile-footer-menu-root-"] {
+        border-top-color: var(--MI_THEME-divider) !important;
+        background: var(--MI_THEME-navBg) !important;
+        color: var(--MI_THEME-navFg) !important;
+        box-shadow: none !important;
+      }
+
+      @supports ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
+        html[data-color-scheme="dark"] [class^="mobile-footer-menu-root-"],
+        html[data-color-scheme="dark"] [class*=" mobile-footer-menu-root-"] {
+          background: color-mix(in srgb, var(--MI_THEME-navBg) 86%, transparent) !important;
+          -webkit-backdrop-filter: blur(12px);
+          backdrop-filter: blur(12px);
+        }
+      }
+
+      html[data-color-scheme="dark"] [class^="mobile-footer-menu-root-"] > button,
+      html[data-color-scheme="dark"] [class*=" mobile-footer-menu-root-"] > button,
+      html[data-color-scheme="dark"] [class^="mobile-footer-menu-root-"] > button > [class*="mobile-footer-menu-itemInner-"],
+      html[data-color-scheme="dark"] [class*=" mobile-footer-menu-root-"] > button > [class*="mobile-footer-menu-itemInner-"],
+      html[data-color-scheme="dark"] [class^="mobile-footer-menu-root-"] > button i,
+      html[data-color-scheme="dark"] [class*=" mobile-footer-menu-root-"] > button i {
+        color: var(--MI_THEME-navFg) !important;
+        -webkit-text-fill-color: currentColor !important;
+      }
+
+      html[data-color-scheme="dark"] body.codex-route-home [class^="mobile-footer-menu-root-"] > button:has(i.ph-house),
+      html[data-color-scheme="dark"] body.codex-route-home [class*=" mobile-footer-menu-root-"] > button:has(i.ph-house),
+      html[data-color-scheme="dark"] body.codex-route-home [class^="mobile-footer-menu-root-"] > button:has(i.ti-home),
+      html[data-color-scheme="dark"] body.codex-route-home [class*=" mobile-footer-menu-root-"] > button:has(i.ti-home),
+      html[data-color-scheme="dark"] body.codex-route-notifications [class^="mobile-footer-menu-root-"] > button:has(i.ph-bell),
+      html[data-color-scheme="dark"] body.codex-route-notifications [class*=" mobile-footer-menu-root-"] > button:has(i.ph-bell),
+      html[data-color-scheme="dark"] body.codex-route-notifications [class^="mobile-footer-menu-root-"] > button:has(i.ti-bell),
+      html[data-color-scheme="dark"] body.codex-route-notifications [class*=" mobile-footer-menu-root-"] > button:has(i.ti-bell) {
+        color: var(--MI_THEME-navActive, var(--MI_THEME-navFg)) !important;
+        -webkit-text-fill-color: currentColor !important;
+      }
+
+      html[data-color-scheme="dark"] [class^="mobile-footer-menu-root-"] > button:not([class*="mobile-footer-menu-post-"]):hover > [class*="mobile-footer-menu-itemInner-"],
+      html[data-color-scheme="dark"] [class*=" mobile-footer-menu-root-"] > button:not([class*="mobile-footer-menu-post-"]):hover > [class*="mobile-footer-menu-itemInner-"],
+      html[data-color-scheme="dark"] [class^="mobile-footer-menu-root-"] > button:not([class*="mobile-footer-menu-post-"]):active > [class*="mobile-footer-menu-itemInner-"],
+      html[data-color-scheme="dark"] [class*=" mobile-footer-menu-root-"] > button:not([class*="mobile-footer-menu-post-"]):active > [class*="mobile-footer-menu-itemInner-"] {
+        background: var(--MI_THEME-panelHighlight) !important;
       }
     </style>
     <script id="codex-disable-initial-tutorial-script">

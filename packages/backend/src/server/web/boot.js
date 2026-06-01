@@ -94,6 +94,26 @@
 		localStorage.removeItem('locale');
 	}
 
+	function getMirroredDeviceState() {
+		try {
+			const value = localStorage.getItem('idbfallback::pizzax::base');
+			if (value == null) return null;
+			const parsed = JSON.parse(value);
+			return parsed != null && typeof parsed === 'object' ? parsed : null;
+		} catch (err) {
+			console.warn('Failed to read mirrored device state.', err);
+			return null;
+		}
+	}
+
+	function expectedColorSchemeFromMirroredState() {
+		const deviceState = getMirroredDeviceState();
+		if (typeof deviceState?.darkMode === 'boolean') {
+			return deviceState.darkMode ? 'dark' : 'light';
+		}
+		return null;
+	}
+
 	//#region Detect language & fetch translations
 	if (!localStorage.getItem('locale')) {
 		const supportedLangs = Array.isArray(LANGS) ? LANGS : ['en-US'];
@@ -157,8 +177,12 @@
 	//#region Theme
 	const theme = localStorage.getItem('theme');
 	const themeFontFaceName = 'sharkey-theme-font-face';
-	const colorScheme = localStorage.getItem('colorScheme');
+	const expectedColorScheme = expectedColorSchemeFromMirroredState();
+	const colorScheme = expectedColorScheme ?? localStorage.getItem('colorScheme');
 	if (colorScheme === 'dark' || colorScheme === 'light') {
+		if (expectedColorScheme != null && localStorage.getItem('colorScheme') !== expectedColorScheme) {
+			localStorage.setItem('colorScheme', expectedColorScheme);
+		}
 		document.documentElement.dataset.colorScheme = colorScheme;
 		document.documentElement.style.setProperty('color-scheme', colorScheme, 'important');
 	} else {

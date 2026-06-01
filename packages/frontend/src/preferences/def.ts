@@ -143,6 +143,7 @@ export const PREF_DEF = {
 			'drive',
 			'achievements',
 			'chat',
+			'ai',
 		],
 	},
 	statusbars: {

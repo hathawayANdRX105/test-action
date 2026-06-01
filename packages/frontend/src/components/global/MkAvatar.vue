@@ -163,6 +163,8 @@ watch(() => props.user.avatarBlurhash, () => {
 	display: inline-block;
 	vertical-align: bottom;
 	flex-shrink: 0;
+	box-sizing: border-box;
+	aspect-ratio: 1 / 1;
 	border-radius: 100%; // sharkey: controlled by square avatars setting!
 	line-height: 16px;
 	z-index: 0; // sharkey: starts stacking context to help with showing decorations behind the avatar

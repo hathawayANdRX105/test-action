@@ -14,6 +14,7 @@ import {
 import { miLocalStorage } from '@/local-storage.js';
 
 const PREFIX = 'idbfallback::';
+const localStorageMirrorKeys = new Set(['pizzax::base']);
 
 let idbAvailable = typeof window !== 'undefined' ? !!(window.indexedDB && typeof window.indexedDB.open === 'function') : true;
 
@@ -44,15 +45,28 @@ export async function get(key: string) {
 }
 
 export async function set(key: string, val: any) {
-	if (idbAvailable) return iset(key, val);
+	if (idbAvailable) {
+		if (localStorageMirrorKeys.has(key)) {
+			miLocalStorage.setItemAsJson(`${PREFIX}${key}`, val);
+		}
+		return iset(key, val);
+	}
 	return miLocalStorage.setItemAsJson(`${PREFIX}${key}`, val);
 }
 
 export async function del(key: string) {
-	if (idbAvailable) return idel(key);
+	if (idbAvailable) {
+		if (localStorageMirrorKeys.has(key)) {
+			miLocalStorage.removeItem(`${PREFIX}${key}`);
+		}
+		return idel(key);
+	}
 	return miLocalStorage.removeItem(`${PREFIX}${key}`);
 }
 
 export async function clear() {
+	for (const key of localStorageMirrorKeys) {
+		miLocalStorage.removeItem(`${PREFIX}${key}`);
+	}
 	if (idbAvailable) return iclear();
 }

@@ -70,6 +70,9 @@ if ($i != null) {
 	if (!nextMenu.includes('chat') && navbarItemDef.chat.show !== false) {
 		nextMenu = [...nextMenu, 'chat'];
 	}
+	if (!nextMenu.includes('ai') && navbarItemDef.ai.show !== false) {
+		nextMenu = [...nextMenu, 'ai'];
+	}
 	if (nextMenu.length !== currentMenu.length || nextMenu.some((item, index) => item !== currentMenu[index])) {
 		prefer.commit('menu', nextMenu);
 	}

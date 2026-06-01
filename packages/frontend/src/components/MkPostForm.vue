@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div
-	:class="[$style.root, { [$style.modal]: modal, _popup: modal }]"
+	:class="[$style.root, { [$style.modal]: modal, _popup: modal, [$style.homeStyle]: homeStyle }]"
 	@dragover.stop="onDragover"
 	@dragenter="onDragenter"
 	@dragleave="onDragleave"
@@ -98,7 +98,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-if="showingOptions" style="padding: 8px 16px;">
 	</div>
 	<footer :class="$style.footer">
-		<div :class="$style.footerLeft">
+		<div v-if="homeStyle" :class="$style.footerLeft">
+			<button v-tooltip="i18n.ts.attachFile" class="_button" :class="$style.footerButton" @click="chooseFileFrom"><i class="ti ti-photo"></i></button>
+			<button v-tooltip="i18n.ts.poll" class="_button" :class="[$style.footerButton, { [$style.footerButtonActive]: poll }]" @click="togglePoll"><i class="ti ti-chart-arrows"></i></button>
+			<button v-tooltip="i18n.ts.emoji" :class="['_button', $style.footerButton]" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
+			<button v-if="$i.policies.scheduleNoteMax > 0" v-tooltip="i18n.ts.options" class="_button" :class="[$style.footerButton, { [$style.footerButtonActive]: scheduleNote }]" @click="toggleScheduleNote"><i class="ti ti-calendar-event"></i></button>
+		</div>
+		<div v-else :class="$style.footerLeft">
 			<button v-tooltip="i18n.ts.attachFile" class="_button" :class="$style.footerButton" @click="chooseFileFrom"><i class="ti ti-photo-plus"></i></button>
 			<button v-tooltip="i18n.ts.poll" class="_button" :class="[$style.footerButton, { [$style.footerButtonActive]: poll }]" @click="togglePoll"><i class="ti ti-chart-arrows"></i></button>
 			<button v-tooltip="i18n.ts.useCw" class="_button" :class="[$style.footerButton, { [$style.footerButtonActive]: useCw }]" @click="useCw = !useCw"><i class="ti ti-eye-off"></i></button>
@@ -173,6 +179,10 @@ const props = withDefaults(defineProps<PostFormProps & {
 	freezeAfterPosted?: boolean;
 	editId?: Misskey.entities.Note['id'];
 	mock?: boolean;
+	// Twitter/X-style inline composer: reorders the footer toolbar (media / GIF /
+	// poll / emoji / schedule) and lets the home page pass a custom placeholder.
+	homeStyle?: boolean;
+	placeholder?: string;
 }>(), {
 	initialVisibleUsers: () => [],
 	autofocus: true,
@@ -252,6 +262,8 @@ const placeholder = computed((): string => {
 		return i18n.ts._postForm.replyPlaceholder;
 	} else if (props.channel) {
 		return i18n.ts._postForm.channelPlaceholder;
+	} else if (props.placeholder) {
+		return props.placeholder;
 	} else {
 		const xs = [
 			i18n.ts._postForm._placeholders.a,
@@ -270,7 +282,11 @@ const submitText = computed((): string => {
 		? i18n.ts.quote
 		: props.reply
 			? i18n.ts.reply
-			: i18n.ts.note;
+			// On the X-style home composer the submit reads "Post" (publish),
+			// matching Twitter; elsewhere it stays the instance's "Note".
+			: props.homeStyle
+				? i18n.ts.publish
+				: i18n.ts.note;
 });
 
 const textLength = computed((): number => {
@@ -1746,5 +1762,75 @@ defineExpose({
 		gap: 0;
 	}
 
+}
+
+/* ---------- Twitter/X-style inline composer (homeStyle) ----------
+   These rules live here (not in the parent page) because the parent's
+   <style module> can't reach MkPostForm's hashed module classes. X brand
+   blue is hardcoded so it stays Twitter-blue regardless of the user theme. */
+.homeStyle {
+	--x-blue: #1d9bf0;
+	--x-blue-hover: #1a8cd8;
+
+	// Hide Misskey-only header controls — child 2 = federation rocket,
+	// child 4 = reaction-acceptance; keep visibility(1), the … menu(3) and submit(5).
+	.headerRight > :nth-child(2),
+	.headerRight > :nth-child(4) {
+		display: none;
+	}
+
+	// Blue pill submit (the visible pill is .submitInner). Drop the trailing icon.
+	.submit > .submitInner > i {
+		display: none;
+	}
+
+	&.root .submit > .submitInner,
+	&.root .submit:disabled > .submitInner {
+		background: var(--x-blue) !important;
+		background-image: none !important;
+		border-radius: var(--MI-radius-ellipse);
+		color: #fff !important;
+		min-width: 0;
+		padding: 0 20px;
+	}
+
+	&.root .submit:not(:disabled):hover > .submitInner,
+	&.root .submit:not(:disabled):active > .submitInner {
+		background: var(--x-blue-hover) !important;
+	}
+
+	// Footer toolbar: cluster icons on the left like X with round blue buttons.
+	.footer {
+		padding: 4px 12px 10px;
+	}
+
+	// X has no right-hand preview/MFM cluster — keep only the left media row.
+	.footerRight {
+		display: none;
+	}
+
+	.footerLeft {
+		display: flex;
+		gap: 2px;
+	}
+
+	.footerButton {
+		width: 36px;
+		height: 36px;
+		display: inline-grid;
+		place-items: center;
+		border-radius: 50%;
+		color: var(--x-blue);
+		transition: background .1s;
+
+		&:hover {
+			background: color-mix(in srgb, var(--x-blue) 14%, transparent);
+		}
+	}
+
+	// No per-note colour stripe in the composer either.
+	.colorBar {
+		display: none;
+	}
 }
 </style>

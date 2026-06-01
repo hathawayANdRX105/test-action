@@ -7,6 +7,7 @@ import { nextTick } from 'vue';
 import { version } from '@@/js/config.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { prefer } from '@/preferences.js';
+import { store } from '@/store.js';
 
 const DISPLAY_REPAIR_CLASS = '_sharkeyDisplayRepair_';
 const knownFontSizeClasses = ['f-1', 'f-2', 'f-3'];
@@ -107,32 +108,33 @@ function isColorScheme(value: unknown): value is 'dark' | 'light' {
 }
 
 function currentColorScheme(): 'dark' | 'light' | null {
+	return store.s.darkMode ? 'dark' : 'light';
+}
+
+function persistedColorSchemeIsUsable(): boolean {
 	const html = window.document.documentElement;
 	const datasetColorScheme = html.dataset.colorScheme;
-	if (isColorScheme(datasetColorScheme)) return datasetColorScheme;
+	if (isColorScheme(datasetColorScheme)) return true;
 
 	const persistedColorScheme = miLocalStorage.getItem('colorScheme');
-	if (isColorScheme(persistedColorScheme)) return persistedColorScheme;
+	if (isColorScheme(persistedColorScheme)) return true;
 
 	const inlineColorScheme = html.style.getPropertyValue('color-scheme');
-	if (inlineColorScheme.includes('dark')) return 'dark';
-	if (inlineColorScheme.includes('light')) return 'light';
+	if (inlineColorScheme.includes('dark') || inlineColorScheme.includes('light')) return true;
 
 	try {
 		const computedColorScheme = window.getComputedStyle(html).colorScheme;
-		if (computedColorScheme.includes('dark')) return 'dark';
-		if (computedColorScheme.includes('light')) return 'light';
+		if (computedColorScheme.includes('dark') || computedColorScheme.includes('light')) return true;
 	} catch (err) {
 		console.warn('Failed to read computed color scheme during display repair.', err);
 	}
 
-	return null;
+	return false;
 }
 
 function verifyColorSchemeState(): void {
 	const html = window.document.documentElement;
 	const colorScheme = currentColorScheme();
-	if (colorScheme == null) return;
 
 	if (html.dataset.colorScheme !== colorScheme) {
 		html.dataset.colorScheme = colorScheme;
@@ -142,7 +144,7 @@ function verifyColorSchemeState(): void {
 		html.style.setProperty('color-scheme', colorScheme, 'important');
 	}
 
-	if (!isColorScheme(miLocalStorage.getItem('colorScheme'))) {
+	if (!persistedColorSchemeIsUsable() || miLocalStorage.getItem('colorScheme') !== colorScheme) {
 		miLocalStorage.setItem('colorScheme', colorScheme);
 	}
 }
