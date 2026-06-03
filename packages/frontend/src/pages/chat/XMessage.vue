@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="[$style.root, { [$style.isMe]: isMe }]">
+<div :class="[$style.root, { [$style.isMe]: isMe, [$style.isRoom]: isRoomChat }]">
 	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="!isMe" :preview="false" @contextmenu.prevent.stop="onAvatarContextmenu"/>
 	<div v-else :class="[$style.avatar, $style.avatarFallback]"><i class="ti ti-user-question"></i></div>
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
@@ -139,6 +139,7 @@ type MessageWithMentionState = typeof props.message & {
 };
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
+const isRoomChat = computed(() => props.message.toRoomId != null);
 const isPending = computed(() => (props.message as MessageWithSendState).sendStatus === 'pending');
 const canDelete = computed(() => !isPending.value && (isMe.value || props.canDeleteAnyMessage === true) && $i.policies.chatAvailability === 'available');
 const canManageSender = computed(() => !isPending.value && props.canManageRoomUsers === true && !isMe.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
@@ -434,10 +435,16 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 		justify-content: flex-start;
 		text-align: right;
 
-		.avatar {
-			display: none;
+		&:not(.isRoom) {
+			.avatar {
+				display: none;
+			}
 		}
 	}
+}
+
+.isRoom .avatar {
+	display: block;
 }
 
 .avatar {
@@ -466,7 +473,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 
 @container (max-width: 450px) {
 	.root {
-		&.isMe {
+		&.isMe:not(.isRoom) {
 			.avatar {
 				display: none;
 			}
@@ -642,7 +649,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	text-align: right;
 }
 
-.isMe .sender {
+.isMe:not(.isRoom) .sender {
 	display: none;
 }
 

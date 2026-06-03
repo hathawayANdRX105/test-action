@@ -279,7 +279,7 @@ export class ChatService {
 		}
 
 		const text = normalizeMessageText(params.text);
-		if (text == null && params.file == null) {
+		if (text == null && params.file == null && params.reply == null && params.quote == null) {
 			throw new Error('content required');
 		}
 
@@ -362,7 +362,7 @@ export class ChatService {
 		const isLargeRoom = membershipsCount > LARGE_CHAT_ROOM_MEMBER_THRESHOLD;
 
 		const text = normalizeMessageText(params.text);
-		if (text == null && params.file == null) {
+		if (text == null && params.file == null && params.reply == null && params.quote == null) {
 			throw new Error('content required');
 		}
 		const mentionedUserIds = await this.filterRoomMentionedUserIds(
@@ -1298,6 +1298,7 @@ export class ChatService {
 		userId?: MiUser['id'] | null;
 		roomId?: MiChatRoom['id'] | null;
 		untilId?: MiChatMessage['id'] | null;
+		fromUserId?: MiUser['id'] | null;
 	}) {
 		const q = this.chatMessagesRepository.createQueryBuilder('message');
 
@@ -1344,6 +1345,11 @@ export class ChatService {
 			q.andWhere('message.id < :untilId', { untilId: params.untilId });
 		}
 
+		if (params.fromUserId) {
+			q.andWhere('message.fromUserId = :fromUserId', { fromUserId: params.fromUserId });
+		}
+
+		q.andWhere('message.text IS NOT NULL');
 		q.andWhere('LOWER(message.text) LIKE :q', { q: `%${ sqlLikeEscape(query.toLowerCase()) }%` });
 
 		q.leftJoinAndSelect('message.file', 'file');

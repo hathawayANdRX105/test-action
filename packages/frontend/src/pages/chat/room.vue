@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span>{{ room?.name ?? user?.name ?? user?.username ?? i18n.ts.chat }}</span>
 		</div>
 		<div :class="$style.localTabs">
-			<button v-for="t in headerTabs" :key="t.key" class="_button" :class="[$style.localTab, { [$style.localTabActive]: tab === t.key }]" @click="tab = t.key">
+			<button v-for="t in headerTabs" :key="t.key" class="_button" :class="[$style.localTab, { [$style.localTabActive]: tab === t.key }]" @click="selectTab(t.key)">
 				<i :class="t.icon"></i>
 				<span>{{ t.title }}</span>
 			</button>
@@ -66,7 +66,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div v-else ref="timelineEl" :class="$style.timeline">
+			<div v-if="isContextMode" :class="$style.contextModeBar">
+				<div :class="$style.contextModeText"><i class="ti ti-search"></i>{{ i18n.ts.searchResult }}</div>
+				<button class="_buttonPrimary" :class="$style.contextModeButton" @click="exitContextToLatest">{{ i18n.ts._chat.newMessage }}</button>
+			</div>
+
+			<div v-if="messages.length > 0" ref="timelineEl" :class="$style.timeline">
 				<div v-if="canFetchMore || moreFetching" :class="$style.more">
 					<MkLoading v-if="moreFetching" :mini="true"/>
 				</div>
@@ -104,19 +109,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-else-if="tab === 'search'" :class="$style.searchPane">
-		<XSearch :userId="userId" :roomId="roomId" @openContext="openMessageContext"/>
+		<XSearch :userId="userId" :roomId="roomId" :user="user" :room="room" @openContext="openMessageContext"/>
 	</div>
 
-	<div v-else-if="tab === 'members'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XMembers v-if="room != null" :room="room" @inviteUser="inviteUser"/>
+	<div v-else-if="tab === 'members'" :class="$style.tabPane">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 700px;">
+			<XMembers v-if="room != null" :room="room" @inviteUser="inviteUser"/>
+		</div>
 	</div>
 
-	<div v-else-if="tab === 'info'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated"/>
+	<div v-else-if="tab === 'info'" :class="$style.tabPane">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 700px;">
+			<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated"/>
+		</div>
 	</div>
 
-	<div v-else-if="tab === 'management'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XManagement v-if="room != null && room.canManage" :room="room" @updated="onRoomUpdated" @cleared="onCleared"/>
+	<div v-else-if="tab === 'management'" :class="$style.tabPane">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 700px;">
+			<XManagement v-if="room != null && room.canManage" :room="room" @updated="onRoomUpdated" @cleared="onCleared"/>
+		</div>
 	</div>
 
 	<div v-if="tab === 'chat'" :class="$style.footer">
@@ -161,6 +172,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkAcct from '@/components/global/MkAcct.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
+import { ChatAutoScrollState, getChatScrollMetrics, sortChatMessagesForTimeline } from './room-scroll.js';
 
 const $i = ensureSignin();
 const router = useRouter();
@@ -206,18 +218,28 @@ const formEl = ref<InstanceType<typeof XForm> | null>(null);
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
 const contextTargetMessageId = ref<string | null>(null);
 const pendingContextScrollId = ref<string | null>(null);
+const usersById = ref(new Map<string, Misskey.entities.UserLite>());
 
 const SCROLL_HEAD_THRESHOLD = 200;
+const SCROLL_LATEST_THRESHOLD = 24;
+const SCROLL_AUTO_STICK_THRESHOLD = 4;
 const SCROLL_HISTORY_THRESHOLD = 480;
 const SCROLL_TAIL_THRESHOLD = 480;
+const USER_SCROLL_INTERACTION_LOCK_MS = 1200;
 const TIMELINE_LIMIT = 20;
 const CONTEXT_LIMIT = 30;
 const MAX_ROOM_MESSAGES = 500;
 const STREAM_CONNECT_TIMEOUT = 5000;
+const autoScrollState = new ChatAutoScrollState({
+	latestThreshold: SCROLL_LATEST_THRESHOLD,
+	interactionLockMs: USER_SCROLL_INTERACTION_LOCK_MS,
+});
 let removeTimelineScrollListener: (() => void) | null = null;
+let pendingStickToLatestFrame: number | null = null;
 let historyFetchArmed = true;
 let newerFetchArmed = true;
 let scrollRestorationDepth = 0;
+let suppressNextMessageIdClearInitialize = false;
 const isRestoringHistoryScroll = ref(false);
 const isRoomChat = computed(() => props.roomId != null);
 const isContextMode = computed(() => contextTargetMessageId.value != null);
@@ -248,7 +270,7 @@ function isAtLatest() {
 	const scrollContainer = getScrollContainer(timelineEl.value);
 	if (scrollContainer == null) return true;
 
-	return Math.abs(scrollContainer.scrollTop) < SCROLL_HEAD_THRESHOLD;
+	return autoScrollState.canAutoFollowLatest(getChatScrollMetrics(scrollContainer).latestDistance);
 }
 
 function clearNewMessageIndicator() {
@@ -260,8 +282,10 @@ function clearNewMessageIndicator() {
 
 function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
 	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+	autoScrollState.markLatest();
+	const scrollTop = scrollContainer == null ? 0 : getChatScrollMetrics(scrollContainer).maxScrollTop;
 	scrollContainer?.scrollTo({
-		top: 0,
+		top: scrollTop,
 		behavior,
 	});
 	clearNewMessageIndicator();
@@ -276,10 +300,13 @@ function setupTimelineScrollListener() {
 	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 	if (scrollContainer == null) return;
 
+	const markUserScrollInteraction = () => {
+		autoScrollState.markUserInteraction();
+	};
+
 	const onScroll = () => {
-		const maxReverseScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-		const reverseScroll = Math.min(maxReverseScroll, Math.max(0, Math.abs(scrollContainer.scrollTop)));
-		const historyDistance = maxReverseScroll - reverseScroll;
+		const { latestDistance, historyDistance } = getChatScrollMetrics(scrollContainer);
+		autoScrollState.updateFromScroll(latestDistance);
 		if (historyDistance >= SCROLL_HISTORY_THRESHOLD) {
 			historyFetchArmed = true;
 		}
@@ -289,7 +316,6 @@ function setupTimelineScrollListener() {
 			fetchMore();
 		}
 
-		const latestDistance = reverseScroll;
 		if (latestDistance < SCROLL_HEAD_THRESHOLD) {
 			clearNewMessageIndicator();
 		}
@@ -305,7 +331,19 @@ function setupTimelineScrollListener() {
 	};
 
 	scrollContainer.addEventListener('scroll', onScroll, { passive: true });
-	removeTimelineScrollListener = () => scrollContainer.removeEventListener('scroll', onScroll);
+	scrollContainer.addEventListener('touchstart', markUserScrollInteraction, { passive: true });
+	scrollContainer.addEventListener('touchmove', markUserScrollInteraction, { passive: true });
+	scrollContainer.addEventListener('pointerdown', markUserScrollInteraction, { passive: true });
+	scrollContainer.addEventListener('pointermove', markUserScrollInteraction, { passive: true });
+	scrollContainer.addEventListener('wheel', markUserScrollInteraction, { passive: true });
+	removeTimelineScrollListener = () => {
+		scrollContainer.removeEventListener('scroll', onScroll);
+		scrollContainer.removeEventListener('touchstart', markUserScrollInteraction);
+		scrollContainer.removeEventListener('touchmove', markUserScrollInteraction);
+		scrollContainer.removeEventListener('pointerdown', markUserScrollInteraction);
+		scrollContainer.removeEventListener('pointermove', markUserScrollInteraction);
+		scrollContainer.removeEventListener('wheel', markUserScrollInteraction);
+	};
 }
 
 function getVisibleMessageAnchor(): ScrollAnchor | null {
@@ -449,42 +487,81 @@ async function restoreVisibleMessageAnchorAfterLayout(anchor: ScrollAnchor | nul
 	}
 }
 
-// column-reverseなので本来はスクロール位置の最下部への追従は不要なはずだが、おそらくブラウザのバグにより、最下部にスクロールした状態でも追従されない場合がある(スクロール位置が少数になることがあるのが関わっていそう)
-// そのため補助としてMutationObserverを使って追従を行う
+// DOM changes near the latest message can shift scroll height. Only pin when
+// the user is already on the exact latest edge; otherwise preserve manual scroll.
+function scheduleStickToLatestAfterMutation() {
+	if (isRestoringHistoryScroll.value || isContextMode.value) return;
+	if (pendingStickToLatestFrame != null) return;
+
+	pendingStickToLatestFrame = window.requestAnimationFrame(() => {
+		pendingStickToLatestFrame = null;
+		if (isRestoringHistoryScroll.value || isContextMode.value) return;
+
+		const scrollContainer = getScrollContainer(timelineEl.value);
+		if (scrollContainer == null) return;
+
+		const metrics = getChatScrollMetrics(scrollContainer);
+		if (autoScrollState.shouldStickToLatest(metrics.latestDistance, SCROLL_AUTO_STICK_THRESHOLD)) {
+			scrollContainer.scrollTo({
+				top: metrics.maxScrollTop,
+				behavior: 'instant',
+			});
+		}
+	});
+}
+
 useMutationObserver(timelineEl, {
 	subtree: true,
 	childList: true,
 	attributes: false,
 }, () => {
-	if (isRestoringHistoryScroll.value || isContextMode.value) return;
-
-	const scrollContainer = getScrollContainer(timelineEl.value)!;
-	// column-reverseなのでscrollTopは負になる
-	if (-scrollContainer.scrollTop < SCROLL_HEAD_THRESHOLD) {
-		scrollContainer.scrollTo({
-			top: 0,
-			behavior: 'instant',
-		});
-	}
+	scheduleStickToLatestAfterMutation();
 });
 
+function rememberUser(user: Misskey.entities.UserLite | null | undefined) {
+	if (user == null) return;
+	usersById.value.set(user.id, user);
+}
+
+function rememberMessageUsers(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage) {
+	rememberUser(message.fromUser);
+	rememberUser(message.reply?.fromUser);
+	rememberUser(message.quote?.fromUser);
+	for (const record of message.reactions) {
+		rememberUser(record.user);
+	}
+}
+
+function resolveUser(userId: string, packedUser?: Misskey.entities.UserLite | null): Misskey.entities.UserLite | null {
+	if (packedUser != null) {
+		rememberUser(packedUser);
+		return packedUser;
+	}
+
+	if (userId === $i.id) return $i;
+	if (user.value?.id === userId) return user.value;
+	return usersById.value.get(userId) ?? null;
+}
+
 function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage): NormalizedChatMessage {
+	rememberMessageUsers(message);
+
 	return {
 		...message,
-		fromUser: message.fromUser ?? (message.fromUserId === $i.id ? $i : user.value),
+		fromUser: resolveUser(message.fromUserId, message.fromUser),
 		reply: message.replyId ? (message.reply ? normalizeMessage(message.reply) : null) : null,
 		quote: message.quoteId ? (message.quote ? normalizeMessage(message.quote) : null) : null,
 		replyUnavailable: message.replyId != null && message.reply == null,
 		quoteUnavailable: message.quoteId != null && message.quote == null,
 		reactions: message.reactions.map(record => ({
 			...record,
-			user: record.user ?? null,
+			user: record.user ? resolveUser(record.user.id, record.user) : null,
 		})),
 	};
 }
 
 function sortMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
-	return [...items].sort((a, b) => a.id > b.id ? -1 : a.id < b.id ? 1 : 0);
+	return sortChatMessagesForTimeline(items);
 }
 
 function isPendingMessage(message: NormalizedChatMessage): boolean {
@@ -670,6 +747,62 @@ async function initializeContextTimeline(messageId: string) {
 	canFetchNewer.value = context.hasMoreAfter;
 }
 
+async function loadLatestTimeline() {
+	messages.value = [];
+	canFetchMore.value = false;
+	canFetchNewer.value = false;
+	contextTargetMessageId.value = null;
+	pendingContextScrollId.value = null;
+	showIndicator.value = false;
+	newMessageCount.value = 0;
+	historyFetchArmed = true;
+	newerFetchArmed = true;
+
+	if (props.userId) {
+		const m = await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: TIMELINE_LIMIT });
+		appendFetchedMessages(m);
+		canFetchMore.value = m.length === TIMELINE_LIMIT;
+		await fetchLatestGap();
+		return;
+	}
+
+	if (room.value == null) return;
+
+	const m = await misskeyApi('chat/messages/room-timeline', { roomId: room.value.id, limit: TIMELINE_LIMIT });
+	appendFetchedMessages(m);
+	canFetchMore.value = m.length === TIMELINE_LIMIT;
+	await fetchLatestGap();
+}
+
+function clearMessageContextRoute() {
+	if (props.messageId == null) return;
+
+	const path = props.roomId != null ? `/chat/room/${props.roomId}` : props.userId != null ? `/chat/user/${props.userId}` : null;
+	if (path == null) return;
+
+	suppressNextMessageIdClearInitialize = true;
+	router.replace(path);
+}
+
+async function exitContextToLatest() {
+	if (initializing.value) return;
+
+	clearMessageContextRoute();
+	initializing.value = true;
+	initializeError.value = null;
+	joinRequiredRoom.value = null;
+
+	try {
+		await loadLatestTimeline();
+	} catch (err) {
+		console.error('Failed to exit chat message context:', err);
+		messages.value = [];
+		initializeError.value = props.roomId ? i18n.ts._chat.noPermissionToViewRoom : i18n.ts.pageLoadError;
+	} finally {
+		await finishInitializeRender();
+	}
+}
+
 async function openMessageContext(messageId: string) {
 	tab.value = 'chat';
 	initializeError.value = null;
@@ -747,9 +880,15 @@ async function finishInitializeRender() {
 	initializing.value = false;
 	const messageId = pendingContextScrollId.value;
 	pendingContextScrollId.value = null;
-	if (messageId == null || initializeError.value != null || joinRequiredRoom.value != null) return;
+	if (initializeError.value != null || joinRequiredRoom.value != null) return;
 
-	await scrollContextTargetAfterRender(messageId);
+	if (messageId != null) {
+		await scrollContextTargetAfterRender(messageId);
+	} else {
+		await nextTick();
+		await waitAnimationFrame();
+		scrollToLatest('instant');
+	}
 }
 
 async function initialize() {
@@ -772,6 +911,7 @@ async function initialize() {
 		if (props.userId) {
 			const u = await misskeyApi('users/show', { userId: props.userId });
 			user.value = u;
+			rememberUser(u);
 			room.value = null;
 
 			connectStream();
@@ -780,13 +920,7 @@ async function initialize() {
 			if (props.messageId != null) {
 				await initializeContextTimeline(props.messageId);
 			} else {
-				const m = await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: TIMELINE_LIMIT });
-				appendFetchedMessages(m);
-
-				if (m.length === TIMELINE_LIMIT) {
-					canFetchMore.value = true;
-				}
-				await fetchLatestGap();
+				await loadLatestTimeline();
 			}
 		} else {
 			const roomId = props.roomId;
@@ -799,6 +933,7 @@ async function initialize() {
 
 			user.value = null;
 			room.value = r as Misskey.entities.ChatRoomsShowResponse;
+			rememberUser(room.value.owner);
 
 			if (room.value.isJoined === false) {
 				messages.value = [];
@@ -818,13 +953,7 @@ async function initialize() {
 			if (props.messageId != null) {
 				await initializeContextTimeline(props.messageId);
 			} else {
-				const m = await misskeyApi('chat/messages/room-timeline', { roomId, limit: TIMELINE_LIMIT });
-				appendFetchedMessages(m);
-
-				if (m.length === TIMELINE_LIMIT) {
-					canFetchMore.value = true;
-				}
-				await fetchLatestGap();
+				await loadLatestTimeline();
 			}
 		}
 	} catch (err) {
@@ -901,9 +1030,7 @@ async function fetchMore() {
 		nextTick(() => {
 			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 			if (scrollContainer == null) return;
-			const maxReverseScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-			const reverseScroll = Math.min(maxReverseScroll, Math.max(0, Math.abs(scrollContainer.scrollTop)));
-			historyFetchArmed = (maxReverseScroll - reverseScroll) >= SCROLL_HISTORY_THRESHOLD;
+			historyFetchArmed = getChatScrollMetrics(scrollContainer).historyDistance >= SCROLL_HISTORY_THRESHOLD;
 		});
 	}
 }
@@ -937,14 +1064,21 @@ async function fetchNewer() {
 		nextTick(() => {
 			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 			if (scrollContainer == null) return;
-			const maxReverseScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-			const reverseScroll = Math.min(maxReverseScroll, Math.max(0, Math.abs(scrollContainer.scrollTop)));
-			newerFetchArmed = reverseScroll >= SCROLL_TAIL_THRESHOLD;
+			newerFetchArmed = getChatScrollMetrics(scrollContainer).latestDistance >= SCROLL_TAIL_THRESHOLD;
 		});
 	}
 }
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {
+	if (isContextMode.value) {
+		const normalized = normalizeMessage(message);
+		removeMatchingPendingMessage(normalized);
+		if (message.fromUserId !== $i.id) {
+			notifyNewMessage();
+		}
+		return;
+	}
+
 	const wasAtLatest = isAtLatest();
 	const anchor = wasAtLatest ? null : getVisibleMessageAnchor();
 	if (!wasAtLatest) {
@@ -1022,9 +1156,10 @@ function onReact(ctx: Parameters<Misskey.Channels['chatUser']['events']['react']
 				user: message.fromUserId === $i.id ? user.value! : $i,
 			});
 		} else {
+			rememberUser(ctx.user);
 			message.reactions.push({
 				reaction: ctx.reaction,
-				user: ctx.user!,
+				user: ctx.user ?? null,
 			});
 		}
 	}
@@ -1032,8 +1167,12 @@ function onReact(ctx: Parameters<Misskey.Channels['chatUser']['events']['react']
 
 function onUnreact(ctx: Parameters<Misskey.Channels['chatUser']['events']['unreact']>[0] | Parameters<Misskey.Channels['chatRoom']['events']['unreact']>[0]) {
 	const message = messages.value.find(m => m.id === ctx.messageId);
+	rememberUser(ctx.user);
 	if (message) {
-		const index = message.reactions.findIndex(r => r.user != null && r.reaction === ctx.reaction && r.user.id === ctx.user!.id);
+		const reactedUser = ctx.user ?? (room.value == null ? (message.fromUserId === $i.id ? user.value : $i) : null);
+		if (reactedUser == null) return;
+
+		const index = message.reactions.findIndex(r => r.user != null && r.reaction === ctx.reaction && r.user.id === reactedUser.id);
 		if (index !== -1) {
 			message.reactions.splice(index, 1);
 		}
@@ -1041,6 +1180,11 @@ function onUnreact(ctx: Parameters<Misskey.Channels['chatUser']['events']['unrea
 }
 
 function onIndicatorClick() {
+	if (isContextMode.value) {
+		void exitContextToLatest();
+		return;
+	}
+
 	scrollToLatest();
 }
 
@@ -1071,6 +1215,11 @@ onMounted(() => {
 	watch(timelineEl, () => nextTick(setupTimelineScrollListener), { immediate: true });
 	watch(() => props.messageId, (to, from) => {
 		if (to !== from) {
+			if (suppressNextMessageIdClearInitialize && to == null) {
+				suppressNextMessageIdClearInitialize = false;
+				return;
+			}
+
 			if (to != null) {
 				openMessageContext(to);
 			} else {
@@ -1084,6 +1233,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	connection.value?.dispose();
 	removeTimelineScrollListener?.();
+	if (pendingStickToLatestFrame != null) {
+		window.cancelAnimationFrame(pendingStickToLatestFrame);
+		pendingStickToLatestFrame = null;
+	}
 	window.document.removeEventListener('visibilitychange', onVisibilitychange);
 });
 
@@ -1114,6 +1267,7 @@ async function leaveRoom() {
 
 function onRoomUpdated(updated: Misskey.entities.ChatRoom) {
 	room.value = updated;
+	rememberUser(updated.owner);
 }
 
 function showMenu(ev: MouseEvent) {
@@ -1145,6 +1299,13 @@ function showMenu(ev: MouseEvent) {
 }
 
 const tab = ref('chat');
+
+function selectTab(key: string) {
+	tab.value = key;
+	if (key === 'chat' && isContextMode.value) {
+		void exitContextToLatest();
+	}
+}
 
 const headerTabs = computed(() => room.value ? room.value.isJoined ? [{
 	key: 'chat',
@@ -1236,6 +1397,11 @@ definePage(computed(() => {
 }
 
 .root {
+	--chat-room-surface: light-dark(#d8e6ee, #0e1621);
+	--chat-room-border: light-dark(rgb(198 213 222), rgb(31 43 55));
+	--chat-room-footer-cover: light-dark(rgb(216 230 238 / 0.98), rgb(14 22 33 / 0.98));
+	--chat-room-footer-shadow: light-dark(rgb(137 164 180 / 0.52), rgb(0 0 0 / 0.44));
+
 	position: relative;
 	height: 100%;
 	min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px) + var(--MI-visualViewportBottom, 0px)));
@@ -1397,6 +1563,40 @@ definePage(computed(() => {
 	animation: contextTargetPulse 2.2s ease-out 1;
 }
 
+.contextModeBar {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 8px 10px;
+	border-radius: 14px;
+	background: light-dark(rgb(255 255 255 / 0.86), rgb(23 35 47 / 0.9));
+	box-shadow: 0 1px 4px rgb(0 0 0 / 0.14);
+	-webkit-backdrop-filter: var(--MI-blur, blur(8px));
+	backdrop-filter: var(--MI-blur, blur(8px));
+}
+
+.contextModeText {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.9em;
+	font-weight: 700;
+}
+
+.contextModeButton {
+	flex-shrink: 0;
+	padding: 0 12px;
+	line-height: 30px;
+	border-radius: 999px;
+	font-size: 0.9em;
+}
+
 .more {
 	min-height: 44px;
 	display: grid;
@@ -1416,16 +1616,20 @@ definePage(computed(() => {
 	overscroll-behavior: contain;
 	scrollbar-gutter: stable;
 	display: flex;
-	flex-direction: column-reverse;
+	flex-direction: column;
 	background:
 		radial-gradient(circle at 20px 20px, light-dark(rgb(0 0 0 / 0.035), rgb(255 255 255 / 0.035)) 1px, transparent 1px),
-		light-dark(#d8e6ee, #0e1621);
+		var(--chat-room-surface);
 	background-size: 22px 22px, auto;
-	border-inline: solid 1px light-dark(rgb(198 213 222), rgb(31 43 55));
+	border-inline: solid 1px var(--chat-room-border);
 }
 
 .chatPane > :global(._gaps) {
 	width: 100%;
+	min-height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
 }
 
 .searchPane {
@@ -1444,6 +1648,33 @@ definePage(computed(() => {
 	min-height: 0;
 	max-height: 100%;
 	width: 100%;
+}
+
+.tabPane {
+	height: 100%;
+	min-height: 0;
+	max-height: 100%;
+	display: flex;
+	flex-direction: column;
+	overflow-x: hidden;
+	overflow-y: hidden;
+	touch-action: pan-y;
+	overscroll-behavior: contain;
+	box-sizing: border-box;
+	background: var(--MI_THEME-bg);
+}
+
+.tabPaneInner {
+	flex: 1 1 auto;
+	height: 100%;
+	min-height: 0;
+	max-height: 100%;
+	overflow-x: hidden;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	box-sizing: border-box;
 }
 
 .error {
@@ -1492,11 +1723,28 @@ definePage(computed(() => {
 }
 
 .footer {
+	position: relative;
+	z-index: 3;
 	width: 100%;
 	padding: 6px 12px max(8px, env(safe-area-inset-bottom));
 	box-sizing: border-box;
-	background: light-dark(#d8e6ee, #0e1621);
-	border-top: solid 1px light-dark(rgb(198 213 222), rgb(31 43 55));
+	background: var(--chat-room-surface);
+	border-top: none;
+	box-shadow: 0 -12px 20px -18px var(--chat-room-footer-shadow);
+}
+
+.footer::before {
+	content: "";
+	position: absolute;
+	inset: -18px 0 auto;
+	height: 18px;
+	pointer-events: none;
+	background: linear-gradient(to bottom, transparent, var(--chat-room-footer-cover));
+}
+
+.footer > :global(._gaps) {
+	position: relative;
+	z-index: 1;
 }
 
 .new {

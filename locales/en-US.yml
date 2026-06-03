@@ -1444,6 +1444,8 @@ _chat:
   leave: "Leave room"
   members: "Members"
   searchMessages: "Search messages"
+  sender: "Sender"
+  allSenders: "All senders"
   home: "Home"
   send: "Send"
   newline: "New line"

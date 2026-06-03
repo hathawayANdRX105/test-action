@@ -49,7 +49,7 @@ export const meta = {
 		},
 
 		contentRequired: {
-			message: 'Content required. You need to set text or fileId.',
+			message: 'Content required. You need to set text, fileId, replyId, or quoteId.',
 			code: 'CONTENT_REQUIRED',
 			id: '340517b7-6d04-42c0-bac1-37ee804e3594',
 		},
@@ -121,11 +121,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			// テキストが無いかつ添付ファイルも無かったらエラー
-			if ((text == null || text.length === 0) && file == null) {
-				throw new ApiError(meta.errors.contentRequired);
-			}
-
 			const [reply, quote] = await Promise.all([
 				ps.replyId != null ? this.chatService.findMessageById(ps.replyId) : null,
 				ps.quoteId != null ? this.chatService.findMessageById(ps.quoteId) : null,
@@ -133,6 +128,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if ((ps.replyId != null && reply?.toRoomId !== room.id) || (ps.quoteId != null && quote?.toRoomId !== room.id)) {
 				throw new ApiError(meta.errors.invalidReference);
+			}
+
+			// テキスト、添付、参照のいずれも無かったらエラー
+			if ((text == null || text.length === 0) && file == null && reply == null && quote == null) {
+				throw new ApiError(meta.errors.contentRequired);
 			}
 
 			return await this.chatService.createMessageToRoom(me, room, {

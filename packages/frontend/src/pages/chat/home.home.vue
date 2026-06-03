@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template #prefix><i class="ti ti-search"></i></template>
 	</MkInput>
 
-	<MkButton v-if="searchQuery.length > 0" primary rounded :wait="searchFetching" @click="search">{{ i18n.ts.search }}</MkButton>
+	<MkButton v-if="searchQuery.length > 0" primary rounded :wait="searchFetching" :disabled="searchQuery.trim().length < MIN_SEARCH_QUERY_LENGTH" @click="search">{{ i18n.ts.search }}</MkButton>
 
 	<MkFoldableSection v-if="searched">
 		<template #header>{{ i18n.ts.searchResult }}</template>
@@ -58,9 +58,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onActivated, onDeactivated, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
-import { useInterval } from '@@/js/use-interval.js';
 import XMessage from './XMessage.vue';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
@@ -84,6 +83,9 @@ const searched = ref(false);
 const searchFetching = ref(false);
 const searchError = ref(false);
 const searchResults = ref<Misskey.entities.ChatMessage[]>([]);
+const MIN_SEARCH_QUERY_LENGTH = 2;
+let disposed = false;
+let searchRequestId = 0;
 
 function start(ev: MouseEvent) {
 	os.popupMenu([{
@@ -153,8 +155,9 @@ async function createRoom() {
 
 async function search() {
 	const query = searchQuery.value.trim();
-	if (query.length === 0 || searchFetching.value) return;
+	if (query.length < MIN_SEARCH_QUERY_LENGTH || searchFetching.value) return;
 
+	const requestId = ++searchRequestId;
 	searched.value = true;
 	searchFetching.value = true;
 	searchError.value = false;
@@ -164,13 +167,17 @@ async function search() {
 			query,
 		});
 
+		if (disposed || requestId !== searchRequestId) return;
 		searchResults.value = res;
 	} catch (err) {
+		if (disposed || requestId !== searchRequestId) return;
 		console.error('Failed to search chat messages:', err);
 		searchResults.value = [];
 		searchError.value = true;
 	} finally {
-		searchFetching.value = false;
+		if (!disposed && requestId === searchRequestId) {
+			searchFetching.value = false;
+		}
 	}
 }
 
@@ -180,6 +187,11 @@ function openContext(message: Misskey.entities.ChatMessage) {
 
 onMounted(() => {
 	updateCurrentAccountPartial({ hasUnreadChatMessages: false });
+});
+
+onBeforeUnmount(() => {
+	disposed = true;
+	searchRequestId++;
 });
 </script>
 

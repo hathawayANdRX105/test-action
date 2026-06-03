@@ -9,7 +9,7 @@ import { ChatService, LARGE_CHAT_ROOM_MEMBER_THRESHOLD } from '@/core/ChatServic
 describe('ChatService large room fast path', () => {
 	function createService(memberCount: number, senderIsMember = true) {
 		const redisState = new Map<string, string>();
-		const redisPipeline = {
+		const redisPipeline: any = {
 			set: jest.fn((key: string, value: string) => {
 				redisState.set(key, value);
 			}),
@@ -55,7 +55,7 @@ describe('ChatService large room fast path', () => {
 			pipelineCommands.length = 0;
 			return results;
 		});
-		const redisClient = {
+		const redisClient: any = {
 			pipeline: jest.fn(() => redisPipeline),
 			get: jest.fn(async (key: string) => redisState.get(key) ?? null),
 			set: jest.fn(async (key: string, value: string) => {
@@ -65,30 +65,30 @@ describe('ChatService large room fast path', () => {
 			del: jest.fn(async (key: string) => redisState.delete(key) ? 1 : 0),
 			scard: jest.fn(async () => 0),
 		};
-		const chatRoomMembershipsRepository = {
+		const chatRoomMembershipsRepository: any = {
 			countBy: jest.fn(async () => memberCount - 1),
 			findOne: jest.fn(async () => senderIsMember ? { userId: 'sender', isMuted: false } : null),
 			findOneBy: jest.fn(async () => null),
 			findOneByOrFail: jest.fn(async () => ({ id: 'membership-id', roomId: 'room', userId: 'sender' })),
-			findBy: jest.fn(async () => []),
+			findBy: jest.fn(async () => [] as any[]),
 			insertOne: jest.fn(async (membership) => membership),
 			delete: jest.fn(async () => ({ affected: 1 })),
 		};
-		const chatMessagesQueryBuilder = {
-			update: jest.fn(function () { return this; }),
-			set: jest.fn(function () { return this; }),
-			where: jest.fn(function () { return this; }),
-			orWhere: jest.fn(function () { return this; }),
-			andWhere: jest.fn(function () { return this; }),
-			leftJoinAndSelect: jest.fn(function () { return this; }),
-			orderBy: jest.fn(function () { return this; }),
-			take: jest.fn(function () { return this; }),
-			setParameter: jest.fn(function () { return this; }),
+		const chatMessagesQueryBuilder: any = {
+			update: jest.fn(function (this: any) { return this; }),
+			set: jest.fn(function (this: any) { return this; }),
+			where: jest.fn(function (this: any) { return this; }),
+			orWhere: jest.fn(function (this: any) { return this; }),
+			andWhere: jest.fn(function (this: any) { return this; }),
+			leftJoinAndSelect: jest.fn(function (this: any) { return this; }),
+			orderBy: jest.fn(function (this: any) { return this; }),
+			take: jest.fn(function (this: any) { return this; }),
+			setParameter: jest.fn(function (this: any) { return this; }),
 			execute: jest.fn(async () => ({ affected: 1 })),
 			getMany: jest.fn(async () => []),
 		};
-		const chatMessagesRepository = {
-			insertOne: jest.fn(async (message) => ({ ...message, reactions: [] })),
+		const chatMessagesRepository: any = {
+			insertOne: jest.fn(async (message: any) => ({ ...message, reactions: [] })),
 			findOneByOrFail: jest.fn(async () => ({
 				id: 'message-id',
 				fromUserId: 'other',
@@ -98,11 +98,11 @@ describe('ChatService large room fast path', () => {
 			})),
 			createQueryBuilder: jest.fn(() => chatMessagesQueryBuilder),
 		};
-		const userEntityService = {
+		const userEntityService: any = {
 			pack: jest.fn(async (userId) => ({ id: userId })),
 		};
-		const chatEntityService = {
-			packMessageLiteForRoom: jest.fn(async (message) => ({
+		const chatEntityService: any = {
+			packMessageLiteForRoom: jest.fn(async (message: any) => ({
 				id: message.id,
 				createdAt: new Date(0).toISOString(),
 				fromUserId: message.fromUserId,
@@ -114,21 +114,21 @@ describe('ChatService large room fast path', () => {
 				reactions: [],
 			})),
 		};
-		const globalEventService = {
+		const globalEventService: any = {
 			publishChatUserStream: jest.fn(),
 			publishChatRoomStream: jest.fn(),
 			publishMainStream: jest.fn(),
 		};
-		const pushNotificationService = {
+		const pushNotificationService: any = {
 			pushNotification: jest.fn(),
 		};
-		const timeService = {
+		const timeService: any = {
 			startTimer: jest.fn(),
 		};
-		const idService = {
+		const idService: any = {
 			gen: jest.fn(() => 'message-id'),
 		};
-		const chatRoomsRepository = {
+		const chatRoomsRepository: any = {
 			findOneByOrFail: jest.fn(async () => ({
 				id: 'room',
 				ownerId: 'owner',
@@ -136,18 +136,21 @@ describe('ChatService large room fast path', () => {
 				memberLimitOverride: null,
 			})),
 		};
-		const chatRoomInvitationsRepository = {
+		const chatRoomInvitationsRepository: any = {
 			findOneBy: jest.fn(async () => null),
 			delete: jest.fn(async () => ({ affected: 1 })),
 		};
-		const customEmojiService = {
+		const customEmojiService: any = {
 			emojisByKeyCache: {
 				fetchMaybe: jest.fn(async () => null),
 			},
 		};
 		const unlockChatRoomJoin = jest.fn(async () => {});
-		const appLockService = {
+		const appLockService: any = {
 			getChatRoomJoinLock: jest.fn(async () => unlockChatRoomJoin),
+		};
+		const mfmService: any = {
+			extractMentions: jest.fn(() => []),
 		};
 		const service = new ChatService(
 			{} as never,
@@ -177,6 +180,8 @@ describe('ChatService large room fast path', () => {
 			timeService as never,
 			{} as never,
 			appLockService as never,
+			mfmService as never,
+			{} as never,
 		);
 
 		return {
@@ -198,13 +203,13 @@ describe('ChatService large room fast path', () => {
 
 	function createMessageQueryBuilder(rows: unknown[]) {
 		return {
-			where: jest.fn(function () { return this; }),
-			orWhere: jest.fn(function () { return this; }),
-			andWhere: jest.fn(function () { return this; }),
-			leftJoinAndSelect: jest.fn(function () { return this; }),
-			orderBy: jest.fn(function () { return this; }),
-			take: jest.fn(function () { return this; }),
-			setParameter: jest.fn(function () { return this; }),
+			where: jest.fn(function (this: any) { return this; }),
+			orWhere: jest.fn(function (this: any) { return this; }),
+			andWhere: jest.fn(function (this: any) { return this; }),
+			leftJoinAndSelect: jest.fn(function (this: any) { return this; }),
+			orderBy: jest.fn(function (this: any) { return this; }),
+			take: jest.fn(function (this: any) { return this; }),
+			setParameter: jest.fn(function (this: any) { return this; }),
 			getMany: jest.fn(async () => rows),
 		};
 	}
@@ -217,11 +222,12 @@ describe('ChatService large room fast path', () => {
 		});
 
 		expect(ctx.chatRoomMembershipsRepository.findBy).not.toHaveBeenCalled();
-		expect(ctx.redisClient.pipeline).not.toHaveBeenCalled();
+		expect(ctx.redisClient.pipeline).toHaveBeenCalledTimes(1);
 		expect(ctx.chatRoomMembershipsRepository.countBy).toHaveBeenCalledTimes(1);
 		expect(ctx.redisClient.get).toHaveBeenCalledWith('chatRoomMembersCount:room');
 		expect(ctx.redisClient.set).toHaveBeenCalledWith('chatRoomMembersCount:room', String(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1), 'EX', 60);
-		expect(ctx.redisClient.set).toHaveBeenCalledWith('latestRoomChatMessage:room', 'message-id', 'EX', 60 * 60 * 24 * 30);
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('latestRoomChatMessage:room', 'message-id', 'EX', 60 * 60 * 24 * 30);
+		expect(ctx.redisPipeline.sadd).not.toHaveBeenCalled();
 		expect(ctx.timeService.startTimer).not.toHaveBeenCalled();
 		expect(ctx.pushNotificationService.pushNotification).not.toHaveBeenCalled();
 		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledWith('room', 'message', expect.objectContaining({ id: 'message-id' }));
@@ -250,6 +256,79 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.globalEventService.publishChatRoomStream).not.toHaveBeenCalled();
 	});
 
+	test('room messages can send with only a reply reference', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+
+		await ctx.service.createMessageToRoom({ id: 'sender', host: null }, { id: 'room', ownerId: 'owner' } as never, {
+			text: '   ',
+			reply: { id: 'reply-id', toRoomId: 'room', toUserId: null } as never,
+		});
+
+		expect(ctx.chatMessagesRepository.insertOne).toHaveBeenCalledWith(expect.objectContaining({
+			text: null,
+			replyId: 'reply-id',
+			toRoomId: 'room',
+		}));
+		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledWith('room', 'message', expect.objectContaining({ id: 'message-id' }));
+	});
+
+	test('room messages can send with only a quote reference', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+
+		await ctx.service.createMessageToRoom({ id: 'sender', host: null }, { id: 'room', ownerId: 'owner' } as never, {
+			quote: { id: 'quote-id', toRoomId: 'room', toUserId: null } as never,
+		});
+
+		expect(ctx.chatMessagesRepository.insertOne).toHaveBeenCalledWith(expect.objectContaining({
+			text: null,
+			quoteId: 'quote-id',
+			toRoomId: 'room',
+		}));
+		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledWith('room', 'message', expect.objectContaining({ id: 'message-id' }));
+	});
+
+	test('small multi-member rooms fan out reply-only messages', async () => {
+		const ctx = createService(3);
+		ctx.chatRoomMembershipsRepository.findBy.mockResolvedValueOnce([
+			{ userId: 'sender', isMuted: false },
+			{ userId: 'member-2', isMuted: false },
+		]);
+
+		await ctx.service.createMessageToRoom({ id: 'sender', host: null }, { id: 'room', ownerId: 'owner' } as never, {
+			reply: { id: 'reply-id', toRoomId: 'room', toUserId: null } as never,
+		});
+
+		expect(ctx.chatMessagesRepository.insertOne).toHaveBeenCalledWith(expect.objectContaining({
+			text: null,
+			replyId: 'reply-id',
+			toRoomId: 'room',
+		}));
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('newRoomChatMessageExists:member-2:room', 'message-id');
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('newRoomChatMessageExists:owner:room', 'message-id');
+		expect(ctx.timeService.startTimer).toHaveBeenCalled();
+	});
+
+	test('small multi-member rooms fan out quote-only messages', async () => {
+		const ctx = createService(3);
+		ctx.chatRoomMembershipsRepository.findBy.mockResolvedValueOnce([
+			{ userId: 'sender', isMuted: false },
+			{ userId: 'member-2', isMuted: false },
+		]);
+
+		await ctx.service.createMessageToRoom({ id: 'sender', host: null }, { id: 'room', ownerId: 'owner' } as never, {
+			quote: { id: 'quote-id', toRoomId: 'room', toUserId: null } as never,
+		});
+
+		expect(ctx.chatMessagesRepository.insertOne).toHaveBeenCalledWith(expect.objectContaining({
+			text: null,
+			quoteId: 'quote-id',
+			toRoomId: 'room',
+		}));
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('newRoomChatMessageExists:member-2:room', 'message-id');
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('newRoomChatMessageExists:owner:room', 'message-id');
+		expect(ctx.timeService.startTimer).toHaveBeenCalled();
+	});
+
 	test('message fanout reuses cached room member count', async () => {
 		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
 		ctx.redisClient.get.mockResolvedValueOnce(String(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1));
@@ -260,7 +339,7 @@ describe('ChatService large room fast path', () => {
 
 		expect(ctx.chatRoomMembershipsRepository.countBy).not.toHaveBeenCalled();
 		expect(ctx.redisClient.set).not.toHaveBeenCalledWith('chatRoomMembersCount:room', expect.anything(), 'EX', 60);
-		expect(ctx.redisClient.set).toHaveBeenCalledWith('latestRoomChatMessage:room', 'message-id', 'EX', 60 * 60 * 24 * 30);
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('latestRoomChatMessage:room', 'message-id', 'EX', 60 * 60 * 24 * 30);
 	});
 
 	test('concurrent sends share one uncached member count query', async () => {
@@ -303,7 +382,8 @@ describe('ChatService large room fast path', () => {
 
 		expect(ctx.chatRoomMembershipsRepository.countBy).toHaveBeenCalledTimes(1);
 		expect(ctx.chatRoomMembershipsRepository.findBy).not.toHaveBeenCalled();
-		expect(ctx.redisClient.pipeline).not.toHaveBeenCalled();
+		expect(ctx.redisClient.pipeline).toHaveBeenCalledTimes(burstSize);
+		expect(ctx.redisPipeline.sadd).not.toHaveBeenCalled();
 		expect(ctx.timeService.startTimer).not.toHaveBeenCalled();
 		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledTimes(burstSize);
 	});
@@ -356,6 +436,20 @@ describe('ChatService large room fast path', () => {
 		await expect(ctx.service.getRoomReadStateMap('reader', ['room'])).resolves.toEqual({ room: true });
 	});
 
+	test('message search applies an explicit sender filter inside the room scope', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+
+		await ctx.service.searchMessages('reader', 'Needle', 20, {
+			roomId: 'room',
+			fromUserId: 'sender',
+		});
+
+		expect(ctx.chatMessagesQueryBuilder.where).toHaveBeenCalledWith('message.toRoomId = :roomId', { roomId: 'room' });
+		expect(ctx.chatMessagesQueryBuilder.andWhere).toHaveBeenCalledWith('message.fromUserId = :fromUserId', { fromUserId: 'sender' });
+		expect(ctx.chatMessagesQueryBuilder.andWhere).toHaveBeenCalledWith('message.text IS NOT NULL');
+		expect(ctx.chatMessagesQueryBuilder.andWhere).toHaveBeenCalledWith('LOWER(message.text) LIKE :q', { q: '%needle%' });
+	});
+
 	test('reactions use query parameters instead of interpolating records into SQL', async () => {
 		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
 
@@ -364,7 +458,7 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.chatMessagesQueryBuilder.set).toHaveBeenCalledWith({
 			reactions: expect.any(Function),
 		});
-		expect(ctx.chatMessagesQueryBuilder.set.mock.calls[0][0].reactions()).toBe('array_append("reactions", :reactionRecord)');
+		expect((ctx.chatMessagesQueryBuilder.set.mock.calls[0]?.[0] as any).reactions()).toBe('array_append("reactions", :reactionRecord)');
 		expect(ctx.chatMessagesQueryBuilder.andWhere).toHaveBeenCalledWith('NOT (:reactionRecord = ANY("reactions"))');
 		expect(ctx.chatMessagesQueryBuilder.andWhere).toHaveBeenCalledWith('cardinality("reactions") < :maxReactions');
 		expect(ctx.chatMessagesQueryBuilder.setParameter).toHaveBeenCalledWith('reactionRecord', 'sender/👍');
@@ -395,7 +489,7 @@ describe('ChatService large room fast path', () => {
 
 		await ctx.service.unreact('message-id', 'sender', '👍');
 
-		expect(ctx.chatMessagesQueryBuilder.set.mock.calls[0][0].reactions()).toBe('array_remove("reactions", :reactionRecord)');
+		expect((ctx.chatMessagesQueryBuilder.set.mock.calls[0]?.[0] as any).reactions()).toBe('array_remove("reactions", :reactionRecord)');
 		expect(ctx.chatMessagesQueryBuilder.andWhere).toHaveBeenCalledWith(':reactionRecord = ANY("reactions")');
 		expect(ctx.chatMessagesQueryBuilder.setParameter).toHaveBeenCalledWith('reactionRecord', 'sender/👍');
 	});

@@ -1,5 +1,5 @@
 import type { Endpoints as Gen } from './autogen/endpoint.js';
-import type { Channel, ChatRoom, Note, UserDetailed } from './autogen/models.js';
+import type { Channel, ChatMessage, ChatRoom, Note, UserDetailed } from './autogen/models.js';
 import type {
 	AdminChatRoomsListRequest,
 	AdminChatRoomsListResponse,
@@ -371,6 +371,32 @@ export type Endpoints = Overwrite<
 					count: number;
 				}[];
 			};
+		},
+		'chat/messages/context': {
+			req: {
+				messageId: string;
+				limitBefore?: number;
+				limitAfter?: number;
+			};
+			res: {
+				before: ChatMessage[];
+				target: ChatMessage;
+				after: ChatMessage[];
+				hasMoreBefore: boolean;
+				hasMoreAfter: boolean;
+			};
+		},
+		'chat/messages/search': {
+			req: Gen['chat/messages/search']['req'] & {
+				fromUserId?: string | null;
+			};
+			res: Gen['chat/messages/search']['res'];
+		},
+		'notes/timeline': {
+			req: Gen['notes/timeline']['req'] & {
+				includeFollowedChannels?: boolean;
+			};
+			res: Gen['notes/timeline']['res'];
 		},
 		'notes/recommended-timeline': {
 			req: {

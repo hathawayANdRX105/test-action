@@ -55,7 +55,7 @@ export const meta = {
 		},
 
 		contentRequired: {
-			message: 'Content required. You need to set text or fileId.',
+			message: 'Content required. You need to set text, fileId, replyId, or quoteId.',
 			code: 'CONTENT_REQUIRED',
 			id: '25587321-b0e6-449c-9239-f8925092942c',
 		},
@@ -124,11 +124,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			// テキストが無いかつ添付ファイルも無かったらエラー
-			if ((text == null || text.length === 0) && file == null) {
-				throw new ApiError(meta.errors.contentRequired);
-			}
-
 			// Myself
 			if (ps.toUserId === me.id) {
 				throw new ApiError(meta.errors.recipientIsYourself);
@@ -149,6 +144,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if ((ps.replyId != null && !isSameUserChat(reply)) || (ps.quoteId != null && !isSameUserChat(quote))) {
 				throw new ApiError(meta.errors.invalidReference);
+			}
+
+			// テキスト、添付、参照のいずれも無かったらエラー
+			if ((text == null || text.length === 0) && file == null && reply == null && quote == null) {
+				throw new ApiError(meta.errors.contentRequired);
 			}
 
 			return await this.chatService.createMessageToUser(me, toUser, {

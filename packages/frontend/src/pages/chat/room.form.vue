@@ -102,7 +102,7 @@ let autocompleteInstance: Autocomplete | null = null;
 let focusScrollTimers: number[] = [];
 let sendSerial = 0;
 
-const canSend = computed(() => (text.value != null && text.value !== '') || file.value != null);
+const canSend = computed(() => text.value.trim().length > 0 || file.value != null || props.replyTarget != null || props.quoteTarget != null);
 
 function getDraftKey(): string | null {
 	if (props.user) return 'user:' + props.user.id;

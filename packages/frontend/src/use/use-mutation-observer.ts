@@ -10,6 +10,8 @@ export function useMutationObserver(targetNodeRef: Ref<HTMLElement | null | unde
 	const observer = new MutationObserver(callback);
 
 	watch(targetNodeRef, (targetNode) => {
+		observer.disconnect();
+
 		if (targetNode) {
 			observer.observe(targetNode, options);
 		}

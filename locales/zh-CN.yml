@@ -1436,6 +1436,8 @@ _chat:
   leave: "退出房间"
   members: "成员"
   searchMessages: "搜索消息"
+  sender: "发送人"
+  allSenders: "全部发送人"
   home: "首页"
   send: "发送"
   newline: "换行"
