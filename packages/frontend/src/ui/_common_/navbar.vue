@@ -193,7 +193,7 @@ function menuEdit() {
 
 <style lang="scss" module>
 .root {
-	--nav-width: 250px;
+	--nav-width: clamp(280px, 18vw, 320px);
 	--nav-icon-only-width: 80px;
 	--nav-bg-transparent: color(from var(--MI_THEME-navBg) srgb r g b / 0.5);
 
@@ -201,6 +201,8 @@ function menuEdit() {
 
 	flex: 0 0 var(--nav-width);
 	width: var(--nav-width);
+	min-width: var(--nav-width);
+	max-width: var(--nav-width);
 	box-sizing: border-box;
 }
 
@@ -273,8 +275,9 @@ function menuEdit() {
 	top: 0;
 	width: var(--nav-icon-only-width);
 	height: 100dvh;
+	min-height: 0;
 	box-sizing: border-box;
-	overflow: auto;
+	overflow: hidden;
 	overflow-x: clip;
 	overscroll-behavior: contain;
 	background: var(--MI_THEME-navBg);
@@ -290,10 +293,25 @@ function menuEdit() {
 
 .middle {
 	direction: ltr;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	scroll-padding-bottom: 16px;
 }
 
 .bottom {
 	direction: ltr;
+	position: relative;
+	z-index: 10;
+	flex: 0 0 auto;
+	max-height: min(220px, 42dvh);
+	box-sizing: border-box;
+	overflow: hidden;
+	background: var(--MI_THEME-navBg);
+	box-shadow: 0 -12px 20px var(--MI_THEME-navBg);
 }
 
 .subButtons {
@@ -375,6 +393,8 @@ function menuEdit() {
 .root:not(.iconOnly) {
 	.body {
 		width: var(--nav-width);
+		min-width: var(--nav-width);
+		max-width: var(--nav-width);
 	}
 
 	.top {
@@ -427,16 +447,16 @@ function menuEdit() {
 		min-width: 38px;
 		max-width: 100%;
 		max-height: 80px;
+		border-radius: 8px;
+		object-fit: contain;
 	}
 
 	.bottom {
-		position: sticky;
-		bottom: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
 		padding: 16px 14px 20px;
-		background: var(--nav-bg-transparent);
+		background: var(--MI_THEME-navBg);
 		-webkit-backdrop-filter: var(--MI-blur, blur(8px));
 		backdrop-filter: var(--MI-blur, blur(8px));
 	}
@@ -490,6 +510,7 @@ function menuEdit() {
 		display: flex;
 		align-items: center;
 		width: 100%;
+		flex: 0 0 auto;
 		min-height: 44px;
 		padding: 6px 16px;
 		text-align: left;
@@ -531,8 +552,7 @@ function menuEdit() {
 	}
 
 	.middle {
-		flex: 1;
-		padding: 4px 0;
+		padding: 4px 0 12px;
 	}
 
 	.divider {
@@ -542,11 +562,13 @@ function menuEdit() {
 
 	.item {
 		position: relative;
-		display: flex;
+		display: grid;
+		grid-template-columns: 32px minmax(0, 1fr);
+		column-gap: 8px;
 		align-items: center;
 		height: 44px;
 		margin: 2px 14px;
-		padding: 0 16px;
+		padding: 0 18px;
 		text-overflow: ellipsis;
 		overflow: hidden;
 		white-space: nowrap;
@@ -581,7 +603,6 @@ function menuEdit() {
 		display: inline-flex;
 		justify-content: center;
 		width: 32px;
-		margin-right: 8px;
 		flex-shrink: 0;
 		color: var(--navbar-readable-fg, inherit) !important;
 		-webkit-text-fill-color: var(--navbar-readable-fg, currentColor) !important;
@@ -613,6 +634,7 @@ function menuEdit() {
 	.itemText {
 		position: relative;
 		display: block;
+		width: 100%;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -628,9 +650,13 @@ function menuEdit() {
 .root.iconOnly {
 	flex: 0 0 var(--nav-icon-only-width);
 	width: var(--nav-icon-only-width);
+	min-width: var(--nav-icon-only-width);
+	max-width: var(--nav-icon-only-width);
 
 	.body {
 		width: var(--nav-icon-only-width);
+		min-width: var(--nav-icon-only-width);
+		max-width: var(--nav-icon-only-width);
 	}
 
 	.top {
@@ -666,10 +692,11 @@ function menuEdit() {
 	}
 
 	.bottom {
-		position: sticky;
-		bottom: 0;
-		padding-top: 20px;
-		background: var(--nav-bg-transparent);
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 14px 0 calc(16px + env(safe-area-inset-bottom, 0px));
+		background: var(--MI_THEME-navBg);
 		-webkit-backdrop-filter: var(--MI-blur, blur(8px));
 		backdrop-filter: var(--MI-blur, blur(8px));
 	}
@@ -756,7 +783,7 @@ function menuEdit() {
 	}
 
 	.middle {
-		flex: 1;
+		padding-bottom: 12px;
 	}
 
 	.divider {

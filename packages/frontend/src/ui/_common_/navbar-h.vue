@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div class="body">
 		<div class="left">
 			<button class="item _button instance" @click="openInstanceMenu">
-				<img :src="instance.iconUrl ?? instance.faviconUrl ?? '/favicon.ico'" draggable="false"/>
+					<img :src="instance.iconUrl ?? '/favicon.ico'" draggable="false"/>
 			</button>
 			<MkA v-tooltip="i18n.ts.home" class="item index" activeClass="active" to="/" exact>
 				<i class="ti ti-home ti-fw"></i>
@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</component>
 			</template>
 			<div class="divider"></div>
-			<MkA v-if="$i.isAdmin || $i.isModerator" v-tooltip="i18n.ts.controlPanel" class="item" activeClass="active" to="/admin" :behavior="settingsWindowed ? 'window' : null">
+				<MkA v-if="$i != null && ($i.isAdmin || $i.isModerator)" v-tooltip="i18n.ts.controlPanel" class="item" activeClass="active" to="/admin" :behavior="settingsWindowed ? 'window' : null">
 				<i class="ti ti-dashboard ti-fw"></i>
 			</MkA>
 			<button class="item _button" @click="more">
@@ -33,9 +33,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkA v-tooltip="i18n.ts.settings" class="item" activeClass="active" to="/settings" :behavior="settingsWindowed ? 'window' : null">
 				<i class="ti ti-settings ti-fw"></i>
 			</MkA>
-			<button class="item _button account" @click="openAccountMenu">
-				<MkAvatar :user="$i" class="avatar"/><MkAcct class="acct" :user="$i"/>
-			</button>
+				<button v-if="$i != null" class="item _button account" @click="openAccountMenu">
+					<MkAvatar :user="$i" class="avatar"/><MkAcct class="acct" :user="$i"/>
+				</button>
 			<div class="post" @click="os.post()">
 				<MkButton class="button" gradate full rounded>
 					<i class="ti ti-pencil ti-fw"></i>
@@ -89,7 +89,7 @@ const otherNavItemIndicated = computed<boolean>(() => {
 
 function more(ev: MouseEvent) {
 	const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkLaunchPad.vue')), {
-		src: ev.currentTarget ?? ev.target,
+		src: ev.currentTarget instanceof HTMLElement ? ev.currentTarget : undefined,
 		anchor: { x: 'center', y: 'bottom' },
 	}, {
 		closed: () => dispose(),

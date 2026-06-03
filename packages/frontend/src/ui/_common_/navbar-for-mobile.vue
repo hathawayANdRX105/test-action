@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</component>
 		</template>
 		<div :class="$style.divider"></div>
-		<MkA v-if="$i.isAdmin || $i.isModerator" :class="$style.item" :activeClass="$style.active" to="/admin">
+			<MkA v-if="$i != null && ($i.isAdmin || $i.isModerator)" :class="$style.item" :activeClass="$style.active" to="/admin">
 			<i :class="$style.itemIcon" class="ti ti-dashboard ti-fw"></i><span :class="$style.itemText">{{ i18n.ts.controlPanel }}</span>
 		</MkA>
 		<button :class="$style.item" class="_button" @click="more">
@@ -38,12 +38,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</MkA>
 	</div>
 	<div :class="$style.bottom">
-		<button class="_button" :class="$style.post" data-cy-open-post-form @click="os.post">
+			<button class="_button" :class="$style.post" data-cy-open-post-form @click="() => { os.post(); }">
 			<i :class="$style.postIcon" class="ti ti-pencil ti-fw"></i><span style="position: relative;">{{ i18n.ts.note }}</span>
 		</button>
-		<button class="_button" :class="$style.account" @click="openAccountMenu">
-			<MkAvatar :user="$i" :class="$style.avatar"/><MkAcct :class="$style.acct" class="_nowrap" :user="$i"/>
-		</button>
+			<button v-if="$i != null" class="_button" :class="$style.account" @click="openAccountMenu">
+				<MkAvatar :user="$i" :class="$style.avatar"/><MkAcct :class="$style.acct" class="_nowrap" :user="$i"/>
+			</button>
 	</div>
 </div>
 </template>
