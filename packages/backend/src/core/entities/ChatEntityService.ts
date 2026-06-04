@@ -17,10 +17,17 @@ import type { MiMeta } from '@/models/Meta.js';
 import { UserEntityService } from './UserEntityService.js';
 import { DriveFileEntityService } from './DriveFileEntityService.js';
 import { In } from 'typeorm';
+import * as Redis from 'ioredis';
 import { MfmService } from '@/core/MfmService.js';
 import { RemoteUserResolveService } from '@/core/RemoteUserResolveService.js';
 import { isLocalUser } from '@/models/User.js';
 import { promiseMap } from '@/misc/promise-map.js';
+
+export const CHAT_MESSAGE_MENTION_CACHE_TTL = 60 * 60 * 24 * 30;
+
+export function chatMessageMentionCacheKey(messageId: MiChatMessage['id']): string {
+	return `chatMessageMentionedUserIds:${messageId}`;
+}
 
 @Injectable()
 export class ChatEntityService {
@@ -39,6 +46,9 @@ export class ChatEntityService {
 
 		@Inject(DI.meta)
 		private meta: MiMeta,
+
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
 
 		private userEntityService: UserEntityService,
 		private driveFileEntityService: DriveFileEntityService,
@@ -77,6 +87,74 @@ export class ChatEntityService {
 	}
 
 	@bindThis
+	private async getCachedMessageMentionedUserIds(message: MiChatMessage): Promise<MiUser['id'][]> {
+		if (message.text == null || !message.text.includes('@')) return [];
+
+		const cacheKey = chatMessageMentionCacheKey(message.id);
+		const cached = await this.redisClient.get(cacheKey);
+		if (cached != null) {
+			try {
+				const parsed = JSON.parse(cached) as unknown;
+				if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) return parsed;
+			} catch {
+				// Ignore stale malformed cache entries and refresh below.
+			}
+		}
+
+		const mentionedUserIds = await this.extractMessageMentionedUserIds(message.text);
+		await this.redisClient.set(cacheKey, JSON.stringify(mentionedUserIds), 'EX', CHAT_MESSAGE_MENTION_CACHE_TTL);
+		return mentionedUserIds;
+	}
+
+	@bindThis
+	private async getCachedMessagesMentionedUserIds(messages: MiChatMessage[]): Promise<Map<MiChatMessage['id'], MiUser['id'][]>> {
+		const result = new Map<MiChatMessage['id'], MiUser['id'][]>();
+		const targets = messages.filter(message => message.toRoomId != null && message.text != null && message.text.includes('@'));
+		if (targets.length === 0) return result;
+
+		const cacheKeys = targets.map(message => chatMessageMentionCacheKey(message.id));
+		const cachedValues = await this.redisClient.mget(...cacheKeys);
+		const misses: MiChatMessage[] = [];
+
+		for (let i = 0; i < targets.length; i++) {
+			const cached = cachedValues[i];
+			if (cached != null) {
+				try {
+					const parsed = JSON.parse(cached) as unknown;
+					if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) {
+						result.set(targets[i].id, parsed);
+						continue;
+					}
+				} catch {
+					// Ignore stale malformed cache entries and refresh below.
+				}
+			}
+
+			misses.push(targets[i]);
+		}
+
+		if (misses.length === 0) return result;
+
+		const resolved = await promiseMap(
+			misses,
+			async message => ({
+				id: message.id,
+				mentionedUserIds: await this.extractMessageMentionedUserIds(message.text),
+			}),
+			{ limiter: 2 },
+		);
+
+		const redisPipeline = this.redisClient.pipeline();
+		for (const item of resolved) {
+			result.set(item.id, item.mentionedUserIds);
+			redisPipeline.set(chatMessageMentionCacheKey(item.id), JSON.stringify(item.mentionedUserIds), 'EX', CHAT_MESSAGE_MENTION_CACHE_TTL);
+		}
+		await redisPipeline.exec();
+
+		return result;
+	}
+
+	@bindThis
 	private async packMessageReference(
 		src: MiChatMessage['id'] | MiChatMessage | null,
 		options?: {
@@ -110,6 +188,7 @@ export class ChatEntityService {
 		src: MiChatMessage['id'] | MiChatMessage,
 		me?: { id: MiUser['id'] },
 		options?: {
+			mentionedUserIds?: MiUser['id'][];
 			_hint_?: {
 				packedFiles?: Map<MiChatMessage['fileId'], Packed<'DriveFile'> | null>;
 				packedUsers?: Map<MiUser['id'], Packed<'UserLite'>>;
@@ -122,7 +201,7 @@ export class ChatEntityService {
 		const packedRooms = options?._hint_?.packedRooms;
 
 		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneByOrFail({ id: src });
-		const mentionedUserIds = message.toRoomId ? await this.extractMessageMentionedUserIds(message.text) : [];
+		const mentionedUserIds = message.toRoomId ? (options?.mentionedUserIds ?? await this.getCachedMessageMentionedUserIds(message)) : [];
 
 		const reactions: { user: Packed<'UserLite'>; reaction: string; }[] = [];
 
@@ -186,16 +265,20 @@ export class ChatEntityService {
 			}
 		}
 
-		const [packedUsers, packedFiles, packedRooms] = await Promise.all([
+		const [packedUsers, packedFiles, packedRooms, mentionedUserIdsByMessage] = await Promise.all([
 			this.userEntityService.packMany(users, me)
 				.then(users => new Map(users.map(u => [u.id, u]))),
 			this.driveFileEntityService.packMany(messages.map(m => m.file).filter(x => x != null))
 				.then(files => new Map(files.map(f => [f.id, f]))),
 			this.packRooms(messages.map(m => m.toRoom ?? m.toRoomId).filter(x => x != null), me)
 				.then(rooms => new Map(rooms.map(r => [r.id, r]))),
+			this.getCachedMessagesMentionedUserIds(messages),
 		]);
 
-		return await Promise.all(messages.map(message => this.packMessageDetailed(message, me, { _hint_: { packedUsers, packedFiles, packedRooms } })));
+		return await Promise.all(messages.map(message => this.packMessageDetailed(message, me, {
+			mentionedUserIds: message.toRoomId ? (mentionedUserIdsByMessage.get(message.id) ?? []) : undefined,
+			_hint_: { packedUsers, packedFiles, packedRooms },
+		})));
 	}
 
 	@bindThis
@@ -254,6 +337,7 @@ export class ChatEntityService {
 	public async packMessageLiteForRoom(
 		src: MiChatMessage['id'] | MiChatMessage,
 		options?: {
+			mentionedUserIds?: MiUser['id'][];
 			_hint_?: {
 				packedFiles: Map<MiChatMessage['fileId'], Packed<'DriveFile'> | null>;
 				packedUsers: Map<MiUser['id'], Packed<'UserLite'>>;
@@ -264,7 +348,7 @@ export class ChatEntityService {
 		const packedUsers = options?._hint_?.packedUsers;
 
 		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneByOrFail({ id: src });
-		const mentionedUserIds = await this.extractMessageMentionedUserIds(message.text);
+		const mentionedUserIds = options?.mentionedUserIds ?? await this.getCachedMessageMentionedUserIds(message);
 
 		const reactions: { user: Packed<'UserLite'>; reaction: string; }[] = [];
 
@@ -309,14 +393,18 @@ export class ChatEntityService {
 			}
 		}
 
-		const [packedUsers, packedFiles] = await Promise.all([
+		const [packedUsers, packedFiles, mentionedUserIdsByMessage] = await Promise.all([
 			this.userEntityService.packMany(users)
 				.then(users => new Map(users.map(u => [u.id, u]))),
 			this.driveFileEntityService.packMany(messages.map(m => m.file).filter(x => x != null))
 				.then(files => new Map(files.map(f => [f.id, f]))),
+			this.getCachedMessagesMentionedUserIds(messages),
 		]);
 
-		return await Promise.all(messages.map(message => this.packMessageLiteForRoom(message, { _hint_: { packedFiles, packedUsers } })));
+		return await Promise.all(messages.map(message => this.packMessageLiteForRoom(message, {
+			mentionedUserIds: mentionedUserIdsByMessage.get(message.id) ?? [],
+			_hint_: { packedFiles, packedUsers },
+		})));
 	}
 
 	@bindThis
@@ -367,32 +455,102 @@ export class ChatEntityService {
 	) {
 		if (rooms.length === 0) return [];
 
-		const _rooms = rooms.filter((room): room is MiChatRoom => typeof room !== 'string');
-		if (_rooms.length !== rooms.length) {
-			_rooms.push(
-				...await this.chatRoomsRepository.find({
-					where: {
-						id: In(rooms.filter((room): room is string => typeof room === 'string')),
-					},
-					relations: ['owner'],
-				}),
-			);
+		const roomsById = new Map<MiChatRoom['id'], MiChatRoom>();
+		for (const room of rooms) {
+			if (typeof room !== 'string') {
+				roomsById.set(room.id, room);
+			}
 		}
 
-		const owners = _rooms.map(x => x.owner ?? x.ownerId);
+		const missingRoomIds = Array.from(new Set(rooms.filter((room): room is string => typeof room === 'string').filter(id => !roomsById.has(id))));
+		if (missingRoomIds.length > 0) {
+			const foundRooms = await this.chatRoomsRepository.find({
+				where: {
+					id: In(missingRoomIds),
+				},
+				relations: ['owner'],
+			});
 
-		const [packedOwners, memberships] = await Promise.all([
+			for (const room of foundRooms) {
+				roomsById.set(room.id, room);
+			}
+		}
+
+		const _rooms = Array.from(roomsById.values());
+		if (_rooms.length === 0) return [];
+
+		const owners = Array.from(new Map(_rooms.map(room => {
+			const owner = room.owner ?? room.ownerId;
+			return [typeof owner === 'string' ? owner : owner.id, owner];
+		})).values());
+		const roomIds = _rooms.map(room => room.id);
+		const shouldLoadMemberships = _rooms.some(room => room.ownerId !== me.id);
+
+		const [packedOwners, memberships, memberCounts, isAdministrator, isModerator] = await Promise.all([
 			this.userEntityService.packMany(owners, me)
 				.then(users => new Map(users.map(u => [u.id, u]))),
-			this.chatRoomMembershipsRepository.find({
+			shouldLoadMemberships ? this.chatRoomMembershipsRepository.find({
 				where: {
-					roomId: In(_rooms.map(x => x.id)),
+					roomId: In(roomIds),
 					userId: me.id,
 				},
-			}).then(memberships => new Map(_rooms.map(r => [r.id, memberships.find(m => m.roomId === r.id)]))),
+			}) : [],
+			this.chatRoomMembershipsRepository
+				.createQueryBuilder('membership')
+				.select('membership.roomId', 'roomId')
+				.addSelect('COUNT(*)', 'count')
+				.where('membership.roomId IN (:...roomIds)', { roomIds })
+				.groupBy('membership.roomId')
+				.getRawMany<{ roomId: MiChatRoom['id']; count: string; }>()
+				.then(rows => new Map<MiChatRoom['id'], number>(rows.map(row => [row.roomId, Number.parseInt(row.count, 10) + 1]))),
+			this.roleService.isAdministrator(me),
+			this.roleService.isModerator(me),
 		]);
 
-		return await Promise.all(_rooms.map(room => this.packRoom(room, me, { _hint_: { packedOwners, memberships } })));
+		const membershipsByRoomId = new Map<MiChatRoom['id'], MiChatRoomMembership>(
+			memberships.map(membership => [membership.roomId, membership] as const),
+		);
+
+		return _rooms.map(room => this.packRoomWithHints(room, me, {
+			packedOwners,
+			membership: membershipsByRoomId.get(room.id) ?? null,
+			memberCount: memberCounts.get(room.id) ?? 1,
+			isAdministrator,
+			isModerator,
+		}));
+	}
+
+	private packRoomWithHints(
+		room: MiChatRoom,
+		me: { id: MiUser['id'] },
+		hints: {
+			packedOwners: Map<MiUser['id'], Packed<'UserLite'>>;
+			membership: MiChatRoomMembership | null;
+			memberCount: number;
+			isAdministrator: boolean;
+			isModerator: boolean;
+		},
+	): Packed<'ChatRoom'> {
+		const isJoined = me.id === room.ownerId || hints.membership != null;
+		const canSeeOverride = me.id === room.ownerId || hints.isAdministrator;
+		const canManage = hints.isModerator;
+
+		return {
+			id: room.id,
+			createdAt: this.idService.parse(room.id).date.toISOString(),
+			name: room.name,
+			description: room.description,
+			joinMode: room.joinMode,
+			memberLimit: room.memberLimitOverride ?? this.meta.chatRoomDefaultMemberLimit,
+			memberLimitOverride: canSeeOverride ? room.memberLimitOverride : undefined,
+			canManage,
+			messageRetentionDays: canManage ? room.messageRetentionDays : undefined,
+			memberCount: hints.memberCount,
+			isJoined,
+			ownerId: room.ownerId,
+			owner: hints.packedOwners.get(room.ownerId)!,
+			isMuted: hints.membership != null ? hints.membership.isMuted : false,
+		};
 	}
 
 	@bindThis

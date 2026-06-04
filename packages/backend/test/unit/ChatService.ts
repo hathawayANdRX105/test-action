@@ -5,6 +5,7 @@
 
 import { jest } from '@jest/globals';
 import { ChatService, LARGE_CHAT_ROOM_MEMBER_THRESHOLD } from '@/core/ChatService.js';
+import { CHAT_MESSAGE_MENTION_CACHE_TTL, chatMessageMentionCacheKey } from '@/core/entities/ChatEntityService.js';
 
 describe('ChatService large room fast path', () => {
 	function createService(memberCount: number, senderIsMember = true) {
@@ -58,18 +59,29 @@ describe('ChatService large room fast path', () => {
 		const redisClient: any = {
 			pipeline: jest.fn(() => redisPipeline),
 			get: jest.fn(async (key: string) => redisState.get(key) ?? null),
+			mget: jest.fn(async (...keys: string[]) => keys.map(key => redisState.get(key) ?? null)),
 			set: jest.fn(async (key: string, value: string) => {
 				redisState.set(key, value);
 				return 'OK';
 			}),
 			del: jest.fn(async (key: string) => redisState.delete(key) ? 1 : 0),
 			scard: jest.fn(async () => 0),
+			eval: jest.fn(async (_script: string, _numberOfKeys: number, newRoomKey: string, mentionKey: string, _newMessagesSetKey: string, latestKey: string, readKey: string) => {
+				const latest = redisState.get(latestKey) ?? null;
+				redisState.delete(newRoomKey);
+				redisState.delete(mentionKey);
+				if (latest != null) {
+					redisState.set(readKey, latest);
+				}
+				return latest;
+			}),
 		};
 		const chatRoomMembershipsRepository: any = {
 			countBy: jest.fn(async () => memberCount - 1),
 			findOne: jest.fn(async () => senderIsMember ? { userId: 'sender', isMuted: false } : null),
 			findOneBy: jest.fn(async () => null),
 			findOneByOrFail: jest.fn(async () => ({ id: 'membership-id', roomId: 'room', userId: 'sender' })),
+			find: jest.fn(async () => [] as any[]),
 			findBy: jest.fn(async () => [] as any[]),
 			insertOne: jest.fn(async (membership) => membership),
 			delete: jest.fn(async () => ({ affected: 1 })),
@@ -102,7 +114,7 @@ describe('ChatService large room fast path', () => {
 			pack: jest.fn(async (userId) => ({ id: userId })),
 		};
 		const chatEntityService: any = {
-			packMessageLiteForRoom: jest.fn(async (message: any) => ({
+			packMessageLiteForRoom: jest.fn(async (message: any, options?: { mentionedUserIds?: string[] }) => ({
 				id: message.id,
 				createdAt: new Date(0).toISOString(),
 				fromUserId: message.fromUserId,
@@ -111,6 +123,19 @@ describe('ChatService large room fast path', () => {
 				text: message.text,
 				fileId: message.fileId,
 				file: null,
+				mentionedUserIds: options?.mentionedUserIds ?? [],
+				reactions: [],
+			})),
+			packMessageDetailed: jest.fn(async (message: any, _me?: any, options?: { mentionedUserIds?: string[] }) => ({
+				id: message.id,
+				createdAt: new Date(0).toISOString(),
+				fromUserId: message.fromUserId,
+				fromUser: { id: message.fromUserId },
+				toRoomId: message.toRoomId,
+				text: message.text,
+				fileId: message.fileId,
+				file: null,
+				mentionedUserIds: options?.mentionedUserIds ?? [],
 				reactions: [],
 			})),
 		};
@@ -152,6 +177,9 @@ describe('ChatService large room fast path', () => {
 		const mfmService: any = {
 			extractMentions: jest.fn(() => []),
 		};
+		const remoteUserResolveService: any = {
+			resolveUser: jest.fn(async () => null),
+		};
 		const service = new ChatService(
 			{} as never,
 			redisClient as never,
@@ -181,7 +209,7 @@ describe('ChatService large room fast path', () => {
 			{} as never,
 			appLockService as never,
 			mfmService as never,
-			{} as never,
+			remoteUserResolveService as never,
 		);
 
 		return {
@@ -195,9 +223,12 @@ describe('ChatService large room fast path', () => {
 			chatRoomsRepository,
 			appLockService,
 			unlockChatRoomJoin,
+			chatEntityService,
 			globalEventService,
 			pushNotificationService,
 			timeService,
+			mfmService,
+			remoteUserResolveService,
 		};
 	}
 
@@ -230,6 +261,7 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.redisPipeline.sadd).not.toHaveBeenCalled();
 		expect(ctx.timeService.startTimer).not.toHaveBeenCalled();
 		expect(ctx.pushNotificationService.pushNotification).not.toHaveBeenCalled();
+		expect(ctx.chatEntityService.packMessageLiteForRoom).toHaveBeenCalledWith(expect.objectContaining({ id: 'message-id' }), { mentionedUserIds: [] });
 		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledWith('room', 'message', expect.objectContaining({ id: 'message-id' }));
 	});
 
@@ -242,6 +274,7 @@ describe('ChatService large room fast path', () => {
 
 		expect(ctx.chatRoomMembershipsRepository.findBy).toHaveBeenCalledWith({ roomId: 'room' });
 		expect(ctx.redisClient.pipeline).toHaveBeenCalled();
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('latestRoomChatMessage:room', 'message-id', 'EX', 60 * 60 * 24 * 30);
 		expect(ctx.timeService.startTimer).toHaveBeenCalled();
 	});
 
@@ -342,6 +375,35 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('latestRoomChatMessage:room', 'message-id', 'EX', 60 * 60 * 24 * 30);
 	});
 
+	test('room sends cache resolved mention ids for later packing', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		ctx.mfmService.extractMentions.mockReturnValueOnce([{ username: 'member2', host: null }]);
+		ctx.remoteUserResolveService.resolveUser.mockResolvedValueOnce({ id: 'member-2', host: null });
+		ctx.chatRoomMembershipsRepository.find.mockResolvedValueOnce([{ userId: 'member-2' }]);
+
+		await ctx.service.createMessageToRoom({ id: 'sender', host: null }, { id: 'room', ownerId: 'owner' } as never, {
+			text: '@member2 hello',
+		});
+
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith(chatMessageMentionCacheKey('message-id'), JSON.stringify(['member-2']), 'EX', CHAT_MESSAGE_MENTION_CACHE_TTL);
+		expect(ctx.chatEntityService.packMessageLiteForRoom).toHaveBeenCalledWith(expect.objectContaining({ id: 'message-id' }), { mentionedUserIds: ['member-2'] });
+	});
+
+	test('room sends cache empty mention results when mention text resolves to no room members', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		ctx.mfmService.extractMentions.mockReturnValueOnce([{ username: 'unknown', host: null }]);
+		ctx.remoteUserResolveService.resolveUser.mockResolvedValueOnce(null);
+
+		await ctx.service.createMessageToRoom({ id: 'sender', host: null }, { id: 'room', ownerId: 'owner' } as never, {
+			text: '@unknown hello',
+		});
+
+		expect(ctx.redisPipeline.set).toHaveBeenCalledWith(chatMessageMentionCacheKey('message-id'), JSON.stringify([]), 'EX', CHAT_MESSAGE_MENTION_CACHE_TTL);
+		expect(ctx.redisPipeline.sadd).not.toHaveBeenCalled();
+		expect(ctx.timeService.startTimer).not.toHaveBeenCalled();
+		expect(ctx.chatEntityService.packMessageLiteForRoom).toHaveBeenCalledWith(expect.objectContaining({ id: 'message-id' }), { mentionedUserIds: [] });
+	});
+
 	test('concurrent sends share one uncached member count query', async () => {
 		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
 		let resolveCount: (value: number) => void = () => {};
@@ -372,7 +434,7 @@ describe('ChatService large room fast path', () => {
 
 	test('large room burst sends do not reintroduce member fanout', async () => {
 		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
-		const burstSize = 5000;
+		const burstSize = 10000;
 
 		await Promise.all(Array.from({ length: burstSize }, (_, i) => (
 			ctx.service.createMessageToRoom({ id: 'sender', host: null }, { id: 'room', ownerId: 'owner' } as never, {
@@ -432,8 +494,55 @@ describe('ChatService large room fast path', () => {
 
 		await ctx.service.readRoomChatMessage('reader', 'room');
 
-		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('readRoomChatMessage:reader:room', 'message-id', 'EX', 60 * 60 * 24 * 30);
+		expect(ctx.redisClient.eval).toHaveBeenCalledWith(expect.any(String), 5,
+			'newRoomChatMessageExists:reader:room',
+			'newRoomChatMentionExists:reader:room',
+			'newChatMessagesExists:reader',
+			'latestRoomChatMessage:room',
+			'readRoomChatMessage:reader:room',
+			'room:room',
+			60 * 60 * 24 * 30,
+		);
 		await expect(ctx.service.getRoomReadStateMap('reader', ['room'])).resolves.toEqual({ room: true });
+	});
+
+	test('history read state maps use batched Redis reads', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		ctx.redisState.set('newUserChatMessageExists:reader:user-2', 'message-1');
+		ctx.redisState.set('latestRoomChatMessage:room-1', 'message-2');
+		ctx.redisState.set('readRoomChatMessage:reader:room-1', 'message-2');
+		ctx.redisState.set('latestRoomChatMessage:room-2', 'message-3');
+		ctx.redisState.set('newRoomChatMentionExists:reader:room-2', 'message-3');
+
+		await expect(ctx.service.getUserReadStateMap('reader', ['user-1', 'user-2'])).resolves.toEqual({
+			'user-1': true,
+			'user-2': false,
+		});
+		await expect(ctx.service.getRoomReadStateMap('reader', ['room-1', 'room-2'])).resolves.toEqual({
+			'room-1': true,
+			'room-2': false,
+		});
+		await expect(ctx.service.getRoomMentionStateMap('reader', ['room-1', 'room-2'])).resolves.toEqual({
+			'room-1': false,
+			'room-2': true,
+		});
+
+		expect(ctx.redisClient.mget).toHaveBeenCalledWith(
+			'newUserChatMessageExists:reader:user-1',
+			'newUserChatMessageExists:reader:user-2',
+		);
+		expect(ctx.redisClient.mget).toHaveBeenCalledWith(
+			'newRoomChatMessageExists:reader:room-1',
+			'latestRoomChatMessage:room-1',
+			'readRoomChatMessage:reader:room-1',
+			'newRoomChatMessageExists:reader:room-2',
+			'latestRoomChatMessage:room-2',
+			'readRoomChatMessage:reader:room-2',
+		);
+		expect(ctx.redisClient.mget).toHaveBeenCalledWith(
+			'newRoomChatMentionExists:reader:room-1',
+			'newRoomChatMentionExists:reader:room-2',
+		);
 	});
 
 	test('message search applies an explicit sender filter inside the room scope', async () => {

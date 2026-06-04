@@ -13,7 +13,7 @@ import { QueueService } from '@/core/QueueService.js';
 import { IdService } from '@/core/IdService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
-import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
+import { CHAT_MESSAGE_MENTION_CACHE_TTL, ChatEntityService, chatMessageMentionCacheKey } from '@/core/entities/ChatEntityService.js';
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
 import { PushNotificationService } from '@/core/PushNotificationService.js';
 import { bindThis } from '@/decorators.js';
@@ -46,9 +46,25 @@ export const MIN_CHAT_ROOM_MESSAGE_RETENTION_DAYS = 1;
 export const MAX_CHAT_ROOM_MESSAGE_RETENTION_DAYS = 3650;
 export const CHAT_ROOM_RETENTION_BATCH_SIZE = 1000;
 const ROOM_MEMBER_COUNT_CACHE_TTL = 60;
+const ROOM_MESSAGE_TARGET_CACHE_TTL = 60;
+const ROOM_SENDER_MEMBERSHIP_CACHE_TTL = 10;
+const ROOM_MESSAGE_TARGET_CACHE_TTL_MS = ROOM_MESSAGE_TARGET_CACHE_TTL * 1000;
+const ROOM_SENDER_MEMBERSHIP_CACHE_TTL_MS = ROOM_SENDER_MEMBERSHIP_CACHE_TTL * 1000;
 const MAX_REACTIONS_PER_MESSAGE = 100;
+const ROOM_CHAT_MESSAGE_READ_TTL = 60 * 60 * 24 * 30;
+const READ_ROOM_CHAT_MESSAGE_SCRIPT = `
+local latest = redis.call('GET', KEYS[4])
+redis.call('DEL', KEYS[1])
+redis.call('DEL', KEYS[2])
+redis.call('SREM', KEYS[3], ARGV[1])
+if latest then
+	redis.call('SET', KEYS[5], latest, 'EX', ARGV[2])
+end
+return latest
+`;
 const isCustomEmojiRegexp = /^:([\w+-]+)(?:@\.)?:$/;
 type ChatMessageReference = Pick<MiChatMessage, 'id' | 'toUserId' | 'toRoomId'>;
+type ChatRoomMessageTarget = Pick<MiChatRoom, 'id' | 'ownerId'>;
 
 // TODO: ReactionServiceのやつと共通化
 function normalizeEmojiString(x: string) {
@@ -72,6 +88,10 @@ function normalizeMessageText(text: string | null | undefined): string | null {
 @Injectable()
 export class ChatService {
 	private readonly roomMemberCountLoads = new Map<MiChatRoom['id'], Promise<number>>();
+	private readonly roomMessageTargetCache = new Map<MiChatRoom['id'], { room: ChatRoomMessageTarget; expiresAt: number; }>();
+	private readonly roomMessageTargetLoads = new Map<MiChatRoom['id'], Promise<ChatRoomMessageTarget | null>>();
+	private readonly roomSenderMembershipCache = new Map<string, { expiresAt: number; }>();
+	private readonly roomSenderMembershipLoads = new Map<string, Promise<boolean>>();
 
 	constructor(
 		@Inject(DI.config)
@@ -155,7 +175,7 @@ export class ChatService {
 
 	@bindThis
 	private async filterRoomMentionedUserIds(
-		room: MiChatRoom,
+		room: ChatRoomMessageTarget,
 		senderId: MiUser['id'],
 		mentionedUserIds: MiUser['id'][],
 	): Promise<MiUser['id'][]> {
@@ -342,22 +362,19 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async createMessageToRoom(fromUser: { id: MiUser['id']; host: MiUser['host']; }, toRoom: MiChatRoom, params: {
+	public async createMessageToRoom(fromUser: { id: MiUser['id']; host: MiUser['host']; }, toRoom: ChatRoomMessageTarget, params: {
 		text?: string | null;
 		file?: MiDriveFile | null;
 		uri?: string | null;
 		reply?: ChatMessageReference | null;
 		quote?: ChatMessageReference | null;
 	}): Promise<Packed<'ChatMessageLiteForRoom'>> {
-		const [membershipsCount, senderMembership] = await Promise.all([
+		const [membershipsCount, senderIsMember] = await Promise.all([
 			this.getRoomMembersCountForMessageFanout(toRoom.id),
-			toRoom.ownerId === fromUser.id ? Promise.resolve({ userId: fromUser.id, isMuted: false }) : this.chatRoomMembershipsRepository.findOne({
-				select: { userId: true, isMuted: true },
-				where: { roomId: toRoom.id, userId: fromUser.id },
-			}),
+			this.isRoomSenderMemberForMessage(toRoom, fromUser.id),
 		]);
 
-		if (senderMembership == null) throw new Error('you are not a member of the room');
+		if (!senderIsMember) throw new Error('you are not a member of the room');
 
 		const isLargeRoom = membershipsCount > LARGE_CHAT_ROOM_MEMBER_THRESHOLD;
 
@@ -365,6 +382,7 @@ export class ChatService {
 		if (text == null && params.file == null && params.reply == null && params.quote == null) {
 			throw new Error('content required');
 		}
+		const shouldCacheMentionedUserIds = text != null && text.includes('@');
 		const mentionedUserIds = await this.filterRoomMentionedUserIds(
 			toRoom,
 			fromUser.id,
@@ -386,18 +404,20 @@ export class ChatService {
 
 		const inserted = await this.chatMessagesRepository.insertOne(message);
 
-		const packedMessage = await this.chatEntityService.packMessageLiteForRoom(inserted);
-
-		this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
-
 		if (isLargeRoom) {
 			const redisPipeline = this.redisClient.pipeline();
 			redisPipeline.set(`latestRoomChatMessage:${toRoom.id}`, message.id, 'EX', 60 * 60 * 24 * 30);
+			if (shouldCacheMentionedUserIds) {
+				redisPipeline.set(chatMessageMentionCacheKey(message.id), JSON.stringify(mentionedUserIds), 'EX', CHAT_MESSAGE_MENTION_CACHE_TTL);
+			}
 			for (const userId of mentionedUserIds) {
 				redisPipeline.set(`newRoomChatMentionExists:${userId}:${toRoom.id}`, message.id);
 				redisPipeline.sadd(`newChatMessagesExists:${userId}`, `room:${toRoom.id}`);
 			}
 			await redisPipeline.exec();
+
+			const packedMessage = await this.chatEntityService.packMessageLiteForRoom(inserted, { mentionedUserIds });
+			await this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
 			if (mentionedUserIds.length > 0) {
 				this.timeService.startTimer(async () => {
@@ -410,7 +430,7 @@ export class ChatService {
 
 					if (markers.every(marker => marker[1] == null)) return;
 
-					const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted);
+					const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted, undefined, { mentionedUserIds });
 
 					for (let i = 0; i < mentionedUserIds.length; i++) {
 						const marker = markers[i][1];
@@ -439,6 +459,10 @@ export class ChatService {
 		const membershipsOtherThanMe = memberships.filter(member => member.userId !== fromUser.id);
 
 		const redisPipeline = this.redisClient.pipeline();
+		redisPipeline.set(`latestRoomChatMessage:${toRoom.id}`, message.id, 'EX', 60 * 60 * 24 * 30);
+		if (shouldCacheMentionedUserIds) {
+			redisPipeline.set(chatMessageMentionCacheKey(message.id), JSON.stringify(mentionedUserIds), 'EX', CHAT_MESSAGE_MENTION_CACHE_TTL);
+		}
 		for (const membership of membershipsOtherThanMe) {
 			const hasMention = mentionedUserIdSet.has(membership.userId);
 			if (membership.isMuted && !hasMention) continue;
@@ -449,7 +473,10 @@ export class ChatService {
 				redisPipeline.set(`newRoomChatMentionExists:${membership.userId}:${toRoom.id}`, message.id);
 			}
 		}
-		redisPipeline.exec();
+		await redisPipeline.exec();
+
+		const packedMessage = await this.chatEntityService.packMessageLiteForRoom(inserted, { mentionedUserIds });
+		await this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
 		// 3秒経っても既読にならなかったらイベント発行
 		this.timeService.startTimer(async () => {
@@ -462,7 +489,7 @@ export class ChatService {
 
 			if (markers.every(marker => marker[1] == null)) return;
 
-			const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted);
+			const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted, undefined, { mentionedUserIds });
 
 			for (let i = 0; i < membershipsOtherThanMe.length; i++) {
 				const marker = markers[i][1];
@@ -497,15 +524,17 @@ export class ChatService {
 		readerId: MiUser['id'],
 		roomId: MiChatRoom['id'],
 	): Promise<void> {
-		const latestRoomMessageId = await this.redisClient.get(`latestRoomChatMessage:${roomId}`);
-		const redisPipeline = this.redisClient.pipeline();
-		redisPipeline.del(`newRoomChatMessageExists:${readerId}:${roomId}`);
-		redisPipeline.del(`newRoomChatMentionExists:${readerId}:${roomId}`);
-		redisPipeline.srem(`newChatMessagesExists:${readerId}`, `room:${roomId}`);
-		if (latestRoomMessageId != null) {
-			redisPipeline.set(`readRoomChatMessage:${readerId}:${roomId}`, latestRoomMessageId, 'EX', 60 * 60 * 24 * 30);
-		}
-		await redisPipeline.exec();
+		await this.redisClient.eval(
+			READ_ROOM_CHAT_MESSAGE_SCRIPT,
+			5,
+			`newRoomChatMessageExists:${readerId}:${roomId}`,
+			`newRoomChatMentionExists:${readerId}:${roomId}`,
+			`newChatMessagesExists:${readerId}`,
+			`latestRoomChatMessage:${roomId}`,
+			`readRoomChatMessage:${readerId}:${roomId}`,
+			`room:${roomId}`,
+			ROOM_CHAT_MESSAGE_READ_TTL,
+		);
 	}
 
 	@bindThis
@@ -538,17 +567,23 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async hasPermissionToViewRoomTimeline(me: MiUser, room: MiChatRoom) {
-		if (await this.isRoomMember(room, me.id)) {
-			return true;
-		} else {
-			const iAmModerator = await this.roleService.isModerator(me);
-			if (iAmModerator) {
-				return true;
-			}
+	public async hasPermissionToViewRoomTimeline(me: MiUser, room: ChatRoomMessageTarget) {
+		if (room.ownerId === me.id) return true;
 
-			return false;
-		}
+		const [membership, iAmModerator] = await Promise.all([
+			this.chatRoomMembershipsRepository.findOne({
+				select: {
+					userId: true,
+				},
+				where: {
+					roomId: room.id,
+					userId: me.id,
+				},
+			}),
+			this.roleService.isModerator(me),
+		]);
+
+		return membership != null || iAmModerator;
 	}
 
 	@bindThis
@@ -917,18 +952,12 @@ export class ChatService {
 	@bindThis
 	public async getUserReadStateMap(userId: MiUser['id'], otherIds: MiUser['id'][]) {
 		const readStateMap: Record<MiUser['id'], boolean> = {};
+		if (otherIds.length === 0) return readStateMap;
 
-		const redisPipeline = this.redisClient.pipeline();
-
-		for (const otherId of otherIds) {
-			redisPipeline.get(`newUserChatMessageExists:${userId}:${otherId}`);
-		}
-
-		const markers = await redisPipeline.exec();
-		if (markers == null) throw new Error('redis error');
+		const markers = await this.redisClient.mget(...otherIds.map(otherId => `newUserChatMessageExists:${userId}:${otherId}`));
 
 		for (let i = 0; i < otherIds.length; i++) {
-			const marker = markers[i][1];
+			const marker = markers[i];
 			readStateMap[otherIds[i]] = marker == null;
 		}
 
@@ -938,22 +967,18 @@ export class ChatService {
 	@bindThis
 	public async getRoomReadStateMap(userId: MiUser['id'], roomIds: MiChatRoom['id'][]) {
 		const readStateMap: Record<MiChatRoom['id'], boolean> = {};
+		if (roomIds.length === 0) return readStateMap;
 
-		const redisPipeline = this.redisClient.pipeline();
-
-		for (const roomId of roomIds) {
-			redisPipeline.get(`newRoomChatMessageExists:${userId}:${roomId}`);
-			redisPipeline.get(`latestRoomChatMessage:${roomId}`);
-			redisPipeline.get(`readRoomChatMessage:${userId}:${roomId}`);
-		}
-
-		const markers = await redisPipeline.exec();
-		if (markers == null) throw new Error('redis error');
+		const markers = await this.redisClient.mget(...roomIds.flatMap(roomId => [
+			`newRoomChatMessageExists:${userId}:${roomId}`,
+			`latestRoomChatMessage:${roomId}`,
+			`readRoomChatMessage:${userId}:${roomId}`,
+		]));
 
 		for (let i = 0; i < roomIds.length; i++) {
-			const marker = markers[i * 3][1];
-			const latestRoomMessageId = markers[(i * 3) + 1][1];
-			const readRoomMessageId = markers[(i * 3) + 2][1];
+			const marker = markers[i * 3];
+			const latestRoomMessageId = markers[(i * 3) + 1];
+			const readRoomMessageId = markers[(i * 3) + 2];
 			readStateMap[roomIds[i]] = marker == null && (latestRoomMessageId == null || latestRoomMessageId === readRoomMessageId);
 		}
 
@@ -965,17 +990,10 @@ export class ChatService {
 		const mentionStateMap: Record<MiChatRoom['id'], boolean> = {};
 		if (roomIds.length === 0) return mentionStateMap;
 
-		const redisPipeline = this.redisClient.pipeline();
-
-		for (const roomId of roomIds) {
-			redisPipeline.get(`newRoomChatMentionExists:${userId}:${roomId}`);
-		}
-
-		const markers = await redisPipeline.exec();
-		if (markers == null) throw new Error('redis error');
+		const markers = await this.redisClient.mget(...roomIds.map(roomId => `newRoomChatMentionExists:${userId}:${roomId}`));
 
 		for (let i = 0; i < roomIds.length; i++) {
-			mentionStateMap[roomIds[i]] = markers[i][1] != null;
+			mentionStateMap[roomIds[i]] = markers[i] != null;
 		}
 
 		return mentionStateMap;
@@ -1050,9 +1068,62 @@ export class ChatService {
 	}
 
 	@bindThis
+	private async isRoomSenderMemberForMessage(room: ChatRoomMessageTarget, userId: MiUser['id']) {
+		if (room.ownerId === userId) return true;
+
+		const cacheKey = `${room.id}:${userId}`;
+		const cached = this.roomSenderMembershipCache.get(cacheKey);
+		if (cached != null && cached.expiresAt > Date.now()) return true;
+
+		const loading = this.roomSenderMembershipLoads.get(cacheKey);
+		if (loading != null) return await loading;
+
+		const load = (async () => {
+			const membership = await this.chatRoomMembershipsRepository.findOne({
+				select: { userId: true },
+				where: { roomId: room.id, userId },
+			});
+			const isMember = membership != null;
+			if (isMember) {
+				this.roomSenderMembershipCache.set(cacheKey, { expiresAt: Date.now() + ROOM_SENDER_MEMBERSHIP_CACHE_TTL_MS });
+			}
+			return isMember;
+		})();
+		this.roomSenderMembershipLoads.set(cacheKey, load);
+
+		try {
+			return await load;
+		} finally {
+			this.roomSenderMembershipLoads.delete(cacheKey);
+		}
+	}
+
+	@bindThis
+	private deleteRoomSenderMembershipCache(roomId: MiChatRoom['id'], userId?: MiUser['id']) {
+		if (userId != null) {
+			this.roomSenderMembershipCache.delete(`${roomId}:${userId}`);
+			this.roomSenderMembershipLoads.delete(`${roomId}:${userId}`);
+			return;
+		}
+
+		for (const key of this.roomSenderMembershipCache.keys()) {
+			if (key.startsWith(`${roomId}:`)) this.roomSenderMembershipCache.delete(key);
+		}
+		for (const key of this.roomSenderMembershipLoads.keys()) {
+			if (key.startsWith(`${roomId}:`)) this.roomSenderMembershipLoads.delete(key);
+		}
+	}
+
+	@bindThis
 	private async deleteRoomMembersCountCache(roomId: MiChatRoom['id']) {
 		this.roomMemberCountLoads.delete(roomId);
 		await this.redisClient.del(`chatRoomMembersCount:${roomId}`);
+	}
+
+	@bindThis
+	private deleteRoomMessageTargetCache(roomId: MiChatRoom['id']) {
+		this.roomMessageTargetCache.delete(roomId);
+		this.roomMessageTargetLoads.delete(roomId);
 	}
 
 	@bindThis
@@ -1072,6 +1143,8 @@ export class ChatService {
 	@bindThis
 	public async deleteRoom(room: MiChatRoom, deleter?: MiUser) {
 		await this.chatRoomsRepository.delete(room.id);
+		this.deleteRoomMessageTargetCache(room.id);
+		this.deleteRoomSenderMembershipCache(room.id);
 		await this.deleteRoomMembersCountCache(room.id);
 
 		// Erase any message notifications for this room
@@ -1105,6 +1178,38 @@ export class ChatService {
 	@bindThis
 	public async findRoomById(roomId: MiChatRoom['id']) {
 		return await this.chatRoomsRepository.findOne({ where: { id: roomId }, relations: ['owner'] });
+	}
+
+	@bindThis
+	public async findRoomMessageTargetById(roomId: MiChatRoom['id']) {
+		const cached = this.roomMessageTargetCache.get(roomId);
+		if (cached != null && cached.expiresAt > Date.now()) return cached.room;
+
+		const loading = this.roomMessageTargetLoads.get(roomId);
+		if (loading != null) return await loading;
+
+		const load = (async () => {
+			const room = await this.chatRoomsRepository.findOne({
+				select: {
+					id: true,
+					ownerId: true,
+				},
+				where: {
+					id: roomId,
+				},
+			});
+			if (room != null) {
+				this.roomMessageTargetCache.set(roomId, { room, expiresAt: Date.now() + ROOM_MESSAGE_TARGET_CACHE_TTL_MS });
+			}
+			return room;
+		})();
+		this.roomMessageTargetLoads.set(roomId, load);
+
+		try {
+			return await load;
+		} finally {
+			this.roomMessageTargetLoads.delete(roomId);
+		}
 	}
 
 	@bindThis
@@ -1219,6 +1324,7 @@ export class ChatService {
 			} satisfies Partial<MiChatRoomMembership>;
 
 			await this.chatRoomMembershipsRepository.insertOne(membership);
+			this.deleteRoomSenderMembershipCache(roomId, userId);
 			await this.deleteRoomMembersCountCache(roomId);
 			if (invitation != null) {
 				await this.chatRoomInvitationsRepository.delete(invitation.id);
@@ -1238,6 +1344,7 @@ export class ChatService {
 	public async leaveRoom(userId: MiUser['id'], roomId: MiChatRoom['id']) {
 		const membership = await this.chatRoomMembershipsRepository.findOneByOrFail({ roomId, userId });
 		await this.chatRoomMembershipsRepository.delete(membership.id);
+		this.deleteRoomSenderMembershipCache(roomId, userId);
 		await this.deleteRoomMembersCountCache(roomId);
 	}
 

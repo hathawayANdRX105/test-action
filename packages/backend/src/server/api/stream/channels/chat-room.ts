@@ -11,6 +11,8 @@ import type { JsonObject } from '@/misc/json-value.js';
 import { ChatService } from '@/core/ChatService.js';
 import type { ChatRoomsRepository } from '@/models/_.js';
 import { Channel, type MiChannelService } from '../channel.js';
+import { serializeChatChannelEventForWs } from './chat-channel-serialization.js';
+import { ChatReadReceiptBatcher, STREAM_CHAT_READ_RECEIPT_MIN_INTERVAL_MS } from './chat-read-receipt-batcher.js';
 
 class ChatRoomChannel extends Channel {
 	public readonly chName = 'chatRoom';
@@ -18,6 +20,7 @@ class ChatRoomChannel extends Channel {
 	public static requireCredential = true as const;
 	public static kind = 'read:chat';
 	private roomId: string;
+	private readonly readReceiptBatcher: ChatReadReceiptBatcher;
 
 	constructor(
 		id: string,
@@ -27,6 +30,16 @@ class ChatRoomChannel extends Channel {
 		private chatService: ChatService,
 	) {
 		super(id, connection);
+		this.readReceiptBatcher = new ChatReadReceiptBatcher({
+			minIntervalMs: STREAM_CHAT_READ_RECEIPT_MIN_INTERVAL_MS,
+			run: () => {
+				if (!this.roomId) return;
+				return this.chatService.readRoomChatMessage(this.user!.id, this.roomId);
+			},
+			onError: err => {
+				console.error('Failed to read room chat message:', err);
+			},
+		});
 	}
 
 	@bindThis
@@ -48,8 +61,8 @@ class ChatRoomChannel extends Channel {
 	}
 
 	@bindThis
-	private async onEvent(data: ChatEventPayload) {
-		this.send(data.type, data.body);
+	private onEvent(data: ChatEventPayload) {
+		this.connection.sendSerializedMessageToWsFast(serializeChatChannelEventForWs(this.id, data), { compress: false });
 	}
 
 	@bindThis
@@ -57,7 +70,7 @@ class ChatRoomChannel extends Channel {
 		switch (type) {
 			case 'read':
 				if (this.roomId) {
-					this.chatService.readRoomChatMessage(this.user!.id, this.roomId);
+					this.readReceiptBatcher.queue();
 				}
 				break;
 		}
@@ -65,6 +78,7 @@ class ChatRoomChannel extends Channel {
 
 	@bindThis
 	public dispose() {
+		this.readReceiptBatcher.flush();
 		this.subscriber.off(`chatRoomStream:${this.roomId}`, this.onEvent);
 	}
 }

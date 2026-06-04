@@ -11,6 +11,8 @@ import type { JsonObject } from '@/misc/json-value.js';
 import { ChatService } from '@/core/ChatService.js';
 import type { UsersRepository } from '@/models/_.js';
 import { Channel, type MiChannelService } from '../channel.js';
+import { serializeChatChannelEventForWs } from './chat-channel-serialization.js';
+import { ChatReadReceiptBatcher, STREAM_CHAT_READ_RECEIPT_MIN_INTERVAL_MS } from './chat-read-receipt-batcher.js';
 
 class ChatUserChannel extends Channel {
 	public readonly chName = 'chatUser';
@@ -18,6 +20,7 @@ class ChatUserChannel extends Channel {
 	public static requireCredential = true as const;
 	public static kind = 'read:chat';
 	private otherId: string;
+	private readonly readReceiptBatcher: ChatReadReceiptBatcher;
 
 	constructor(
 		id: string,
@@ -27,6 +30,16 @@ class ChatUserChannel extends Channel {
 		private chatService: ChatService,
 	) {
 		super(id, connection);
+		this.readReceiptBatcher = new ChatReadReceiptBatcher({
+			minIntervalMs: STREAM_CHAT_READ_RECEIPT_MIN_INTERVAL_MS,
+			run: () => {
+				if (!this.otherId) return;
+				return this.chatService.readUserChatMessage(this.user!.id, this.otherId);
+			},
+			onError: err => {
+				console.error('Failed to read user chat message:', err);
+			},
+		});
 	}
 
 	@bindThis
@@ -47,8 +60,8 @@ class ChatUserChannel extends Channel {
 	}
 
 	@bindThis
-	private async onEvent(data: ChatEventPayload) {
-		this.send(data.type, data.body);
+	private onEvent(data: ChatEventPayload) {
+		this.connection.sendSerializedMessageToWsFast(serializeChatChannelEventForWs(this.id, data), { compress: false });
 	}
 
 	@bindThis
@@ -56,7 +69,7 @@ class ChatUserChannel extends Channel {
 		switch (type) {
 			case 'read':
 				if (this.otherId) {
-					this.chatService.readUserChatMessage(this.user!.id, this.otherId);
+					this.readReceiptBatcher.queue();
 				}
 				break;
 		}
@@ -64,6 +77,7 @@ class ChatUserChannel extends Channel {
 
 	@bindThis
 	public dispose() {
+		this.readReceiptBatcher.flush();
 		this.subscriber.off(`chatUserStream:${this.user!.id}-${this.otherId}`, this.onEvent);
 	}
 }

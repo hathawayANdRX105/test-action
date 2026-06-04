@@ -1,0 +1,216 @@
+/*
+ * SPDX-FileCopyrightText: hhhl contributors
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+import { describe, expect, jest, test } from '@jest/globals';
+import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
+
+describe('ChatEntityService chat message mention cache', () => {
+	function createService() {
+		const redisState = new Map<string, string>();
+		const redisClient: any = {
+			get: jest.fn(async (key: string) => redisState.get(key) ?? null),
+			mget: jest.fn(async (...keys: string[]) => keys.map(key => redisState.get(key) ?? null)),
+			set: jest.fn(async (key: string, value: string) => {
+				redisState.set(key, value);
+				return 'OK';
+			}),
+			pipeline: jest.fn(() => {
+				const commands: (() => void)[] = [];
+				const pipeline = {
+					set: jest.fn((key: string, value: string) => {
+						commands.push(() => {
+							redisState.set(key, value);
+						});
+						return pipeline;
+					}),
+					exec: jest.fn(async () => {
+						commands.forEach(command => command());
+						commands.length = 0;
+						return [] as [Error | null, unknown][];
+					}),
+				};
+				return pipeline;
+			}),
+		};
+		const userEntityService: any = {
+			pack: jest.fn(async (userOrId: any) => ({
+				id: typeof userOrId === 'string' ? userOrId : userOrId.id,
+			})),
+			packMany: jest.fn(async (users: any[]) => users.map(userOrId => ({
+				id: typeof userOrId === 'string' ? userOrId : userOrId.id,
+			}))),
+		};
+		const driveFileEntityService: any = {
+			pack: jest.fn(),
+			packMany: jest.fn(async () => []),
+		};
+		const chatRoomMembershipsQueryBuilder: any = {
+			select: jest.fn(function (this: any) { return this; }),
+			addSelect: jest.fn(function (this: any) { return this; }),
+			where: jest.fn(function (this: any) { return this; }),
+			groupBy: jest.fn(function (this: any) { return this; }),
+			getRawMany: jest.fn(async () => []),
+		};
+		const chatRoomMembershipsRepository: any = {
+			find: jest.fn(async () => []),
+			findOneBy: jest.fn(async () => null),
+			countBy: jest.fn(async () => 0),
+			createQueryBuilder: jest.fn(() => chatRoomMembershipsQueryBuilder),
+		};
+		const chatRoomsRepository: any = {
+			find: jest.fn(async () => []),
+			findOneByOrFail: jest.fn(),
+		};
+		const roleService: any = {
+			isAdministrator: jest.fn(async () => false),
+			isModerator: jest.fn(async () => false),
+		};
+		const idService: any = {
+			parse: jest.fn(() => ({ date: new Date(0) })),
+		};
+		const mfmService: any = {
+			extractMentions: jest.fn(() => [{ username: 'alice', host: null }]),
+		};
+		const remoteUserResolveService: any = {
+			resolveUser: jest.fn(async () => ({ id: 'alice-id', host: null })),
+		};
+		const service = new ChatEntityService(
+			{} as never,
+			chatRoomsRepository as never,
+			{} as never,
+			chatRoomMembershipsRepository as never,
+			{ chatRoomDefaultMemberLimit: 500 } as never,
+			redisClient as never,
+			userEntityService as never,
+			driveFileEntityService as never,
+			idService as never,
+			roleService as never,
+			mfmService as never,
+			remoteUserResolveService as never,
+		);
+
+		const message: any = {
+			id: 'message-id',
+			text: '@alice hello',
+			fromUserId: 'sender',
+			fromUser: { id: 'sender' },
+			toRoomId: 'room',
+			fileId: null,
+			replyId: null,
+			quoteId: null,
+			reactions: [],
+		};
+
+		return {
+			service,
+			redisState,
+			redisClient,
+			userEntityService,
+			driveFileEntityService,
+			chatRoomsRepository,
+			chatRoomMembershipsRepository,
+			chatRoomMembershipsQueryBuilder,
+			roleService,
+			mfmService,
+			remoteUserResolveService,
+			message,
+		};
+	}
+
+	test('reuses cached mentioned users when packing room messages repeatedly', async () => {
+		const ctx = createService();
+
+		await ctx.service.packMessageLiteForRoom(ctx.message);
+		await ctx.service.packMessageLiteForRoom(ctx.message);
+
+		expect(ctx.mfmService.extractMentions).toHaveBeenCalledTimes(1);
+		expect(ctx.remoteUserResolveService.resolveUser).toHaveBeenCalledTimes(1);
+		expect(ctx.redisClient.get).toHaveBeenCalledTimes(2);
+		expect(ctx.redisClient.set).toHaveBeenCalledWith('chatMessageMentionedUserIds:message-id', JSON.stringify(['alice-id']), 'EX', 60 * 60 * 24 * 30);
+	});
+
+	test('skips mention cache IO for messages without mention text', async () => {
+		const ctx = createService();
+		ctx.message.text = 'hello';
+
+		const packed = await ctx.service.packMessageLiteForRoom(ctx.message);
+
+		expect(packed.mentionedUserIds).toEqual([]);
+		expect(ctx.redisClient.get).not.toHaveBeenCalled();
+		expect(ctx.redisClient.set).not.toHaveBeenCalled();
+		expect(ctx.mfmService.extractMentions).not.toHaveBeenCalled();
+	});
+
+	test('batch-packs room messages with one Redis cache read', async () => {
+		const ctx = createService();
+		ctx.redisState.set('chatMessageMentionedUserIds:cached-message', JSON.stringify(['cached-user']));
+		const uncachedMessage = {
+			...ctx.message,
+			id: 'uncached-message',
+		};
+		const cachedMessage = {
+			...ctx.message,
+			id: 'cached-message',
+		};
+
+		const packed = await ctx.service.packMessagesLiteForRoom([uncachedMessage, cachedMessage]);
+
+		expect(packed.map(message => message.mentionedUserIds)).toEqual([
+			['alice-id'],
+			['cached-user'],
+		]);
+		expect(ctx.redisClient.mget).toHaveBeenCalledTimes(1);
+		expect(ctx.redisClient.mget).toHaveBeenCalledWith('chatMessageMentionedUserIds:uncached-message', 'chatMessageMentionedUserIds:cached-message');
+		expect(ctx.redisClient.get).not.toHaveBeenCalled();
+		expect(ctx.redisClient.pipeline).toHaveBeenCalledTimes(1);
+		expect(ctx.mfmService.extractMentions).toHaveBeenCalledTimes(1);
+		expect(ctx.remoteUserResolveService.resolveUser).toHaveBeenCalledTimes(1);
+	});
+
+	test('deduplicates room, owner, membership, and member-count work when packing rooms', async () => {
+		const ctx = createService();
+		ctx.chatRoomsRepository.find.mockResolvedValueOnce([{
+			id: 'room-2',
+			name: 'room 2',
+			description: null,
+			joinMode: 'open',
+			ownerId: 'owner-2',
+			owner: { id: 'owner-2' },
+			memberLimitOverride: null,
+			messageRetentionDays: null,
+		}]);
+		ctx.chatRoomMembershipsQueryBuilder.getRawMany.mockResolvedValueOnce([
+			{ roomId: 'room-1', count: '2' },
+			{ roomId: 'room-2', count: '4' },
+		]);
+		ctx.chatRoomMembershipsRepository.find.mockResolvedValueOnce([
+			{ roomId: 'room-1', userId: 'me', isMuted: true },
+		]);
+		const room1 = {
+			id: 'room-1',
+			name: 'room 1',
+			description: null,
+			joinMode: 'open',
+			ownerId: 'owner-1',
+			owner: { id: 'owner-1' },
+			memberLimitOverride: null,
+			messageRetentionDays: null,
+		};
+
+		const packed = await ctx.service.packRooms([room1, room1, 'room-2', 'room-2'], { id: 'me' });
+
+		expect(packed).toHaveLength(2);
+		expect(packed.map(room => [room.id, room.memberCount, room.isMuted])).toEqual([
+			['room-1', 3, true],
+			['room-2', 5, false],
+		]);
+		expect(ctx.chatRoomsRepository.find).toHaveBeenCalledTimes(1);
+		expect(ctx.userEntityService.packMany).toHaveBeenLastCalledWith([{ id: 'owner-1' }, { id: 'owner-2' }], { id: 'me' });
+		expect(ctx.chatRoomMembershipsRepository.find).toHaveBeenCalledTimes(1);
+		expect(ctx.chatRoomMembershipsRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+		expect(ctx.roleService.isAdministrator).toHaveBeenCalledTimes(1);
+		expect(ctx.roleService.isModerator).toHaveBeenCalledTimes(1);
+	});
+});
