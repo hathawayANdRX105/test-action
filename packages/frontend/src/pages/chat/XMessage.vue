@@ -602,11 +602,11 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 		content: "";
 		position: absolute;
 		left: -5px;
-		bottom: 0;
+		top: 10px;
 		width: 10px;
 		height: 12px;
 		background: inherit;
-		clip-path: polygon(100% 0, 100% 100%, 0 100%);
+		clip-path: polygon(100% 0, 100% 100%, 0 50%);
 	}
 }
 
@@ -625,7 +625,7 @@ function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.en
 	&::before {
 		left: auto;
 		right: -5px;
-		clip-path: polygon(0 0, 100% 100%, 0 100%);
+		clip-path: polygon(0 0, 100% 50%, 0 100%);
 	}
 }
 

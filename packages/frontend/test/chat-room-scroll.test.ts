@@ -134,6 +134,15 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /class="_buttonPrimary" :class="\$style\.toLatestButton"/);
 	});
 
+	test('keeps message bubble arrows pointed at the avatar side', async () => {
+		const source = await import('@/pages/chat/XMessage.vue?raw').then(module => module.default);
+
+		assert.match(source, /\.bubble \{[\s\S]*?&::before \{[\s\S]*?top: 10px;/);
+		assert.match(source, /\.bubble \{[\s\S]*?&::before \{[\s\S]*?clip-path: polygon\(100% 0, 100% 100%, 0 50%\);/);
+		assert.match(source, /\.isMe \.bubble \{[\s\S]*?&::before \{[\s\S]*?clip-path: polygon\(0 0, 100% 50%, 0 100%\);/);
+		assert.strictEqual(/\.bubble \{[\s\S]*?&::before \{[\s\S]*?bottom: 0;/.test(source), false);
+	});
+
 	test('sorts context/search messages by creation time before id', () => {
 		const sorted = sortChatMessagesForTimeline([
 			{ id: 'z', createdAt: '2026-06-01T00:00:00.000Z' },
