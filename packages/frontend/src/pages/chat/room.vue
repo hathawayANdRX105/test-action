@@ -252,6 +252,7 @@ let historyFetchArmed = true;
 let newerFetchArmed = true;
 let scrollRestorationDepth = 0;
 let suppressNextMessageIdClearInitialize = false;
+let chatTabLatestReturnGeneration = 0;
 const isRestoringHistoryScroll = ref(false);
 const isRoomChat = computed(() => props.roomId != null);
 const isContextMode = computed(() => contextTargetMessageId.value != null);
@@ -1035,6 +1036,9 @@ let isActivated = true;
 onActivated(() => {
 	isActivated = true;
 	readReceiptBatcher.flush();
+	if (tab.value === 'chat' && !isContextMode.value && !initializing.value && initializeError.value == null && joinRequiredRoom.value == null) {
+		scheduleLatestOnChatTabReturn();
+	}
 });
 
 onDeactivated(() => {
@@ -1223,6 +1227,17 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) 
 
 function flushIncomingMessages() {
 	pendingIncomingMessageFrame = null;
+	const batch = pendingIncomingMessages;
+	pendingIncomingMessages = [];
+	processIncomingMessageBatch(batch);
+}
+
+function flushIncomingMessagesNow() {
+	if (pendingIncomingMessageFrame != null) {
+		window.cancelAnimationFrame(pendingIncomingMessageFrame);
+		pendingIncomingMessageFrame = null;
+	}
+
 	const batch = pendingIncomingMessages;
 	pendingIncomingMessages = [];
 	processIncomingMessageBatch(batch);
@@ -1422,10 +1437,48 @@ function showMenu(ev: MouseEvent) {
 
 const tab = ref('chat');
 
+async function ensureLatestOnChatTabReturn(generation: number) {
+	await nextTick();
+	await waitAnimationFrame();
+
+	if (generation !== chatTabLatestReturnGeneration || tab.value !== 'chat' || initializing.value || initializeError.value != null || joinRequiredRoom.value != null) return;
+
+	scrollToLatest('instant');
+	flushIncomingMessagesNow();
+
+	try {
+		await fetchLatestGap();
+	} catch (err) {
+		console.warn('Failed to refresh latest chat messages after returning to chat tab:', err);
+	}
+
+	await nextTick();
+	await waitAnimationFrame();
+
+	if (generation !== chatTabLatestReturnGeneration || tab.value !== 'chat' || initializing.value || initializeError.value != null || joinRequiredRoom.value != null) return;
+
+	scrollToLatest('instant', { flushReadReceipt: true });
+	await fillInitialScrollableHistory();
+}
+
+function scheduleLatestOnChatTabReturn() {
+	chatTabLatestReturnGeneration++;
+	void ensureLatestOnChatTabReturn(chatTabLatestReturnGeneration);
+}
+
 function selectTab(key: string) {
+	const previousTab = tab.value;
 	tab.value = key;
-	if (key === 'chat' && isContextMode.value) {
+
+	if (key !== 'chat') return;
+
+	if (isContextMode.value) {
 		void exitContextToLatest();
+		return;
+	}
+
+	if (previousTab !== 'chat') {
+		scheduleLatestOnChatTabReturn();
 	}
 }
 

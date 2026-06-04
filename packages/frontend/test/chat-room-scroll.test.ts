@@ -119,6 +119,13 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /\.chatPane > :global\(\._gaps\) > :first-child \{[\s\S]*?margin-top: auto;/);
 	});
 
+	test('refreshes and scrolls to latest when returning from another chat tab', () => {
+		assert.match(roomSource, /async function ensureLatestOnChatTabReturn/);
+		assert.match(roomSource, /const previousTab = tab\.value;[\s\S]*if \(previousTab !== 'chat'\) \{[\s\S]*scheduleLatestOnChatTabReturn/);
+		assert.match(roomSource, /function scheduleLatestOnChatTabReturn\(\) \{[\s\S]*ensureLatestOnChatTabReturn/);
+		assert.match(roomSource, /await fetchLatestGap\(\);[\s\S]*scrollToLatest\('instant', \{ flushReadReceipt: true \}\);/);
+	});
+
 	test('sorts context/search messages by creation time before id', () => {
 		const sorted = sortChatMessagesForTimeline([
 			{ id: 'z', createdAt: '2026-06-01T00:00:00.000Z' },
