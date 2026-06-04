@@ -172,7 +172,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkAcct from '@/components/global/MkAcct.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
-import { ChatAutoScrollState, getChatScrollMetrics, sortChatMessagesForTimeline } from './room-scroll.js';
+import { ChatAutoScrollState, ChatReadReceiptBatcher, getChatScrollMetrics, isChatMessageVisibleAtLatestEdge, mergeChatMessagesForTimeline, prependChatMessageForTimeline } from './room-scroll.js';
 
 const $i = ensureSignin();
 const router = useRouter();
@@ -220,7 +220,6 @@ const contextTargetMessageId = ref<string | null>(null);
 const pendingContextScrollId = ref<string | null>(null);
 const usersById = ref(new Map<string, Misskey.entities.UserLite>());
 
-const SCROLL_HEAD_THRESHOLD = 200;
 const SCROLL_LATEST_THRESHOLD = 24;
 const SCROLL_AUTO_STICK_THRESHOLD = 4;
 const SCROLL_HISTORY_THRESHOLD = 480;
@@ -228,14 +227,27 @@ const SCROLL_TAIL_THRESHOLD = 480;
 const USER_SCROLL_INTERACTION_LOCK_MS = 1200;
 const TIMELINE_LIMIT = 20;
 const CONTEXT_LIMIT = 30;
+const INITIAL_HISTORY_FILL_LIMIT = 6;
 const MAX_ROOM_MESSAGES = 500;
 const STREAM_CONNECT_TIMEOUT = 5000;
+const CHAT_READ_RECEIPT_MIN_INTERVAL_MS = 2000;
 const autoScrollState = new ChatAutoScrollState({
 	latestThreshold: SCROLL_LATEST_THRESHOLD,
 	interactionLockMs: USER_SCROLL_INTERACTION_LOCK_MS,
 });
+const readReceiptBatcher = new ChatReadReceiptBatcher({
+	minIntervalMs: CHAT_READ_RECEIPT_MIN_INTERVAL_MS,
+	canSend: () => !window.document.hidden && isActivated,
+	send: messageId => {
+		connection.value?.send('read', {
+			id: messageId,
+		});
+	},
+});
 let removeTimelineScrollListener: (() => void) | null = null;
 let pendingStickToLatestFrame: number | null = null;
+let pendingIncomingMessageFrame: number | null = null;
+let pendingIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
 let historyFetchArmed = true;
 let newerFetchArmed = true;
 let scrollRestorationDepth = 0;
@@ -280,7 +292,7 @@ function clearNewMessageIndicator() {
 	newMessageCount.value = 0;
 }
 
-function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
+function scrollToLatest(behavior: ScrollBehavior = 'smooth', options?: { flushReadReceipt?: boolean }) {
 	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 	autoScrollState.markLatest();
 	const scrollTop = scrollContainer == null ? 0 : getChatScrollMetrics(scrollContainer).maxScrollTop;
@@ -289,6 +301,9 @@ function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
 		behavior,
 	});
 	clearNewMessageIndicator();
+	if (options?.flushReadReceipt === true) {
+		readReceiptBatcher.flush();
+	}
 	newerFetchArmed = false;
 	historyFetchArmed = true;
 }
@@ -316,7 +331,7 @@ function setupTimelineScrollListener() {
 			fetchMore();
 		}
 
-		if (latestDistance < SCROLL_HEAD_THRESHOLD) {
+		if (latestDistance <= SCROLL_LATEST_THRESHOLD) {
 			clearNewMessageIndicator();
 		}
 
@@ -465,6 +480,22 @@ function scrollMessageIntoView(messageId: string, block: ScrollLogicalPosition =
 	return true;
 }
 
+function isMessageVisibleAtLatestEdge(messageId: string): boolean {
+	if (timelineEl.value == null) return false;
+
+	const scrollContainer = getScrollContainer(timelineEl.value);
+	if (scrollContainer == null) return true;
+
+	const element = timelineEl.value.querySelector<HTMLElement>(`[data-scroll-anchor="${CSS.escape(messageId)}"]`);
+	if (element == null) return false;
+
+	return isChatMessageVisibleAtLatestEdge(
+		scrollContainer.getBoundingClientRect(),
+		element.getBoundingClientRect(),
+		SCROLL_LATEST_THRESHOLD,
+	);
+}
+
 function waitAnimationFrame() {
 	return new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
 }
@@ -560,10 +591,6 @@ function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.en
 	};
 }
 
-function sortMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
-	return sortChatMessagesForTimeline(items);
-}
-
 function isPendingMessage(message: NormalizedChatMessage): boolean {
 	return message.sendStatus === 'pending';
 }
@@ -581,37 +608,18 @@ function findOldestPersistedMessageId(): string | undefined {
 	return undefined;
 }
 
-function trimMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
-	if (!isRoomChat.value || isContextMode.value || items.length <= MAX_ROOM_MESSAGES) return items;
-	return items.slice(0, MAX_ROOM_MESSAGES);
+function messageLimit(): number | undefined {
+	return isRoomChat.value && !isContextMode.value ? MAX_ROOM_MESSAGES : undefined;
 }
 
 function mergeMessages(...sources: NormalizedChatMessage[][]): NormalizedChatMessage[] {
-	const map = new Map<string, NormalizedChatMessage>();
-
-	for (const source of sources) {
-		for (const message of source) {
-			map.set(message.id, message);
-		}
-	}
-
-	return trimMessages(sortMessages([...map.values()]));
+	if (sources.length === 0) return [];
+	if (sources.length === 1) return mergeChatMessagesForTimeline([], sources[0], { limit: messageLimit() });
+	return mergeChatMessagesForTimeline(sources[0], sources[1], { limit: messageLimit() });
 }
 
 function prependMessage(message: NormalizedChatMessage) {
-	const existingIndex = messages.value.findIndex(item => item.id === message.id);
-	if (existingIndex !== -1) {
-		messages.value[existingIndex] = message;
-		return;
-	}
-
-	const current = messages.value;
-	if (current.length === 0 || message.id > current[0].id) {
-		messages.value = trimMessages([message, ...current]);
-		return;
-	}
-
-	messages.value = mergeMessages(current, [message]);
+	messages.value = prependChatMessageForTimeline(messages.value, message, { limit: messageLimit() });
 }
 
 function appendFetchedMessages(fetched: Misskey.entities.ChatMessageLite[]) {
@@ -630,6 +638,32 @@ function isSameOutgoingMessage(a: NormalizedChatMessage, b: NormalizedChatMessag
 		(a.fileId ?? null) === (b.fileId ?? null) &&
 		(a.replyId ?? null) === (b.replyId ?? null) &&
 		(a.quoteId ?? null) === (b.quoteId ?? null);
+}
+
+function outgoingMessageKey(message: NormalizedChatMessage): string {
+	return [
+		message.fromUserId,
+		message.toUserId ?? '',
+		message.toRoomId ?? '',
+		message.text ?? '',
+		message.fileId ?? '',
+		message.replyId ?? '',
+		message.quoteId ?? '',
+	].join('\u001f');
+}
+
+function removeMatchingPendingMessagesFrom(current: NormalizedChatMessage[], incoming: NormalizedChatMessage[]): NormalizedChatMessage[] {
+	if (incoming.length === 0) return current;
+
+	const incomingKeys = new Set(incoming.map(message => outgoingMessageKey(message)));
+	let removed = false;
+	const next = current.filter(message => {
+		if (!isPendingMessage(message) || !incomingKeys.has(outgoingMessageKey(message))) return true;
+		removed = true;
+		return false;
+	});
+
+	return removed ? next : current;
 }
 
 function removePendingMessage(clientId: string) {
@@ -688,6 +722,7 @@ async function waitChannelConnected() {
 }
 
 function connectStream() {
+	readReceiptBatcher.flush({ force: true });
 	connection.value?.dispose();
 
 	if (props.userId) {
@@ -748,6 +783,7 @@ async function initializeContextTimeline(messageId: string) {
 }
 
 async function loadLatestTimeline() {
+	clearIncomingMessageQueue({ flushReadReceipt: true });
 	messages.value = [];
 	canFetchMore.value = false;
 	canFetchNewer.value = false;
@@ -805,6 +841,7 @@ async function exitContextToLatest() {
 
 async function openMessageContext(messageId: string) {
 	tab.value = 'chat';
+	clearIncomingMessageQueue({ flushReadReceipt: true });
 	initializeError.value = null;
 	joinRequiredRoom.value = null;
 	canFetchMore.value = false;
@@ -831,6 +868,7 @@ async function openMessageContext(messageId: string) {
 
 async function openReferenceMessage(messageId: string) {
 	tab.value = 'chat';
+	clearIncomingMessageQueue({ flushReadReceipt: true });
 	initializeError.value = null;
 	joinRequiredRoom.value = null;
 	showIndicator.value = false;
@@ -888,16 +926,19 @@ async function finishInitializeRender() {
 		await nextTick();
 		await waitAnimationFrame();
 		scrollToLatest('instant');
+		await fillInitialScrollableHistory();
 	}
 }
 
 async function initialize() {
 	initializing.value = true;
+	clearIncomingMessageQueue({ flushReadReceipt: true });
 	initializeError.value = null;
 	joinRequiredRoom.value = null;
 	canFetchMore.value = false;
 	canFetchNewer.value = false;
 	messages.value = [];
+	readReceiptBatcher.flush({ force: true });
 	connection.value?.dispose();
 	connection.value = null;
 	showIndicator.value = false;
@@ -993,18 +1034,19 @@ let isActivated = true;
 
 onActivated(() => {
 	isActivated = true;
+	readReceiptBatcher.flush();
 });
 
 onDeactivated(() => {
 	isActivated = false;
 });
 
-async function fetchMore() {
+async function fetchMore(options: { keepLatest?: boolean } = {}) {
 	const LIMIT = 30;
 	const untilId = findOldestPersistedMessageId();
 	if (!canFetchMore.value || moreFetching.value || untilId == null) return;
 
-	const anchor = getVisibleMessageAnchor();
+	const anchor = options.keepLatest ? null : getVisibleMessageAnchor();
 	beginScrollRestoration();
 	moreFetching.value = true;
 
@@ -1024,14 +1066,35 @@ async function fetchMore() {
 		canFetchMore.value = newMessages.length === LIMIT;
 	} finally {
 		moreFetching.value = false;
-		// The loading row is part of the scroll layout, so restore only after it is gone.
-		await restoreVisibleMessageAnchorAfterLayout(anchor);
+		if (options.keepLatest) {
+			await nextTick();
+			await waitAnimationFrame();
+			scrollToLatest('instant');
+		} else {
+			// The loading row is part of the scroll layout, so restore only after it is gone.
+			await restoreVisibleMessageAnchorAfterLayout(anchor);
+		}
 		endScrollRestoration();
 		nextTick(() => {
 			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 			if (scrollContainer == null) return;
 			historyFetchArmed = getChatScrollMetrics(scrollContainer).historyDistance >= SCROLL_HISTORY_THRESHOLD;
 		});
+	}
+}
+
+async function fillInitialScrollableHistory() {
+	if (isContextMode.value) return;
+
+	for (let i = 0; i < INITIAL_HISTORY_FILL_LIMIT; i++) {
+		await nextTick();
+		await waitAnimationFrame();
+
+		const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+		if (scrollContainer == null || messages.value.length === 0 || !canFetchMore.value || moreFetching.value) return;
+		if (scrollContainer.scrollHeight > scrollContainer.clientHeight + 1) return;
+
+		await fetchMore({ keepLatest: true });
 	}
 }
 
@@ -1069,12 +1132,40 @@ async function fetchNewer() {
 	}
 }
 
-function onMessage(message: Misskey.entities.ChatMessageLite) {
+function clearIncomingMessageQueue(options?: { flushReadReceipt?: boolean }) {
+	if (options?.flushReadReceipt === true) {
+		readReceiptBatcher.flush({ force: true });
+	}
+
+	pendingIncomingMessages = [];
+	if (pendingIncomingMessageFrame != null) {
+		window.cancelAnimationFrame(pendingIncomingMessageFrame);
+		pendingIncomingMessageFrame = null;
+	}
+	if (options?.flushReadReceipt !== true) {
+		readReceiptBatcher.cancel();
+	}
+}
+
+function getNewestMessage(messages: NormalizedChatMessage[]): NormalizedChatMessage | null {
+	let newest: NormalizedChatMessage | null = null;
+	for (const message of messages) {
+		if (newest == null || message.id > newest.id) {
+			newest = message;
+		}
+	}
+	return newest;
+}
+
+function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) {
+	if (batch.length === 0) return;
+
 	if (isContextMode.value) {
-		const normalized = normalizeMessage(message);
-		removeMatchingPendingMessage(normalized);
-		if (message.fromUserId !== $i.id) {
-			notifyNewMessage();
+		const normalized = batch.map(message => normalizeMessage(message));
+		messages.value = removeMatchingPendingMessagesFrom(messages.value, normalized);
+		const otherCount = normalized.filter(message => message.fromUserId !== $i.id).length;
+		if (otherCount > 0) {
+			notifyNewMessages(otherCount);
 		}
 		return;
 	}
@@ -1089,9 +1180,15 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 		sound.playMisskeySfx('chatMessage');
 	}
 
-	const normalized = normalizeMessage(message);
-	removeMatchingPendingMessage(normalized);
-	prependMessage(normalized);
+	const normalized = batch.map(message => normalizeMessage(message));
+	const newestOtherMessage = getNewestMessage(normalized.filter(message => message.fromUserId !== $i.id));
+	const firstNormalized = normalized[0];
+	if (firstNormalized == null) return;
+
+	const current = removeMatchingPendingMessagesFrom(messages.value, normalized);
+	messages.value = normalized.length === 1
+		? prependChatMessageForTimeline(current, firstNormalized, { limit: messageLimit() })
+		: mergeChatMessagesForTimeline(current, normalized, { limit: messageLimit() });
 	if (!wasAtLatest) {
 		void restoreVisibleMessageAnchorAfterLayout(anchor).finally(() => {
 			historyFetchArmed = true;
@@ -1101,18 +1198,40 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 	}
 
 	// TODO: DOM的にバックグラウンドになっていないかどうかも考慮する
-	if (message.fromUserId !== $i.id && !window.document.hidden && isActivated) {
-		connection.value?.send('read', {
-			id: message.id,
-		});
+	if (newestOtherMessage != null && !window.document.hidden && isActivated) {
+		readReceiptBatcher.queue(newestOtherMessage.id);
 	}
 
-	if (message.fromUserId !== $i.id) {
+	if (newestOtherMessage != null) {
 		if (wasAtLatest) {
-			nextTick(() => scrollToLatest('instant'));
+			nextTick(() => {
+				scrollToLatest('instant');
+				clearNewMessageIndicator();
+			});
 		} else {
-			notifyNewMessage();
+			nextTick(async () => {
+				await waitAnimationFrame();
+				if (isMessageVisibleAtLatestEdge(newestOtherMessage.id)) {
+					clearNewMessageIndicator();
+				} else {
+					notifyNewMessages(normalized.filter(message => message.fromUserId !== $i.id).length);
+				}
+			});
 		}
+	}
+}
+
+function flushIncomingMessages() {
+	pendingIncomingMessageFrame = null;
+	const batch = pendingIncomingMessages;
+	pendingIncomingMessages = [];
+	processIncomingMessageBatch(batch);
+}
+
+function onMessage(message: Misskey.entities.ChatMessageLite) {
+	pendingIncomingMessages.push(message);
+	if (pendingIncomingMessageFrame == null) {
+		pendingIncomingMessageFrame = window.requestAnimationFrame(flushIncomingMessages);
 	}
 }
 
@@ -1129,6 +1248,7 @@ function onDeletedMany(ids: string[]) {
 }
 
 function onCleared() {
+	clearIncomingMessageQueue({ flushReadReceipt: true });
 	messages.value = [];
 	canFetchMore.value = false;
 	canFetchNewer.value = false;
@@ -1185,12 +1305,12 @@ function onIndicatorClick() {
 		return;
 	}
 
-	scrollToLatest();
+	scrollToLatest('smooth', { flushReadReceipt: true });
 }
 
-function notifyNewMessage() {
+function notifyNewMessages(count = 1) {
 	showIndicator.value = true;
-	newMessageCount.value += 1;
+	newMessageCount.value += count;
 }
 
 function setReplyTarget(message: NormalizedChatMessage) {
@@ -1207,7 +1327,7 @@ function setQuoteTarget(message: NormalizedChatMessage) {
 
 function onVisibilitychange() {
 	if (window.document.hidden) return;
-	// TODO
+	readReceiptBatcher.flush();
 }
 
 onMounted(() => {
@@ -1231,8 +1351,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+	readReceiptBatcher.flush({ force: true });
 	connection.value?.dispose();
 	removeTimelineScrollListener?.();
+	clearIncomingMessageQueue();
 	if (pendingStickToLatestFrame != null) {
 		window.cancelAnimationFrame(pendingStickToLatestFrame);
 		pendingStickToLatestFrame = null;
@@ -1610,10 +1732,12 @@ definePage(computed(() => {
 	margin: 0 auto;
 	padding: 14px 18px;
 	box-sizing: border-box;
-	overflow: clip;
+	overflow-x: hidden;
 	overflow-y: scroll;
 	overflow-anchor: none;
 	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+	touch-action: pan-y;
 	scrollbar-gutter: stable;
 	display: flex;
 	flex-direction: column;
@@ -1627,9 +1751,13 @@ definePage(computed(() => {
 .chatPane > :global(._gaps) {
 	width: 100%;
 	min-height: 100%;
+	flex: 0 0 auto;
 	display: flex;
 	flex-direction: column;
-	justify-content: flex-end;
+}
+
+.chatPane > :global(._gaps) > :first-child {
+	margin-top: auto;
 }
 
 .searchPane {
