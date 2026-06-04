@@ -179,6 +179,7 @@ import MkAcct from '@/components/global/MkAcct.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
 import { ChatAutoScrollState, ChatReadReceiptBatcher, getChatScrollMetrics, isChatMessageVisibleAtLatestEdge, mergeChatMessagesForTimeline, prependChatMessageForTimeline } from './room-scroll.js';
+import { hasChatUserResolvedAvatar, mergeChatUserForCache } from './room-user-cache.js';
 
 const $i = ensureSignin();
 const router = useRouter();
@@ -226,6 +227,9 @@ const timeline = makeDateSeparatedTimelineComputedRef(messages);
 const contextTargetMessageId = ref<string | null>(null);
 const pendingContextScrollId = ref<string | null>(null);
 const usersById = ref(new Map<string, Misskey.entities.UserLite>());
+const usersRefreshingById = new Set<string>();
+const usersRefreshFailedById = new Set<string>();
+const usersRefreshQueue = new Map<string, Misskey.entities.UserLite>();
 const showScrollToLatestButton = ref(false);
 
 const SCROLL_LATEST_THRESHOLD = 24;
@@ -239,6 +243,8 @@ const INITIAL_HISTORY_FILL_LIMIT = 6;
 const MAX_ROOM_MESSAGES = 500;
 const STREAM_CONNECT_TIMEOUT = 5000;
 const CHAT_READ_RECEIPT_MIN_INTERVAL_MS = 2000;
+const CHAT_USER_REFRESH_BATCH_SIZE = 20;
+const CHAT_USER_REFRESH_DELAY_MS = 250;
 const autoScrollState = new ChatAutoScrollState({
 	latestThreshold: SCROLL_LATEST_THRESHOLD,
 	interactionLockMs: USER_SCROLL_INTERACTION_LOCK_MS,
@@ -256,6 +262,7 @@ let removeTimelineScrollListener: (() => void) | null = null;
 let pendingStickToLatestFrame: number | null = null;
 let pendingIncomingMessageFrame: number | null = null;
 let pendingIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
+let pendingUserRefreshTimer: number | null = null;
 let historyFetchArmed = true;
 let newerFetchArmed = true;
 let scrollRestorationDepth = 0;
@@ -568,9 +575,154 @@ useMutationObserver(timelineEl, {
 	scheduleStickToLatestAfterMutation();
 });
 
+function refreshMessagesForUser(userId: string) {
+	let changed = false;
+	const refreshMessage = (message: NormalizedChatMessage): NormalizedChatMessage => {
+		let next = message;
+		const cached = usersById.value.get(message.fromUserId);
+		if (message.fromUserId === userId && cached != null && message.fromUser !== cached) {
+			next = {
+				...next,
+				fromUser: cached,
+			};
+			changed = true;
+		}
+
+		if (next.reply?.fromUserId === userId) {
+			const reply = refreshMessage(next.reply);
+			if (reply !== next.reply) {
+				next = {
+					...next,
+					reply,
+				};
+			}
+		}
+
+		if (next.quote?.fromUserId === userId) {
+			const quote = refreshMessage(next.quote);
+			if (quote !== next.quote) {
+				next = {
+					...next,
+					quote,
+				};
+			}
+		}
+
+		const reactions = next.reactions.map(record => {
+			if (record.user == null) return record;
+			if (record.user.id !== userId) return record;
+			const reactionUser = usersById.value.get(record.user.id);
+			if (reactionUser == null || reactionUser === record.user) return record;
+			changed = true;
+			return {
+				...record,
+				user: reactionUser,
+			};
+		});
+		if (reactions.some((record, index) => record !== next.reactions[index])) {
+			next = {
+				...next,
+				reactions,
+			};
+		}
+
+		return next;
+	};
+
+	const refreshed = messages.value.map(message => refreshMessage(message));
+	if (changed) {
+		messages.value = refreshed;
+	}
+}
+
+function applyResolvedUser(user: Misskey.entities.UserLite) {
+	const existing = usersById.value.get(user.id);
+	const merged = existing == null ? user : mergeChatUserForCache(existing, user);
+	usersById.value.set(user.id, merged);
+
+	if (existing !== merged) {
+		refreshMessagesForUser(user.id);
+	}
+}
+
+function flushUserRefreshQueue() {
+	pendingUserRefreshTimer = null;
+	const requestedUsers = Array.from(usersRefreshQueue.values()).slice(0, CHAT_USER_REFRESH_BATCH_SIZE);
+	if (requestedUsers.length === 0) return;
+
+	for (const user of requestedUsers) {
+		usersRefreshQueue.delete(user.id);
+		usersRefreshingById.add(user.id);
+	}
+
+	const localUserIds = requestedUsers.filter(user => user.host == null).map(user => user.id);
+	const remoteUsers = requestedUsers.filter(user => user.host != null);
+
+	Promise.all([
+		localUserIds.length > 0
+			? misskeyApi('users/show', {
+				userIds: localUserIds,
+				detail: false,
+			}).catch(err => {
+				console.warn('Failed to refresh local chat message users:', err);
+				return [] as Misskey.entities.UserLite[];
+			})
+			: Promise.resolve([] as Misskey.entities.UserLite[]),
+		Promise.all(remoteUsers.map(user => misskeyApi('users/show', {
+			username: user.username,
+			host: user.host,
+			detail: false,
+		}).catch(err => {
+			console.warn('Failed to refresh remote chat message user:', err);
+			return null;
+		}))),
+	]).then(([localUsers, resolvedRemoteUsers]) => {
+		const refreshedUsers = [
+			...(localUsers as Misskey.entities.UserLite[]),
+			...resolvedRemoteUsers.filter(user => user != null),
+		] as Misskey.entities.UserLite[];
+		const refreshedUserIds = new Set(refreshedUsers.map(user => user.id));
+
+		for (const user of refreshedUsers) {
+			applyResolvedUser(user);
+			if (hasChatUserResolvedAvatar(user)) {
+				usersRefreshFailedById.delete(user.id);
+			} else {
+				usersRefreshFailedById.add(user.id);
+			}
+		}
+
+		for (const user of requestedUsers) {
+			if (!refreshedUserIds.has(user.id)) {
+				usersRefreshFailedById.add(user.id);
+			}
+		}
+	}).finally(() => {
+		for (const user of requestedUsers) {
+			usersRefreshingById.delete(user.id);
+		}
+		if (usersRefreshQueue.size > 0 && pendingUserRefreshTimer == null) {
+			pendingUserRefreshTimer = window.setTimeout(flushUserRefreshQueue, CHAT_USER_REFRESH_DELAY_MS);
+		}
+	});
+}
+
+function queueUserRefresh(user: Misskey.entities.UserLite) {
+	if (user.id === $i.id) return;
+	if (hasChatUserResolvedAvatar(user)) return;
+	if (usersRefreshingById.has(user.id) || usersRefreshFailedById.has(user.id)) return;
+	usersRefreshQueue.set(user.id, user);
+	if (pendingUserRefreshTimer == null) {
+		pendingUserRefreshTimer = window.setTimeout(flushUserRefreshQueue, CHAT_USER_REFRESH_DELAY_MS);
+	}
+}
+
 function rememberUser(user: Misskey.entities.UserLite | null | undefined) {
 	if (user == null) return;
-	usersById.value.set(user.id, user);
+	const existing = usersById.value.get(user.id);
+	const merged = existing == null ? user : mergeChatUserForCache(existing, user);
+	usersById.value.set(user.id, merged);
+	queueUserRefresh(merged);
 }
 
 function rememberMessageUsers(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage) {
@@ -585,7 +737,7 @@ function rememberMessageUsers(message: Misskey.entities.ChatMessageLite | Misske
 function resolveUser(userId: string, packedUser?: Misskey.entities.UserLite | null): Misskey.entities.UserLite | null {
 	if (packedUser != null) {
 		rememberUser(packedUser);
-		return packedUser;
+		return usersById.value.get(packedUser.id) ?? packedUser;
 	}
 
 	if (userId === $i.id) return $i;
@@ -1423,6 +1575,11 @@ onBeforeUnmount(() => {
 		window.cancelAnimationFrame(pendingStickToLatestFrame);
 		pendingStickToLatestFrame = null;
 	}
+	if (pendingUserRefreshTimer != null) {
+		window.clearTimeout(pendingUserRefreshTimer);
+		pendingUserRefreshTimer = null;
+	}
+	usersRefreshQueue.clear();
 	window.document.removeEventListener('visibilitychange', onVisibilitychange);
 });
 
