@@ -8,7 +8,12 @@ import { AiService, AiServiceError } from '@/core/AiService.js';
 
 describe('AiService', () => {
 	function createService() {
-		const meta = {
+		const meta: {
+			enableAi: boolean;
+			showAiInNavbar: boolean;
+			aiDefaultProviderId: string | null;
+			aiMaxContextMessages: number;
+		} = {
 			enableAi: true,
 			showAiInNavbar: true,
 			aiDefaultProviderId: null,
@@ -189,7 +194,7 @@ describe('AiService', () => {
 		})).rejects.toThrow(AiServiceError);
 	});
 
-	it('does not expose providers without explicit allowed models to users', async () => {
+	it('uses fetched provider models when no explicit allow-list is configured', async () => {
 		const { service, providers, meta } = createService();
 		providers.set('provider1', createProvider({
 			models: ['gpt-4o'],
@@ -197,18 +202,13 @@ describe('AiService', () => {
 		}));
 		meta.aiDefaultProviderId = 'provider1';
 
-		await expect(service.streamChat({
-			user: { id: 'user1' } as never,
-			providerId: 'provider1',
-			model: 'gpt-4o',
-			content: 'hello',
-		})).rejects.toMatchObject({
-			code: 'NO_MODELS',
-		});
-
 		await expect(service.getStatus()).resolves.toMatchObject({
-			providers: [],
-			defaultProviderId: null,
+			providers: [expect.objectContaining({
+				id: 'provider1',
+				defaultModel: 'gpt-4o',
+				allowedModels: ['gpt-4o'],
+			})],
+			defaultProviderId: 'provider1',
 		});
 	});
 

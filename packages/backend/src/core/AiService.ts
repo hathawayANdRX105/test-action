@@ -669,7 +669,10 @@ export class AiService {
 
 	@bindThis
 	private getAllowedModels(provider: MiAiProvider): string[] {
-		return this.normalizeModelList(provider.allowedModels);
+		const allowedModels = this.normalizeModelList(provider.allowedModels);
+		if (allowedModels.length > 0) return allowedModels;
+
+		return this.normalizeModelList(provider.models);
 	}
 
 	@bindThis
