@@ -70,20 +70,29 @@ type WindowButton = {
 const minHeight = 50;
 const minWidth = 250;
 
+const dragControllers = new Set<AbortController>();
+
 function dragListen(fn: (ev: MouseEvent | TouchEvent) => void) {
-	window.addEventListener('mousemove', fn);
-	window.addEventListener('touchmove', fn);
-	window.addEventListener('mouseleave', dragClear.bind(null, fn));
-	window.addEventListener('mouseup', dragClear.bind(null, fn));
-	window.addEventListener('touchend', dragClear.bind(null, fn));
+	const controller = new AbortController();
+	const clear = () => {
+		controller.abort();
+		dragControllers.delete(controller);
+	};
+	dragControllers.add(controller);
+
+	const options = { signal: controller.signal };
+	window.addEventListener('mousemove', fn, options);
+	window.addEventListener('touchmove', fn, options);
+	window.addEventListener('mouseleave', clear, options);
+	window.addEventListener('mouseup', clear, options);
+	window.addEventListener('touchend', clear, options);
 }
 
-function dragClear(fn) {
-	window.removeEventListener('mousemove', fn);
-	window.removeEventListener('touchmove', fn);
-	window.removeEventListener('mouseleave', dragClear);
-	window.removeEventListener('mouseup', dragClear);
-	window.removeEventListener('touchend', dragClear);
+function clearDragListeners() {
+	for (const controller of dragControllers) {
+		controller.abort();
+	}
+	dragControllers.clear();
 }
 
 const props = withDefaults(defineProps<{
@@ -471,6 +480,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	window.removeEventListener('resize', onBrowserResize);
+	clearDragListeners();
 });
 
 defineExpose({

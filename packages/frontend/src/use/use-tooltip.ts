@@ -13,11 +13,12 @@ export function useTooltip(
 ): void {
 	let isHovering = false;
 
-	let timeoutId: number;
+	let timeoutId: number | undefined;
+	let boundEl: HTMLElement | undefined;
 
 	let changeShowingState: (() => void) | null;
 
-	let autoHidingTimer;
+	let autoHidingTimer: number | undefined;
 
 	const open = () => {
 		close();
@@ -44,6 +45,14 @@ export function useTooltip(
 	};
 
 	const close = () => {
+		if (timeoutId != null) {
+			window.clearTimeout(timeoutId);
+			timeoutId = undefined;
+		}
+		if (autoHidingTimer != null) {
+			window.clearInterval(autoHidingTimer);
+			autoHidingTimer = undefined;
+		}
 		if (changeShowingState != null) {
 			changeShowingState();
 			changeShowingState = null;
@@ -79,15 +88,26 @@ export function useTooltip(
 		close();
 	};
 
+	const removeListeners = () => {
+		if (!boundEl) return;
+		boundEl.removeEventListener('pointerover', onPointerover);
+		boundEl.removeEventListener('mouseleave', onMouseleave);
+		boundEl.removeEventListener('touchstart', onTouchstart);
+		boundEl.removeEventListener('touchend', onTouchend);
+		boundEl.removeEventListener('click', close);
+		boundEl = undefined;
+	};
+
 	const stop = watch(elRef, () => {
+		removeListeners();
 		if (elRef.value) {
-			stop();
 			const el = elRef.value instanceof Element ? elRef.value : elRef.value.$el;
-			el.addEventListener('pointerover', onPointerover, { passive: true });
-			el.addEventListener('mouseleave', onMouseleave, { passive: true });
-			el.addEventListener('touchstart', onTouchstart, { passive: true });
-			el.addEventListener('touchend', onTouchend, { passive: true });
-			el.addEventListener('click', close, { passive: true });
+			boundEl = el;
+			boundEl.addEventListener('pointerover', onPointerover, { passive: true });
+			boundEl.addEventListener('mouseleave', onMouseleave, { passive: true });
+			boundEl.addEventListener('touchstart', onTouchstart, { passive: true });
+			boundEl.addEventListener('touchend', onTouchend, { passive: true });
+			boundEl.addEventListener('click', close, { passive: true });
 		}
 	}, {
 		immediate: true,
@@ -95,6 +115,8 @@ export function useTooltip(
 	});
 
 	onUnmounted(() => {
+		stop();
+		removeListeners();
 		close();
 	});
 }

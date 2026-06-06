@@ -205,6 +205,11 @@ onMounted(() => {
 
 onUnmounted(() => {
 	mounted.value = false;
+	if (intervalId.value != null) {
+		window.clearInterval(intervalId.value);
+		intervalId.value = undefined;
+		intervalValue.value = undefined;
+	}
 });
 </script>
 

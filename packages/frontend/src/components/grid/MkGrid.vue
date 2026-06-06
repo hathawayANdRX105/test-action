@@ -48,7 +48,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, toRefs, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, toRefs, watch } from 'vue';
 import type { DataSource, GridSetting, GridState, Size } from '@/components/grid/grid.js';
 import type { CellAddress, CellValue, GridCell } from '@/components/grid/cell.js';
 import type { GridContext, GridEvent } from '@/components/grid/grid-event.js';
@@ -128,7 +128,16 @@ const bus = new GridEventEmitter();
  *
  * @see {@link onResize}
  */
-const resizeObserver = new ResizeObserver((entries) => window.setTimeout(() => onResize(entries)));
+let resizeTimeout: number | null = null;
+const resizeObserver = new ResizeObserver((entries) => {
+	if (resizeTimeout != null) {
+		window.clearTimeout(resizeTimeout);
+	}
+	resizeTimeout = window.setTimeout(() => {
+		resizeTimeout = null;
+		onResize(entries);
+	});
+});
 
 const rootEl = ref<InstanceType<typeof HTMLTableElement>>();
 /**
@@ -1282,6 +1291,16 @@ onMounted(() => {
 	}
 
 	refreshData();
+});
+
+onBeforeUnmount(() => {
+	resizeObserver.disconnect();
+	if (resizeTimeout != null) {
+		window.clearTimeout(resizeTimeout);
+		resizeTimeout = null;
+	}
+	unregisterMouseMove();
+	unregisterMouseUp();
 });
 </script>
 

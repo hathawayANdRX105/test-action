@@ -44,6 +44,8 @@ let startScreenY: number | null = null;
 
 const rootEl = useTemplateRef('rootEl');
 let scrollEl: HTMLElement | null = null;
+let gestureController: AbortController | null = null;
+const moveIntervals = new Map<number, () => void>();
 
 const props = withDefaults(defineProps<{
 	refresher: () => Promise<void>;
@@ -56,11 +58,10 @@ const emit = defineEmits<{
 }>();
 
 function getScreenY(event: TouchEvent | MouseEvent | PointerEvent): number {
-	if (event.touches && event.touches[0] && event.touches[0].screenY != null) {
-		return event.touches[0].screenY;
-	} else {
-		return event.screenY;
+	if ('touches' in event) {
+		return event.touches[0]?.screenY ?? 0;
 	}
+	return event.screenY;
 }
 
 // When at the top of the page, disable vertical overscroll so passive touch listeners can take over.
@@ -94,11 +95,7 @@ function moveStartByMouse(event: MouseEvent) {
 	startScreenY = getScreenY(event);
 	pullDistance.value = 0;
 
-	window.addEventListener('mousemove', moving, { passive: true });
-	window.addEventListener('mouseup', () => {
-		window.removeEventListener('mousemove', moving);
-		onPullRelease();
-	}, { passive: true, once: true });
+	startGesture('mousemove', 'mouseup');
 }
 
 function moveStartByTouch(event: TouchEvent) {
@@ -116,11 +113,23 @@ function moveStartByTouch(event: TouchEvent) {
 	startScreenY = getScreenY(event);
 	pullDistance.value = 0;
 
-	window.addEventListener('touchmove', moving, { passive: true });
-	window.addEventListener('touchend', () => {
-		window.removeEventListener('touchmove', moving);
+	startGesture('touchmove', 'touchend');
+}
+
+function startGesture(moveEvent: 'mousemove' | 'touchmove', endEvent: 'mouseup' | 'touchend') {
+	clearGestureListeners();
+	gestureController = new AbortController();
+	const { signal } = gestureController;
+	window.addEventListener(moveEvent, moving, { passive: true, signal });
+	window.addEventListener(endEvent, () => {
+		clearGestureListeners();
 		onPullRelease();
-	}, { passive: true, once: true });
+	}, { passive: true, once: true, signal });
+}
+
+function clearGestureListeners() {
+	gestureController?.abort();
+	gestureController = null;
 }
 
 function moveBySystem(to: number): Promise<void> {
@@ -132,11 +141,12 @@ function moveBySystem(to: number): Promise<void> {
 			return;
 		}
 		const startTime = Date.now();
-		let intervalId = window.setInterval(() => {
+		const intervalId = window.setInterval(() => {
 			const time = Date.now() - startTime;
 			if (time > RELEASE_TRANSITION_DURATION) {
 				pullDistance.value = to;
 				window.clearInterval(intervalId);
+				moveIntervals.delete(intervalId);
 				r();
 				return;
 			}
@@ -144,6 +154,7 @@ function moveBySystem(to: number): Promise<void> {
 			if (pullDistance.value < nextHeight) return;
 			pullDistance.value = nextHeight;
 		}, 1);
+		moveIntervals.set(intervalId, r);
 	});
 }
 
@@ -160,6 +171,7 @@ async function closeContent() {
 }
 
 function onPullRelease() {
+	clearGestureListeners();
 	startScreenY = null;
 	if (isPulledEnough.value) {
 		isPulledEnough.value = false;
@@ -226,6 +238,12 @@ onMounted(() => {
 
 onUnmounted(() => {
 	unlockDownScroll();
+	clearGestureListeners();
+	for (const [intervalId, resolve] of moveIntervals) {
+		window.clearInterval(intervalId);
+		resolve();
+	}
+	moveIntervals.clear();
 	if (rootEl.value) rootEl.value.removeEventListener('mousedown', moveStartByMouse);
 	if (rootEl.value) rootEl.value.removeEventListener('touchstart', moveStartByTouch);
 	if (rootEl.value) rootEl.value.removeEventListener('touchend', toggleScrollLockOnTouchEnd);
