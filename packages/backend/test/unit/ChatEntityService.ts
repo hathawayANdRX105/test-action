@@ -213,4 +213,80 @@ describe('ChatEntityService chat message mention cache', () => {
 		expect(ctx.roleService.isAdministrator).toHaveBeenCalledTimes(1);
 		expect(ctx.roleService.isModerator).toHaveBeenCalledTimes(1);
 	});
+
+	test('packs owned rooms as manageable with retention settings visible', async () => {
+		const ctx = createService();
+		ctx.chatRoomMembershipsRepository.countBy.mockResolvedValueOnce(2);
+		const room = {
+			id: 'room-owned',
+			name: 'owned room',
+			description: null,
+			joinMode: 'open',
+			ownerId: 'me',
+			owner: { id: 'me' },
+			memberLimitOverride: null,
+			messageRetentionDays: 30,
+		};
+
+		const packed = await ctx.service.packRoom(room, { id: 'me' });
+
+		expect(packed.canManage).toBe(true);
+		expect(packed.messageRetentionDays).toBe(30);
+		expect(packed.isJoined).toBe(true);
+	});
+
+	test('packs moderator rooms as manageable even without membership', async () => {
+		const ctx = createService();
+		ctx.roleService.isModerator.mockResolvedValueOnce(true);
+		ctx.chatRoomMembershipsQueryBuilder.getRawMany.mockResolvedValueOnce([
+			{ roomId: 'room-moderated', count: '3' },
+		]);
+		const room = {
+			id: 'room-moderated',
+			name: 'moderated room',
+			description: null,
+			joinMode: 'open',
+			ownerId: 'owner',
+			owner: { id: 'owner' },
+			memberLimitOverride: null,
+			messageRetentionDays: 14,
+		};
+
+		const [packed] = await ctx.service.packRooms([room], { id: 'moderator' });
+
+		expect(packed.canManage).toBe(true);
+		expect(packed.messageRetentionDays).toBe(14);
+		expect(packed.isJoined).toBe(false);
+		expect(ctx.chatRoomMembershipsRepository.find).toHaveBeenCalledWith({
+			where: {
+				roomId: expect.anything(),
+				userId: 'moderator',
+			},
+		});
+	});
+
+	test('packs administrator rooms as manageable through moderator role', async () => {
+		const ctx = createService();
+		ctx.roleService.isAdministrator.mockResolvedValueOnce(true);
+		ctx.roleService.isModerator.mockResolvedValueOnce(true);
+		ctx.chatRoomMembershipsQueryBuilder.getRawMany.mockResolvedValueOnce([
+			{ roomId: 'room-admin', count: '1' },
+		]);
+		const room = {
+			id: 'room-admin',
+			name: 'admin room',
+			description: null,
+			joinMode: 'open',
+			ownerId: 'owner',
+			owner: { id: 'owner' },
+			memberLimitOverride: null,
+			messageRetentionDays: 7,
+		};
+
+		const [packed] = await ctx.service.packRooms([room], { id: 'admin' });
+
+		expect(packed.canManage).toBe(true);
+		expect(packed.messageRetentionDays).toBe(7);
+		expect(packed.isJoined).toBe(false);
+	});
 });

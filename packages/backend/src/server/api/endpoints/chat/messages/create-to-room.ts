@@ -6,7 +6,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import { GetterService } from '@/server/api/GetterService.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatService } from '@/core/ChatService.js';
@@ -89,7 +88,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.config)
 		private config: Config,
 
-		private getterService: GetterService,
 		private chatService: ChatService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -100,12 +98,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.maxLength);
 			}
 
-			const room = await this.chatService.findRoomById(ps.toRoomId);
+			const room = await this.chatService.findRoomMessageTargetById(ps.toRoomId);
 			if (room == null) {
-				throw new ApiError(meta.errors.noSuchRoom);
-			}
-
-			if (!(await this.chatService.isRoomMember(room, me.id))) {
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
@@ -140,6 +134,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				file: file,
 				reply,
 				quote,
+			}).catch(err => {
+				if (err instanceof Error && err.message === 'you are not a member of the room') {
+					throw new ApiError(meta.errors.noSuchRoom);
+				}
+				throw err;
 			});
 		});
 	}

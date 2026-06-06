@@ -5599,6 +5599,10 @@ export interface Locale extends ILocale {
          */
         "notJoinedRoom": string;
         /**
+         * 管理権限でこのルームを表示していますが、まだ参加していません。参加するとメッセージを送信でき、メンバー一覧に表示されます。
+         */
+        "managerViewingRoomWithoutJoining": string;
+        /**
          * このルームを表示する権限がありません。
          */
         "noPermissionToViewRoom": string;
@@ -14195,6 +14199,10 @@ export interface Locale extends ILocale {
      * Migrated at
      */
     "accountMigratedAt": string;
+    /**
+     * Migration pending
+     */
+    "accountMigrationPending": string;
     /**
      * Migrated to
      */

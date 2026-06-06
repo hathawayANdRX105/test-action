@@ -180,6 +180,11 @@ describe('ChatService large room fast path', () => {
 		const remoteUserResolveService: any = {
 			resolveUser: jest.fn(async () => null),
 		};
+		const roleService: any = {
+			getUserPolicies: jest.fn(async () => ({ chatAvailability: 'available' })),
+			isAdministrator: jest.fn(async () => false),
+			isModerator: jest.fn(async () => false),
+		};
 		const service = new ChatService(
 			{} as never,
 			redisClient as never,
@@ -201,7 +206,7 @@ describe('ChatService large room fast path', () => {
 			{} as never,
 			{} as never,
 			{} as never,
-			{} as never,
+			roleService as never,
 			{} as never,
 			customEmojiService as never,
 			{} as never,
@@ -220,6 +225,7 @@ describe('ChatService large room fast path', () => {
 			chatMessagesRepository,
 			chatMessagesQueryBuilder,
 			chatRoomMembershipsRepository,
+			chatRoomInvitationsRepository,
 			chatRoomsRepository,
 			appLockService,
 			unlockChatRoomJoin,
@@ -229,6 +235,7 @@ describe('ChatService large room fast path', () => {
 			timeService,
 			mfmService,
 			remoteUserResolveService,
+			roleService,
 		};
 	}
 
@@ -375,6 +382,27 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.redisPipeline.set).toHaveBeenCalledWith('latestRoomChatMessage:room', 'message-id', 'EX', 60 * 60 * 24 * 30);
 	});
 
+	test('room owner can manage a room without moderator permission', async () => {
+		const ctx = createService(1);
+
+		const canManage = await ctx.service.hasPermissionToManageRoom({ id: 'owner' } as never, { ownerId: 'owner' } as never);
+
+		expect(canManage).toBe(true);
+		expect(ctx.roleService.isModerator).not.toHaveBeenCalled();
+	});
+
+	test('non-owner room management delegates to moderator permission', async () => {
+		const ctx = createService(1);
+		ctx.roleService.isModerator.mockResolvedValueOnce(true);
+
+		await expect(ctx.service.hasPermissionToManageRoom({ id: 'moderator' } as never, { ownerId: 'owner' } as never)).resolves.toBe(true);
+		expect(ctx.roleService.isModerator).toHaveBeenCalledWith({ id: 'moderator' });
+		expect(ctx.roleService.isAdministrator).not.toHaveBeenCalled();
+
+		ctx.roleService.isModerator.mockResolvedValueOnce(false);
+		await expect(ctx.service.hasPermissionToManageRoom({ id: 'member' } as never, { ownerId: 'owner' } as never)).resolves.toBe(false);
+	});
+
 	test('room sends cache resolved mention ids for later packing', async () => {
 		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
 		ctx.mfmService.extractMentions.mockReturnValueOnce([{ username: 'member2', host: null }]);
@@ -471,6 +499,79 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.unlockChatRoomJoin).toHaveBeenCalledTimes(1);
 		expect(ctx.redisClient.del).toHaveBeenCalledWith('chatRoomMembersCount:room');
 		expect(ctx.redisClient.del).toHaveBeenCalledTimes(2);
+	});
+
+	test('room managers can explicitly join invite-only or closed rooms they can already view', async () => {
+		const ctx = createService(2);
+		ctx.roleService.isModerator.mockResolvedValue(true);
+		ctx.chatRoomsRepository.findOneByOrFail.mockResolvedValue({
+			id: 'room',
+			ownerId: 'owner',
+			joinMode: 'closed',
+			memberLimitOverride: null,
+		});
+
+		await ctx.service.joinToRoom('moderator', 'room');
+
+		expect(ctx.roleService.isModerator).toHaveBeenCalledWith({ id: 'moderator' });
+		expect(ctx.chatRoomInvitationsRepository.findOneBy).toHaveBeenCalledWith({ roomId: 'room', userId: 'moderator' });
+		expect(ctx.chatRoomMembershipsRepository.insertOne).toHaveBeenCalledWith(expect.objectContaining({
+			roomId: 'room',
+			userId: 'moderator',
+		}));
+	});
+
+	test('non-managers still cannot join invite-only or closed rooms without an invitation', async () => {
+		const inviteOnly = createService(2);
+		inviteOnly.chatRoomsRepository.findOneByOrFail.mockResolvedValue({
+			id: 'room',
+			ownerId: 'owner',
+			joinMode: 'inviteOnly',
+			memberLimitOverride: null,
+		});
+
+		await expect(inviteOnly.service.joinToRoom('sender', 'room')).rejects.toThrow('invitation required');
+		expect(inviteOnly.chatRoomMembershipsRepository.insertOne).not.toHaveBeenCalled();
+
+		const closed = createService(2);
+		closed.chatRoomsRepository.findOneByOrFail.mockResolvedValue({
+			id: 'room',
+			ownerId: 'owner',
+			joinMode: 'closed',
+			memberLimitOverride: null,
+		});
+
+		await expect(closed.service.joinToRoom('sender', 'room')).rejects.toThrow('joining disabled');
+		expect(closed.chatRoomMembershipsRepository.insertOne).not.toHaveBeenCalled();
+	});
+
+	test('room managers cannot bypass duplicate membership or room capacity checks when joining', async () => {
+		const duplicate = createService(2);
+		duplicate.roleService.isModerator.mockResolvedValue(true);
+		duplicate.chatRoomsRepository.findOneByOrFail.mockResolvedValue({
+			id: 'room',
+			ownerId: 'owner',
+			joinMode: 'closed',
+			memberLimitOverride: null,
+		});
+		duplicate.chatRoomMembershipsRepository.findOneBy.mockResolvedValueOnce({ userId: 'moderator', isMuted: false });
+
+		await expect(duplicate.service.joinToRoom('moderator', 'room')).rejects.toThrow('already member');
+		expect(duplicate.chatRoomMembershipsRepository.insertOne).not.toHaveBeenCalled();
+		expect(duplicate.unlockChatRoomJoin).toHaveBeenCalledTimes(1);
+
+		const full = createService(10000);
+		full.roleService.isModerator.mockResolvedValue(true);
+		full.chatRoomsRepository.findOneByOrFail.mockResolvedValue({
+			id: 'room',
+			ownerId: 'owner',
+			joinMode: 'closed',
+			memberLimitOverride: null,
+		});
+
+		await expect(full.service.joinToRoom('moderator', 'room')).rejects.toThrow('room is full');
+		expect(full.chatRoomMembershipsRepository.insertOne).not.toHaveBeenCalled();
+		expect(full.unlockChatRoomJoin).toHaveBeenCalledTimes(1);
 	});
 
 	test('room join lock is released when the room is full', async () => {

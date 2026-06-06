@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="[$style.root, { [$style.isMe]: isMe, [$style.isRoom]: isRoomChat }]">
-	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="!isMe" :preview="false" @contextmenu.prevent.stop="onAvatarContextmenu"/>
+	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="false" :preview="false" @click="onAvatarClick" @contextmenu.prevent.stop="onAvatarContextmenu" @pointerdown="onAvatarPointerdown" @pointerup="stopAvatarLongPress" @pointerleave="stopAvatarLongPress" @pointercancel="stopAvatarLongPress"/>
 	<div v-else :class="[$style.avatar, $style.avatarFallback]"><i class="ti ti-user-question"></i></div>
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
 		<div :class="$style.header">
@@ -84,7 +84,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, provide } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, provide } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
@@ -104,8 +104,11 @@ import { DI } from '@/di.js';
 import { getHTMLElementOrNull } from '@/utility/get-dom-node-or-null.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
 import SkUrlPreviewGroup from '@/components/SkUrlPreviewGroup.vue';
+import { userPage } from '@/filters/user.js';
+import { useRouter } from '@/router.js';
 
 const $i = ensureSignin();
+const router = useRouter();
 
 const props = defineProps<{
 	message: NormalizedChatMessage | Misskey.entities.ChatMessage;
@@ -113,6 +116,7 @@ const props = defineProps<{
 	enableReferenceActions?: boolean;
 	canDeleteAnyMessage?: boolean;
 	canManageRoomUsers?: boolean;
+	canModerateUsers?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -142,8 +146,9 @@ type MessageWithMentionState = typeof props.message & {
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const isRoomChat = computed(() => props.message.toRoomId != null);
 const isPending = computed(() => (props.message as MessageWithSendState).sendStatus === 'pending');
-const canDelete = computed(() => !isPending.value && (isMe.value || props.canDeleteAnyMessage === true) && $i.policies.chatAvailability === 'available');
+const canDelete = computed(() => !isPending.value && (isMe.value || props.canDeleteAnyMessage === true || (props.canManageRoomUsers === true && props.message.toRoomId != null)) && $i.policies.chatAvailability === 'available');
 const canManageSender = computed(() => !isPending.value && props.canManageRoomUsers === true && !isMe.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
+const canModerateSender = computed(() => !isPending.value && props.canModerateUsers === true && !isMe.value && props.message.fromUser != null);
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
 const messageWithReferenceState = computed<MessageWithReferenceState>(() => props.message);
 const isMentionedMe = computed(() => {
@@ -212,12 +217,58 @@ function onContextmenu(ev: MouseEvent) {
 	showMenu(ev, true);
 }
 
-function onAvatarContextmenu(ev: MouseEvent) {
-	if (!canManageSender.value) {
-		showMenu(ev, true);
+let avatarLongPressTimer: ReturnType<typeof window.setTimeout> | null = null;
+let avatarLongPressEvent: MouseEvent | null = null;
+let avatarLongPressTriggered = false;
+
+function stopAvatarLongPress() {
+	if (avatarLongPressTimer != null) {
+		window.clearTimeout(avatarLongPressTimer);
+		avatarLongPressTimer = null;
+	}
+	avatarLongPressEvent = null;
+}
+
+function onAvatarPointerdown(ev: PointerEvent) {
+	if (ev.pointerType === 'mouse' || props.message.fromUser == null || isPending.value) return;
+
+	stopAvatarLongPress();
+	avatarLongPressTriggered = false;
+	const syntheticEvent = new MouseEvent('contextmenu', {
+		bubbles: true,
+		cancelable: true,
+		clientX: ev.clientX,
+		clientY: ev.clientY,
+	});
+	avatarLongPressEvent = syntheticEvent;
+	avatarLongPressTimer = window.setTimeout(() => {
+		const event = avatarLongPressEvent;
+		stopAvatarLongPress();
+		if (event == null) return;
+		avatarLongPressTriggered = true;
+		ev.preventDefault();
+		showAvatarMenu(event);
+	}, 550);
+}
+
+function onAvatarClick(ev: MouseEvent) {
+	if (avatarLongPressTriggered) {
+		avatarLongPressTriggered = false;
+		ev.preventDefault();
+		ev.stopPropagation();
 		return;
 	}
 
+	if (isMe.value || props.message.fromUser == null) return;
+	router.push(userPage(props.message.fromUser), ev.ctrlKey ? 'forcePage' : null);
+}
+
+function onAvatarContextmenu(ev: MouseEvent) {
+	showAvatarMenu(ev);
+}
+
+function showAvatarMenu(ev: MouseEvent) {
+	if (props.message.fromUser == null || isPending.value) return;
 	os.contextMenu(getAvatarMenu(), ev);
 }
 
@@ -320,98 +371,125 @@ function showMenu(ev: MouseEvent, contextmenu = false) {
 
 function getAvatarMenu(): MenuItem[] {
 	const user = props.message.fromUser!;
-	const roomId = props.message.toRoomId!;
-
-	return [{
+	const menu: MenuItem[] = [{
 		type: 'label',
 		text: user.name ?? user.username,
 		caption: `@${user.username}`,
-	}, {
-		text: i18n.ts._chat.deleteThisMessage,
-		icon: 'ti ti-trash',
-		danger: true,
-		action: async () => {
-			const confirm = await os.confirm({
-				type: 'warning',
-				text: i18n.ts._chat.deleteThisMessageConfirm,
-			});
-			if (confirm.canceled) return;
-
-			await os.apiWithDialog('chat/messages/delete', {
-				messageId: props.message.id,
-			});
-		},
-	}, {
-		text: i18n.ts._chat.deleteUserMessagesInRoom,
-		icon: 'ti ti-messages-off',
-		danger: true,
-		action: async () => {
-			const confirm = await os.confirm({
-				type: 'warning',
-				text: i18n.ts._chat.deleteUserMessagesInRoomConfirm,
-			});
-			if (confirm.canceled) return;
-
-			const res = await os.apiWithDialog('chat/rooms/manage/delete-user-messages', {
-				roomId,
-				userId: user.id,
-			});
-			emit('deletedMany', res.deletedIds);
-		},
-	}, { type: 'divider' }, {
-		text: i18n.ts.suspend,
-		icon: 'ti ti-user-off',
-		danger: true,
-		action: async () => {
-			const confirm = await os.confirm({
-				type: 'warning',
-				text: i18n.ts.suspendConfirm,
-			});
-			if (confirm.canceled) return;
-
-			await os.apiWithDialog('admin/suspend-user', {
-				userId: user.id,
-			});
-		},
-	}, {
-		text: i18n.ts.silence,
-		icon: 'ti ti-volume-off',
-		danger: true,
-		action: async () => {
-			const confirm = await os.confirm({
-				type: 'warning',
-				text: i18n.ts.silenceConfirm,
-			});
-			if (confirm.canceled) return;
-
-			await os.apiWithDialog('admin/silence-user', {
-				userId: user.id,
-			});
-		},
-	}, {
-		text: i18n.ts.moderation,
-		icon: 'ti ti-user-exclamation',
-		action: () => {
-			window.location.href = `/admin/user/${user.id}`;
-		},
-	}, { type: 'divider' }, {
-		text: i18n.ts.reportAbuse,
-		icon: 'ti ti-exclamation-circle',
-		action: () => {
-			const localUrl = `${url}/chat/messages/${props.message.id}`;
-			const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkAbuseReportWindow.vue')), {
-				user,
-				initialComment: `${localUrl}\n-----\n`,
-			}, {
-				closed: () => dispose(),
-			});
-		},
 	}];
+	const roomId = props.message.toRoomId;
+
+	if (!isMe.value && props.message.toRoomId != null && $i.policies.chatAvailability === 'available') {
+		menu.push({
+			text: i18n.ts.mention,
+			icon: 'ti ti-at',
+			action: () => emit('mention', user),
+		});
+	}
+
+	if (canManageSender.value) {
+		menu.push({
+			type: 'divider',
+		}, {
+			text: i18n.ts._chat.deleteThisMessage,
+			icon: 'ti ti-trash',
+			danger: true,
+			action: async () => {
+				const confirm = await os.confirm({
+					type: 'warning',
+					text: i18n.ts._chat.deleteThisMessageConfirm,
+				});
+				if (confirm.canceled) return;
+
+				await os.apiWithDialog('chat/messages/delete', {
+					messageId: props.message.id,
+				});
+			},
+		}, {
+			text: i18n.ts._chat.deleteUserMessagesInRoom,
+			icon: 'ti ti-messages-off',
+			danger: true,
+			action: async () => {
+				const confirm = await os.confirm({
+					type: 'warning',
+					text: i18n.ts._chat.deleteUserMessagesInRoomConfirm,
+				});
+				if (confirm.canceled) return;
+
+				const res = await os.apiWithDialog('chat/rooms/manage/delete-user-messages', {
+					roomId: roomId!,
+					userId: user.id,
+				});
+				emit('deletedMany', res.deletedIds);
+			},
+		});
+	}
+
+	if (canModerateSender.value) {
+		menu.push({ type: 'divider' }, {
+			text: i18n.ts.suspend,
+			icon: 'ti ti-user-off',
+			danger: true,
+			action: async () => {
+				const confirm = await os.confirm({
+					type: 'warning',
+					text: i18n.ts.suspendConfirm,
+				});
+				if (confirm.canceled) return;
+
+				await os.apiWithDialog('admin/suspend-user', {
+					userId: user.id,
+				});
+			},
+		}, {
+			text: i18n.ts.silence,
+			icon: 'ti ti-volume-off',
+			danger: true,
+			action: async () => {
+				const confirm = await os.confirm({
+					type: 'warning',
+					text: i18n.ts.silenceConfirm,
+				});
+				if (confirm.canceled) return;
+
+				await os.apiWithDialog('admin/silence-user', {
+					userId: user.id,
+				});
+			},
+		}, {
+			text: i18n.ts.moderation,
+			icon: 'ti ti-user-exclamation',
+			action: () => {
+				window.location.href = `/admin/user/${user.id}`;
+			},
+		});
+	}
+
+	if (!isMe.value) {
+		menu.push({ type: 'divider' }, {
+			text: i18n.ts.reportAbuse,
+			icon: 'ti ti-exclamation-circle',
+			action: () => {
+				const localUrl = `${url}/chat/messages/${props.message.id}`;
+				const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkAbuseReportWindow.vue')), {
+					user,
+					initialComment: `${localUrl}\n-----\n`,
+				}, {
+					closed: () => dispose(),
+				});
+			},
+		});
+	}
+
+	return menu;
 }
 
 function getReferenceText(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage) {
 	return message.text ?? message.file?.name ?? i18n.ts.file;
 }
+
+onBeforeUnmount(() => {
+	stopAvatarLongPress();
+});
 </script>
 
 <style lang="scss" module>

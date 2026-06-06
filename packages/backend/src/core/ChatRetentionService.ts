@@ -10,6 +10,9 @@ import type { ChatRoomsRepository } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { TimeService, type TimerHandle } from '@/global/TimeService.js';
 import { EnvService } from '@/global/EnvService.js';
+import { LoggerService } from '@/core/LoggerService.js';
+import { renderInlineError } from '@/misc/render-inline-error.js';
+import type Logger from '@/logger.js';
 import { ChatService, CHAT_ROOM_RETENTION_BATCH_SIZE } from './ChatService.js';
 import { IdService } from './IdService.js';
 import { AppLockService } from './AppLockService.js';
@@ -21,6 +24,7 @@ const CHAT_RETENTION_LOCK_TIMEOUT = 1000 * 60 * 55;
 export class ChatRetentionService implements OnApplicationBootstrap, BeforeApplicationShutdown {
 	private timerId: TimerHandle | null = null;
 	private running = false;
+	private readonly logger: Logger;
 
 	constructor(
 		@Inject(DI.chatRoomsRepository)
@@ -31,7 +35,9 @@ export class ChatRetentionService implements OnApplicationBootstrap, BeforeAppli
 		private appLockService: AppLockService,
 		private readonly timeService: TimeService,
 		private readonly envService: EnvService,
+		loggerService: LoggerService,
 	) {
+		this.logger = loggerService.getLogger('chat-retention');
 	}
 
 	@bindThis
@@ -40,12 +46,12 @@ export class ChatRetentionService implements OnApplicationBootstrap, BeforeAppli
 
 		this.timerId = this.timeService.startTimer(() => {
 			this.run().catch(err => {
-				console.error('Failed to prune old chat messages:', err);
+				this.logger.error(`Failed to prune old chat messages: ${renderInlineError(err)}`);
 			});
 		}, CHAT_RETENTION_INTERVAL, { repeated: true });
 
 		this.run().catch(err => {
-			console.error('Failed to prune old chat messages:', err);
+			this.logger.error(`Failed to prune old chat messages: ${renderInlineError(err)}`);
 		});
 	}
 

@@ -131,6 +131,9 @@ async function saveRetention() {
 }
 
 async function deleteAllMessages() {
+	const auth = await os.authenticateDialog();
+	if (auth.canceled) return;
+
 	const { canceled } = await os.confirm({
 		type: 'warning',
 		text: i18n.ts._chat.deleteAllMessagesConfirm,
@@ -139,6 +142,7 @@ async function deleteAllMessages() {
 
 	await os.apiWithDialog('chat/rooms/manage/delete-all-messages', {
 		roomId: props.room.id,
+		password: auth.result.password,
 	});
 	await loadStats();
 	emit('cleared');

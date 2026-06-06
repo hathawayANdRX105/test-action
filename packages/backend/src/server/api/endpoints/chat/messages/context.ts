@@ -91,7 +91,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			let canView = message.fromUserId === me.id || message.toUserId === me.id || await this.roleService.isModerator(me);
 			if (!canView && message.toRoomId != null) {
-				const room = await this.chatService.findRoomById(message.toRoomId);
+				const room = await this.chatService.findRoomMessageTargetById(message.toRoomId);
 				canView = room != null && await this.chatService.hasPermissionToViewRoomTimeline(me, room);
 			}
 

@@ -1396,6 +1396,7 @@ _chat:
   closedRoom: "参加禁止"
   joinRoom: "ルームに参加"
   notJoinedRoom: "あなたはまだこのルームのメンバーではありません。参加するとメッセージの閲覧とチャットができます。"
+  managerViewingRoomWithoutJoining: "管理権限でこのルームを表示していますが、まだ参加していません。参加するとメッセージを送信でき、メンバー一覧に表示されます。"
   noPermissionToViewRoom: "このルームを表示する権限がありません。"
   needInvitationToJoinRoom: "このルームを表示または参加するには、ルーム所有者からの招待が必要です。"
   joiningDisabledRoom: "このルームは参加が禁止されています。"

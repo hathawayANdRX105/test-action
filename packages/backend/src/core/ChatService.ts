@@ -544,6 +544,7 @@ export class ChatService {
 
 	@bindThis
 	public async hasPermissionToManageRoom(me: MiUser, room: MiChatRoom) {
+		if (room.ownerId === me.id) return true;
 		return await this.roleService.isModerator(me);
 	}
 
@@ -1296,13 +1297,14 @@ export class ChatService {
 	@bindThis
 	public async joinToRoom(userId: MiUser['id'], roomId: MiChatRoom['id']) {
 		const room = await this.chatRoomsRepository.findOneByOrFail({ id: roomId });
+		const isRoomManager = await this.hasPermissionToManageRoom({ id: userId } as MiUser, room);
 
-		if (room.joinMode === 'closed') {
+		if (room.joinMode === 'closed' && !isRoomManager) {
 			throw new Error('joining disabled');
 		}
 
 		const invitation = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId });
-		if (invitation == null && room.joinMode !== 'open') {
+		if (invitation == null && room.joinMode !== 'open' && !isRoomManager) {
 			throw new Error('invitation required');
 		}
 

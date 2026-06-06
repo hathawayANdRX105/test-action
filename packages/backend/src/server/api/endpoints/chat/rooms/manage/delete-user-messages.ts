@@ -14,7 +14,6 @@ export const meta = {
 	tags: ['chat'],
 
 	requireCredential: true,
-	requireModerator: true,
 
 	kind: 'write:chat',
 

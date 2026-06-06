@@ -6,12 +6,15 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { ChatService } from '@/core/ChatService.js';
+import { UserAuthService } from '@/core/UserAuthService.js';
+import { CacheService } from '@/core/CacheService.js';
 import { ApiError } from '@/server/api/error.js';
 
 export const meta = {
 	tags: ['chat'],
 
 	requireCredential: true,
+	secure: true,
 
 	kind: 'write:chat',
 
@@ -26,6 +29,11 @@ export const meta = {
 			code: 'ACCESS_DENIED',
 			id: '45392e23-7484-4cef-92fa-4e305d3c2082',
 		},
+		incorrectPassword: {
+			message: 'Incorrect password.',
+			code: 'INCORRECT_PASSWORD',
+			id: '7add0395-9901-4098-82f9-4f67af65f775',
+		},
 	},
 } as const;
 
@@ -33,14 +41,17 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		roomId: { type: 'string', format: 'misskey:id' },
+		password: { type: 'string' },
 	},
-	required: ['roomId'],
+	required: ['roomId', 'password'],
 } as const;
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
 		private chatService: ChatService,
+		private userAuthService: UserAuthService,
+		private cacheService: CacheService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			await this.chatService.checkChatAvailability(me.id, 'write');
@@ -51,6 +62,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (!await this.chatService.hasPermissionToManageRoom(me, room)) {
 				throw new ApiError(meta.errors.accessDenied);
+			}
+
+			const profile = await this.cacheService.userProfileCache.fetch(me.id);
+			if (!await this.userAuthService.checkPassword(profile, ps.password)) {
+				throw new ApiError(meta.errors.incorrectPassword);
 			}
 
 			await this.chatService.deleteAllRoomMessages(room);

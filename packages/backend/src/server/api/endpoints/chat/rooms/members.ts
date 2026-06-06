@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import { DI } from '@/di-symbols.js';
 import { ChatService } from '@/core/ChatService.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
@@ -61,7 +60,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
-			if (!(await this.chatService.isRoomMember(room, me.id))) {
+			if (!(await this.chatService.isRoomMember(room, me.id)) && !(await this.chatService.hasPermissionToManageRoom(me, room))) {
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 

@@ -345,6 +345,7 @@ export type Endpoints = Overwrite<
 		'chat/rooms/manage/delete-all-messages': {
 			req: {
 				roomId: string;
+				password: string;
 			};
 			res: EmptyResponse;
 		},

@@ -428,7 +428,7 @@ export class ChatEntityService {
 			me != null ? this.roleService.isModerator(me) : false,
 		]);
 		const canSeeOverride = me != null && (me.id === room.ownerId || isAdministrator);
-		const canManage = me != null && isModerator;
+		const canManage = me != null && (me.id === room.ownerId || isModerator);
 
 		return {
 			id: room.id,
@@ -533,7 +533,7 @@ export class ChatEntityService {
 	): Packed<'ChatRoom'> {
 		const isJoined = me.id === room.ownerId || hints.membership != null;
 		const canSeeOverride = me.id === room.ownerId || hints.isAdministrator;
-		const canManage = hints.isModerator;
+		const canManage = me.id === room.ownerId || hints.isModerator;
 
 		return {
 			id: room.id,
