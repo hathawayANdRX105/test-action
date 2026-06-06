@@ -300,7 +300,13 @@ export class NoteVisibilityService {
 		return this.checkNoteVisibilityFor(note, me, opts);
 	}
 
-	private checkNoteVisibilityFor(note: PopulatedNote, me: PopulatedMe, opts: { filters?: NoteVisibilityFilters, data: NoteVisibilityData }): NoteVisibilityResult {
+	private checkNoteVisibilityFor(note: PopulatedNote | null, me: PopulatedMe, opts: { filters?: NoteVisibilityFilters, data: NoteVisibilityData }): NoteVisibilityResult {
+		if (note == null || isPopulatedBoostWithoutTarget(note)) {
+			// Nested boosts may be intentionally packed without their target.
+			// Treat them as inaccessible instead of recursing into null.
+			return { accessible: false, redact: true, silence: true };
+		}
+
 		const accessible = this.isAccessible(note, me, opts.data, opts.filters);
 		const redact = !accessible || this.shouldRedact(note, me);
 		const silence = this.shouldSilence(note, me, opts.data, opts.filters);
@@ -587,6 +593,16 @@ interface PopulatedUser {
 }
 
 function isPopulatedBoost(note: PopulatedNote): note is PopulatedNote & { renote: PopulatedNote } {
+	return isPopulatedBoostLike(note)
+		&& note.renote != null;
+}
+
+function isPopulatedBoostWithoutTarget(note: PopulatedNote): boolean {
+	return isPopulatedBoostLike(note)
+		&& note.renote == null;
+}
+
+function isPopulatedBoostLike(note: PopulatedNote): boolean {
 	return note.renoteId != null
 		&& note.replyId == null
 		&& note.text == null

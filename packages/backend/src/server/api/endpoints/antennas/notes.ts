@@ -107,8 +107,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				await this.internalEventService.emit('antennaUpdated', antenna);
 			}
 
-			let noteIds = await this.fanoutTimelineService.get(`antennaTimeline:${antenna.id}`, untilId, sinceId);
-			noteIds = noteIds.slice(0, ps.limit);
+				const noteIds = await this.fanoutTimelineService.get(`antennaTimeline:${antenna.id}`, untilId, sinceId, Math.max(ps.limit * 3, ps.limit + 50));
 			if (noteIds.length === 0) {
 				return [];
 			}

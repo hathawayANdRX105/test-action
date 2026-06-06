@@ -40,6 +40,9 @@ export type FanoutTimelineName = (
 	| `roleTimeline:${string}` // any notes are included
 );
 
+const DEFAULT_TIMELINE_READ_LIMIT = 100;
+const TIMELINE_SCAN_CHUNK_SIZE = 200;
+
 @Injectable()
 export class FanoutTimelineService {
 	constructor(
@@ -76,41 +79,87 @@ export class FanoutTimelineService {
 	}
 
 	@bindThis
-	public get(name: FanoutTimelineName, untilId?: string | null, sinceId?: string | null) {
-		if (untilId && sinceId) {
-			return this.redisForTimelines.lrange('list:' + name, 0, -1)
-				.then(ids => ids.filter(id => id < untilId && id > sinceId).sort((a, b) => a > b ? -1 : 1));
-		} else if (untilId) {
-			return this.redisForTimelines.lrange('list:' + name, 0, -1)
-				.then(ids => ids.filter(id => id < untilId).sort((a, b) => a > b ? -1 : 1));
-		} else if (sinceId) {
-			return this.redisForTimelines.lrange('list:' + name, 0, -1)
-				.then(ids => ids.filter(id => id > sinceId).sort((a, b) => a < b ? -1 : 1));
-		} else {
-			return this.redisForTimelines.lrange('list:' + name, 0, -1)
-				.then(ids => ids.sort((a, b) => a > b ? -1 : 1));
-		}
+	public get(name: FanoutTimelineName, untilId?: string | null, sinceId?: string | null, limit = DEFAULT_TIMELINE_READ_LIMIT) {
+		return this.getWindowed(name, untilId, sinceId, limit);
 	}
 
 	@bindThis
-	public getMulti(name: FanoutTimelineName[], untilId?: string | null, sinceId?: string | null): Promise<string[][]> {
-		const pipeline = this.redisForTimelines.pipeline();
-		for (const n of name) {
-			pipeline.lrange('list:' + n, 0, -1);
+	public getMulti(name: FanoutTimelineName[], untilId?: string | null, sinceId?: string | null, limit = DEFAULT_TIMELINE_READ_LIMIT): Promise<string[][]> {
+		return Promise.all(name.map(n => this.getWindowed(n, untilId, sinceId, limit)));
+	}
+
+	private async getWindowed(name: FanoutTimelineName, untilId?: string | null, sinceId?: string | null, limit = DEFAULT_TIMELINE_READ_LIMIT): Promise<string[]> {
+		const normalizedLimit = Math.max(1, Math.trunc(limit));
+		const listKey = 'list:' + name;
+		if (sinceId != null && untilId == null) {
+			return this.getSinceWindow(listKey, sinceId, normalizedLimit);
 		}
-		return pipeline.exec().then(res => {
-			if (res == null) return [];
-			const tls = res.map(r => r[1] as string[]);
-			return tls.map(ids =>
-				(untilId && sinceId)
-					? ids.filter(id => id < untilId && id > sinceId).sort((a, b) => a > b ? -1 : 1)
-					: untilId
-						? ids.filter(id => id < untilId).sort((a, b) => a > b ? -1 : 1)
-						: sinceId
-							? ids.filter(id => id > sinceId).sort((a, b) => a < b ? -1 : 1)
-							: ids.sort((a, b) => a > b ? -1 : 1),
-			);
-		});
+
+		return this.getDescendingWindow(listKey, untilId, sinceId, normalizedLimit);
+	}
+
+	private async getSinceWindow(listKey: string, sinceId: string, limit: number): Promise<string[]> {
+		const length = await this.redisForTimelines.llen(listKey);
+		if (length <= 0) return [];
+
+		const boundary = await this.findFirstIndexWhere(listKey, length, id => id <= sinceId);
+		if (boundary <= 0) return [];
+
+		const start = Math.max(0, boundary - limit);
+		const ids = await this.redisForTimelines.lrange(listKey, start, boundary - 1);
+		return ids
+			.filter(id => id > sinceId)
+			.sort((a, b) => a < b ? -1 : 1);
+	}
+
+	private async getDescendingWindow(listKey: string, untilId: string | null | undefined, sinceId: string | null | undefined, limit: number): Promise<string[]> {
+		const length = untilId == null ? null : await this.redisForTimelines.llen(listKey);
+		let offset = 0;
+		if (untilId != null) {
+			if (length == null || length <= 0) return [];
+			offset = await this.findFirstIndexWhere(listKey, length, id => id < untilId);
+		}
+
+		const results: string[] = [];
+		const seen = new Set<string>();
+
+		for (; results.length < limit; offset += TIMELINE_SCAN_CHUNK_SIZE) {
+			const ids = await this.redisForTimelines.lrange(listKey, offset, offset + TIMELINE_SCAN_CHUNK_SIZE - 1);
+			if (ids.length === 0) break;
+
+			for (const id of ids) {
+				if (untilId != null && id >= untilId) continue;
+				if (sinceId != null && id <= sinceId) {
+					break;
+				}
+				if (seen.has(id)) continue;
+
+				seen.add(id);
+				results.push(id);
+				if (results.length >= limit) break;
+			}
+
+			if (ids.length < TIMELINE_SCAN_CHUNK_SIZE) break;
+		}
+
+		return results;
+	}
+
+	private async findFirstIndexWhere(listKey: string, length: number, predicate: (id: string) => boolean): Promise<number> {
+		let low = 0;
+		let high = length;
+
+		while (low < high) {
+			const middle = Math.floor((low + high) / 2);
+			const id = await this.redisForTimelines.lindex(listKey, middle);
+			if (id == null || predicate(id)) {
+				high = middle;
+			} else {
+				low = middle + 1;
+			}
+		}
+
+		return low;
 	}
 
 	@bindThis

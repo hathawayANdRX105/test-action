@@ -5,7 +5,7 @@
 
 import { Brackets } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
-import type { NotesRepository } from '@/models/_.js';
+import type { MiNote, NotesRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { QueryService } from '@/core/QueryService.js';
@@ -148,7 +148,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				.leftJoinAndSelect('note.renote', 'renote')
 				.leftJoinAndSelect('reply.user', 'replyUser')
 				.leftJoinAndSelect('renote.user', 'renoteUser')
-				.leftJoinAndSelect('note.channel', 'channel');
+				.leftJoinAndSelect('note.channel', 'channel')
+				.andWhere(new Brackets(qb => qb
+					.orWhere('note.replyId IS NULL')
+					.orWhere('reply.id IS NOT NULL AND replyUser.id IS NOT NULL')))
+				.andWhere(new Brackets(qb => qb
+					.orWhere('note.renoteId IS NULL')
+					.orWhere('renote.id IS NOT NULL AND renoteUser.id IS NOT NULL')));
 
 			if (untilId) query.andWhere('note.id < :untilId', { untilId });
 			if (sinceId) query.andWhere('note.id > :sinceId', { sinceId });
@@ -244,11 +250,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// fetch the candidate window, then compute each note's sort key with a
 				// dedicated bulk query (newest public reply id, or the note's own id when
 				// it has no replies) and sort in JS — deterministic, no raw-alias guessing.
-				const fetched = await query
+				const fetched = this.filterPackableCandidates(await query
 					.orderBy('note.id', 'DESC')
 					.offset(ps.offset)
 					.limit(recommendationLimit)
-					.getMany();
+					.getMany());
 				const sortKeyById = new Map<string, string>(fetched.map(n => [n.id, n.id]));
 				if (fetched.length > 0) {
 					// Raw parameterised query with explicit column aliases — avoids any
@@ -280,7 +286,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const freshQuery = query.clone()
 					.orderBy('note.id', 'DESC')
 					.limit(Math.min(Math.ceil(ps.limit * FRESH_POOL_MULTIPLIER), 220));
-				const [scored, fresh] = await Promise.all([scoredQuery.getMany(), freshQuery.getMany()]);
+				const [scoredRaw, freshRaw] = await Promise.all([scoredQuery.getMany(), freshQuery.getMany()]);
+				const scored = this.filterPackableCandidates(scoredRaw);
+				const fresh = this.filterPackableCandidates(freshRaw);
 				const merged = new Map<string, typeof scored[number]>();
 				for (const note of scored) merged.set(note.id, note);
 				for (const note of fresh) merged.set(note.id, note);
@@ -312,6 +320,25 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.recommendationService.recordDelivery(me?.id ?? null, notes.map(note => note.id), this.timeService.now);
 			return await this.noteEntityService.packMany(notes, me);
 		});
+	}
+
+	private filterPackableCandidates<T extends MiNote>(notes: readonly (T | null | undefined)[]): T[] {
+		return notes.filter((note): note is T => {
+			if (note == null || note.userId == null) return false;
+			if (note.replyId != null && (note.reply == null || note.reply.userId == null)) return false;
+			if (note.renoteId != null && (note.renote == null || note.renote.userId == null)) return false;
+			if (note.renote != null && this.isPureRenote(note.renote) && note.renote.renote == null) return false;
+			return true;
+		});
+	}
+
+	private isPureRenote(note: MiNote): boolean {
+		return note.renoteId != null
+			&& note.replyId == null
+			&& note.text == null
+			&& note.cw == null
+			&& note.fileIds.length === 0
+			&& !note.hasPoll;
 	}
 
 	private applyScope(query: ReturnType<NotesRepository['createQueryBuilder']>, scope: RecommendationScope, meId: string | null): void {
