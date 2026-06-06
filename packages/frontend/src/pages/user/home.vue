@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="_spacer" :style="{ '--MI_SPACER-w': narrow ? '800px' : '1100px', ...background }">
+<div class="userHomeRoot _spacer" :style="{ '--MI_SPACER-w': narrow ? '800px' : '1100px', ...background }">
 	<div ref="rootEl" class="ftskorzw" :class="{ wide: !narrow, 'has-background': user.backgroundUrl != null }" style="container-type: inline-size;">
 		<div class="main _gaps">
 			<MkInfo v-if="user.isDeleted" :warn="true">{{ i18n.ts.userDeleted }}</MkInfo>
@@ -191,7 +191,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<XListenBrainz v-if="user.listenbrainz && listenbrainzdata" :key="user.id" :user="user"/>
 		</div>
 	</div>
-	<div class="background"></div>
+	<div v-if="user.backgroundUrl != null" class="background"></div>
 </div>
 </template>
 
@@ -479,19 +479,21 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .background{
-	position: fixed;
-	z-index: -1;
+	position: absolute;
+	z-index: 0;
 	background: var(--backgroundImageStatic);
 	background-size: cover;
 	background-position: center;
 	pointer-events: none;
 	filter: var(--MI-blur, blur(10px)) opacity(0.6);
-	// Funny CSS schenanigans to make background escape container
-	left: -100%;
-	top: -5%;
-	right: -100%;
-	bottom: -100%;
-	background-attachment: fixed;
+	inset: 0;
+	border-radius: inherit;
+}
+
+.userHomeRoot {
+	position: relative;
+	isolation: isolate;
+	overflow: hidden;
 }
 
 @mixin readableUserTitleOnDark {
@@ -532,6 +534,8 @@ onUnmounted(() => {
 }
 
 .ftskorzw {
+	position: relative;
+	z-index: 1;
 
 	> .main {
 
