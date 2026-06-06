@@ -1,18 +1,18 @@
-import pluginReplace from '@rollup/plugin-replace';
+import * as pluginReplaceModule from '@rollup/plugin-replace';
 import type { RollupReplaceOptions } from '@rollup/plugin-replace';
 import type { Plugin } from 'rollup';
 
-// https://github.com/rollup/plugins/issues/1541#issuecomment-3114729017
-const fix = <T>(f: { default: T }): T => f as unknown as T;
+type ReplacePlugin = (options?: RollupReplaceOptions) => Plugin;
+const pluginReplace = ((pluginReplaceModule as unknown as { default?: ReplacePlugin }).default ?? (pluginReplaceModule as unknown)) as ReplacePlugin;
 
 function iconsReplace(opts: RollupReplaceOptions): Plugin {
-	return fix(pluginReplace)({
+	return pluginReplace({
 		...opts,
 		preventAssignment: false,
 		// only replace these strings at the start of strings, and make
 		// sure they're followed by a word-boundary that's not a dash
 		delimiters: ['(?<=["\'`])', '\\b(?!-)'],
-	});
+	}) as unknown as Plugin;
 }
 
 export function pluginReplaceIcons(): Plugin[] {
