@@ -285,7 +285,7 @@ export class ApiCallService {
 			this.userIpHistories.set(user.id, ips);
 		}
 
-		if (!ips.has(user.id)) {
+		if (!ips.has(ip)) {
 			ips.add(ip);
 
 			try {
