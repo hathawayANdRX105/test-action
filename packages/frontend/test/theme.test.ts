@@ -36,15 +36,15 @@ const makeTheme = (base: 'light' | 'dark', bg: string, fg: string, props: Record
 
 describe(applyTheme, () => {
 	beforeEach(() => {
-		document.documentElement.removeAttribute('style');
-		document.documentElement.removeAttribute('data-color-scheme');
+		window.document.documentElement.removeAttribute('style');
+		window.document.documentElement.removeAttribute('data-color-scheme');
 		localStorage.clear();
 
-		const themeColor = document.createElement('meta');
+		const themeColor = window.document.createElement('meta');
 		themeColor.name = 'theme-color';
-		document.head.appendChild(themeColor);
+		window.document.head.appendChild(themeColor);
 
-		Object.defineProperty(document, 'fonts', {
+		Object.defineProperty(window.document, 'fonts', {
 			configurable: true,
 			value: {
 				forEach: vi.fn(),
@@ -55,36 +55,36 @@ describe(applyTheme, () => {
 	});
 
 	afterEach(() => {
-		document.head.querySelector('meta[name="theme-color"]')?.remove();
+		window.document.head.querySelector('meta[name="theme-color"]')?.remove();
 		vi.useRealTimers();
 	});
 
 	test('applies and persists the selected light theme', () => {
 		applyTheme(makeTheme('light', '#ffffff', '#111111'));
 
-		expect(document.documentElement.dataset.colorScheme).toBe('light');
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-bg')).toBe('rgb(255, 255, 255)');
-		expect(document.documentElement.style.getPropertyPriority('--MI_THEME-bg')).toBe('important');
-		expect(document.documentElement.style.getPropertyValue('color-scheme')).toBe('light');
-		expect(document.documentElement.style.getPropertyPriority('color-scheme')).toBe('important');
+		expect(window.document.documentElement.dataset.colorScheme).toBe('light');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-bg')).toBe('rgb(255, 255, 255)');
+		expect(window.document.documentElement.style.getPropertyPriority('--MI_THEME-bg')).toBe('important');
+		expect(window.document.documentElement.style.getPropertyValue('color-scheme')).toBe('light');
+		expect(window.document.documentElement.style.getPropertyPriority('color-scheme')).toBe('important');
 		expect(localStorage.getItem('themeId')).toBe('test-light');
 		expect(localStorage.getItem('colorScheme')).toBe('light');
 		expect(JSON.parse(localStorage.getItem('theme') ?? '{}').fg).toBe('rgb(17, 17, 17)');
-		expect(document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe('rgb(255, 255, 255)');
+		expect(window.document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe('rgb(255, 255, 255)');
 	});
 
 	test('switches persisted values when applying a dark theme', () => {
 		applyTheme(makeTheme('light', '#ffffff', '#111111'));
 		applyTheme(makeTheme('dark', '#000000', '#eeeeee'));
 
-		expect(document.documentElement.dataset.colorScheme).toBe('dark');
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-bg')).toBe('rgb(0, 0, 0)');
-		expect(document.documentElement.style.getPropertyPriority('--MI_THEME-bg')).toBe('important');
-		expect(document.documentElement.style.getPropertyValue('color-scheme')).toBe('dark');
+		expect(window.document.documentElement.dataset.colorScheme).toBe('dark');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-bg')).toBe('rgb(0, 0, 0)');
+		expect(window.document.documentElement.style.getPropertyPriority('--MI_THEME-bg')).toBe('important');
+		expect(window.document.documentElement.style.getPropertyValue('color-scheme')).toBe('dark');
 		expect(localStorage.getItem('themeId')).toBe('test-dark');
 		expect(localStorage.getItem('colorScheme')).toBe('dark');
 		expect(JSON.parse(localStorage.getItem('theme') ?? '{}').fg).toBe('rgb(238, 238, 238)');
-		expect(document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe('rgb(0, 0, 0)');
+		expect(window.document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe('rgb(0, 0, 0)');
 	});
 
 	test('normalizes light custom surfaces in dark themes', () => {
@@ -99,13 +99,13 @@ describe(applyTheme, () => {
 			htmlThemeColor: '#ffffff',
 		}));
 
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-panel')).toBe('#1b1b1b');
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-pageHeaderBg')).toBe('#111111');
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-pageHeaderFg')).toBe('rgb(222, 231, 228)');
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-navBg')).toBe('#171717');
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-navFg')).toBe('#ffffff');
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-panelHeaderBg')).toBe('#202020');
-		expect(document.documentElement.style.getPropertyValue('--MI_THEME-panelHeaderFg')).toBe('rgb(222, 231, 228)');
-		expect(document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe('#111111');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-panel')).toBe('#1b1b1b');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-pageHeaderBg')).toBe('#111111');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-pageHeaderFg')).toBe('rgb(222, 231, 228)');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-navBg')).toBe('#171717');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-navFg')).toBe('#ffffff');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-panelHeaderBg')).toBe('#202020');
+		expect(window.document.documentElement.style.getPropertyValue('--MI_THEME-panelHeaderFg')).toBe('rgb(222, 231, 228)');
+		expect(window.document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe('#111111');
 	});
 });
