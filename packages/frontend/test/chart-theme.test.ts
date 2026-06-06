@@ -9,13 +9,13 @@ import { chartVLine } from '@/utility/chart-vline.js';
 
 describe('chart theme colors', () => {
 	afterEach(() => {
-		document.documentElement.removeAttribute('data-color-scheme');
-		document.documentElement.removeAttribute('style');
+		window.document.documentElement.removeAttribute('data-color-scheme');
+		window.document.documentElement.removeAttribute('style');
 	});
 
 	test('uses white chart text in dark color scheme', () => {
-		document.documentElement.dataset.colorScheme = 'dark';
-		document.documentElement.style.setProperty('--MI_THEME-fg', '#111111');
+		window.document.documentElement.dataset.colorScheme = 'dark';
+		window.document.documentElement.style.setProperty('--MI_THEME-fg', '#111111');
 
 		expect(getChartThemeColors()).toEqual({
 			textColor: '#ffffff',
@@ -32,7 +32,7 @@ describe('chart theme colors', () => {
 	});
 
 	test('applies readable dark colors to chart options', () => {
-		document.documentElement.dataset.colorScheme = 'dark';
+		window.document.documentElement.dataset.colorScheme = 'dark';
 		const options: Record<string, any> = {
 			plugins: {
 				legend: {},
@@ -63,8 +63,8 @@ describe('chart theme colors', () => {
 	});
 
 	test('keeps light chart text from theme foreground', () => {
-		document.documentElement.dataset.colorScheme = 'light';
-		document.documentElement.style.setProperty('--MI_THEME-fg', 'rgb(17, 24, 39)');
+		window.document.documentElement.dataset.colorScheme = 'light';
+		window.document.documentElement.style.setProperty('--MI_THEME-fg', 'rgb(17, 24, 39)');
 
 		expect(getChartThemeColors().textColor).toBe('rgb(17, 24, 39)');
 		expect(getChartThemeColors().gridColor).toBe('rgba(0, 0, 0, 0.1)');
@@ -73,22 +73,22 @@ describe('chart theme colors', () => {
 	});
 
 	test('trusts data color scheme over stale color-scheme style', () => {
-		document.documentElement.dataset.colorScheme = 'light';
-		document.documentElement.style.setProperty('color-scheme', 'dark');
-		document.documentElement.style.setProperty('--MI_THEME-fg', 'rgb(17, 24, 39)');
+		window.document.documentElement.dataset.colorScheme = 'light';
+		window.document.documentElement.style.setProperty('color-scheme', 'dark');
+		window.document.documentElement.style.setProperty('--MI_THEME-fg', 'rgb(17, 24, 39)');
 
 		expect(getChartThemeColors().textColor).toBe('rgb(17, 24, 39)');
 	});
 
 	test('uses configured light accent for mini chart line', () => {
-		document.documentElement.dataset.colorScheme = 'light';
-		document.documentElement.style.setProperty('--MI_THEME-accent', 'rgb(34, 197, 94)');
+		window.document.documentElement.dataset.colorScheme = 'light';
+		window.document.documentElement.style.setProperty('--MI_THEME-accent', 'rgb(34, 197, 94)');
 
 		expect(getChartThemeColors().miniChartLineColor).toBe('rgb(34, 197, 94)');
 	});
 
 	test('draws hover guide line with current dark theme color', () => {
-		document.documentElement.dataset.colorScheme = 'dark';
+		window.document.documentElement.dataset.colorScheme = 'dark';
 		const ctx = {
 			save: vi.fn(),
 			beginPath: vi.fn(),
