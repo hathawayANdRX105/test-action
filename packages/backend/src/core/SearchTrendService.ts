@@ -181,5 +181,4 @@ export class SearchTrendService {
 	private getCurrentUtcDay(): string {
 		return new Date(this.timeService.now).toISOString().slice(0, 10).replaceAll('-', '');
 	}
-
 }
