@@ -153,6 +153,21 @@ describe('chat room scroll state', () => {
 		assert.ok(mentionedBubbleRule.groups.body.includes('filter: drop-shadow('));
 	});
 
+	test('keeps overflowing room tabs reachable with scroll buttons', () => {
+		assert.match(roomSource, /ref="localTabsEl"[\s\S]*@scroll="updateChatTabsScrollState"/);
+		assert.match(roomSource, /@click="scrollChatTabs\('left'\)"/);
+		assert.match(roomSource, /@click="scrollChatTabs\('right'\)"/);
+		assert.match(roomSource, /const showChatTabsScrollControls = ref\(false\)/);
+		assert.match(roomSource, /const canScrollChatTabsLeft = ref\(false\)/);
+		assert.match(roomSource, /const canScrollChatTabsRight = ref\(false\)/);
+		assert.match(roomSource, /function updateChatTabsScrollState\(\)/);
+		assert.match(roomSource, /function scrollChatTabs\(direction: 'left' \| 'right'\)/);
+		assert.match(roomSource, /scrollBy\(\{[\s\S]*left: direction === 'left' \? -distance : distance/);
+		assert.match(roomSource, /function ensureSelectedChatTabVisible\(behavior: ScrollBehavior = 'smooth'\)/);
+		assert.match(roomSource, /scrollIntoView\(\{[\s\S]*inline: 'nearest'/);
+		assert.match(roomSource, /watch\(tab, \(\) => ensureSelectedChatTabVisible\(\)\);/);
+	});
+
 	test('sorts context/search messages by creation time before id', () => {
 		const sorted = sortChatMessagesForTimeline([
 			{ id: 'z', createdAt: '2026-06-01T00:00:00.000Z' },

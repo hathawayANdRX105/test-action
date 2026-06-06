@@ -11,10 +11,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkAvatar v-else-if="user" :user="user" :class="$style.localTitleAvatar" indicator/>
 			<span>{{ room?.name ?? user?.name ?? user?.username ?? i18n.ts.chat }}</span>
 		</div>
-		<div :class="$style.localTabs">
-			<button v-for="t in headerTabs" :key="t.key" class="_button" :class="[$style.localTab, { [$style.localTabActive]: tab === t.key }]" @click="selectTab(t.key)">
-				<i :class="t.icon"></i>
-				<span>{{ t.title }}</span>
+		<div :class="[$style.localTabsShell, { [$style.localTabsShellScrollable]: showChatTabsScrollControls }]">
+			<button v-if="showChatTabsScrollControls" class="_button" :class="[$style.localTabsScrollButton, $style.localTabsScrollButtonLeft]" :disabled="!canScrollChatTabsLeft" :aria-label="i18n.ts.left" @click="scrollChatTabs('left')">
+				<i class="ti ti-chevron-left"></i>
+			</button>
+			<div ref="localTabsEl" :class="$style.localTabs" @scroll="updateChatTabsScrollState">
+				<button v-for="t in headerTabs" :key="t.key" class="_button" :class="[$style.localTab, { [$style.localTabActive]: tab === t.key }]" :data-chat-room-tab-key="t.key" @click="selectTab(t.key)">
+					<i :class="t.icon"></i>
+					<span>{{ t.title }}</span>
+				</button>
+			</div>
+			<button v-if="showChatTabsScrollControls" class="_button" :class="[$style.localTabsScrollButton, $style.localTabsScrollButtonRight]" :disabled="!canScrollChatTabsRight" :aria-label="i18n.ts.right" @click="scrollChatTabs('right')">
+				<i class="ti ti-chevron-right"></i>
 			</button>
 		</div>
 		<button v-if="headerActions.length > 0" class="_button" :class="$style.localMenu" @click="headerActions[0].handler">
@@ -221,6 +229,7 @@ const showIndicator = ref(false);
 const newMessageCount = ref(0);
 const rootEl = ref<HTMLElement | null>(null);
 const chatPaneEl = ref<HTMLElement | null>(null);
+const localTabsEl = ref<HTMLElement | null>(null);
 const timelineEl = ref<HTMLElement | null>(null);
 const formEl = ref<InstanceType<typeof XForm> | null>(null);
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
@@ -231,6 +240,9 @@ const usersRefreshingById = new Set<string>();
 const usersRefreshFailedById = new Set<string>();
 const usersRefreshQueue = new Map<string, Misskey.entities.UserLite>();
 const showScrollToLatestButton = ref(false);
+const showChatTabsScrollControls = ref(false);
+const canScrollChatTabsLeft = ref(false);
+const canScrollChatTabsRight = ref(false);
 
 const SCROLL_LATEST_THRESHOLD = 24;
 const SCROLL_AUTO_STICK_THRESHOLD = 4;
@@ -245,6 +257,8 @@ const STREAM_CONNECT_TIMEOUT = 5000;
 const CHAT_READ_RECEIPT_MIN_INTERVAL_MS = 2000;
 const CHAT_USER_REFRESH_BATCH_SIZE = 20;
 const CHAT_USER_REFRESH_DELAY_MS = 250;
+const CHAT_TABS_SCROLL_MIN_DISTANCE = 160;
+const CHAT_TABS_SCROLL_VISIBLE_RATIO = 0.7;
 const autoScrollState = new ChatAutoScrollState({
 	latestThreshold: SCROLL_LATEST_THRESHOLD,
 	interactionLockMs: USER_SCROLL_INTERACTION_LOCK_MS,
@@ -1541,6 +1555,47 @@ function mentionUser(user: Misskey.entities.UserLite) {
 	formEl.value?.insertMention(user);
 }
 
+function updateChatTabsScrollState() {
+	const tabs = localTabsEl.value;
+	if (tabs == null) {
+		showChatTabsScrollControls.value = false;
+		canScrollChatTabsLeft.value = false;
+		canScrollChatTabsRight.value = false;
+		return;
+	}
+
+	const maxScrollLeft = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+	const hasOverflow = maxScrollLeft > 1;
+	showChatTabsScrollControls.value = hasOverflow;
+	canScrollChatTabsLeft.value = hasOverflow && tabs.scrollLeft > 1;
+	canScrollChatTabsRight.value = hasOverflow && tabs.scrollLeft < maxScrollLeft - 1;
+}
+
+function scrollChatTabs(direction: 'left' | 'right') {
+	const tabs = localTabsEl.value;
+	if (tabs == null) return;
+
+	const distance = Math.max(CHAT_TABS_SCROLL_MIN_DISTANCE, tabs.clientWidth * CHAT_TABS_SCROLL_VISIBLE_RATIO);
+	tabs.scrollBy({
+		left: direction === 'left' ? -distance : distance,
+		behavior: 'smooth',
+	});
+	window.requestAnimationFrame(updateChatTabsScrollState);
+}
+
+function ensureSelectedChatTabVisible(behavior: ScrollBehavior = 'smooth') {
+	void nextTick(() => {
+		const tabs = localTabsEl.value;
+		const selectedTab = tabs?.querySelector<HTMLElement>(`[data-chat-room-tab-key="${CSS.escape(tab.value)}"]`);
+		selectedTab?.scrollIntoView({
+			behavior,
+			block: 'nearest',
+			inline: 'nearest',
+		});
+		window.requestAnimationFrame(updateChatTabsScrollState);
+	});
+}
+
 function onVisibilitychange() {
 	if (window.document.hidden) return;
 	readReceiptBatcher.flush();
@@ -1548,7 +1603,13 @@ function onVisibilitychange() {
 
 onMounted(() => {
 	window.document.addEventListener('visibilitychange', onVisibilitychange);
+	window.addEventListener('resize', updateChatTabsScrollState);
 	watch(timelineEl, () => nextTick(setupTimelineScrollListener), { immediate: true });
+	watch(headerTabs, () => {
+		showChatTabsScrollControls.value = false;
+		ensureSelectedChatTabVisible('instant');
+	}, { immediate: true });
+	watch(tab, () => ensureSelectedChatTabVisible());
 	watch(() => props.messageId, (to, from) => {
 		if (to !== from) {
 			if (suppressNextMessageIdClearInitialize && to == null) {
@@ -1581,6 +1642,7 @@ onBeforeUnmount(() => {
 	}
 	usersRefreshQueue.clear();
 	window.document.removeEventListener('visibilitychange', onVisibilitychange);
+	window.removeEventListener('resize', updateChatTabsScrollState);
 });
 
 async function inviteUser() {
@@ -1783,6 +1845,7 @@ definePage(computed(() => {
 	--chat-room-footer-shadow: light-dark(rgb(137 164 180 / 0.52), rgb(0 0 0 / 0.44));
 
 	position: relative;
+	container-type: inline-size;
 	height: 100%;
 	min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px) + var(--MI-visualViewportBottom, 0px)));
 	overflow: hidden;
@@ -1798,35 +1861,46 @@ definePage(computed(() => {
 
 .localHeader {
 	--chat-room-header-bg: color(from var(--MI_THEME-pageHeaderBg) srgb r g b / 0.92);
+	--chat-room-header-fg: var(--MI_THEME-pageHeaderFg);
 
 	position: relative;
 	z-index: 1000;
 	display: grid;
-	grid-template-columns: minmax(130px, auto) minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"title menu"
+		"tabs tabs";
 	align-items: center;
-	gap: 8px;
-	min-height: 52px;
-	padding: 0 18px;
+	gap: 0 8px;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	padding: 0 14px 4px;
 	box-sizing: border-box;
 	background: var(--chat-room-header-bg);
 	border-bottom: solid 1px var(--MI_THEME-divider);
-	color: var(--MI_THEME-pageHeaderFg);
+	color: var(--chat-room-header-fg);
 }
 
 :global(html[data-color-scheme=dark]) {
 	.localHeader {
 		--chat-room-header-bg: color-mix(in srgb, var(--MI_THEME-bg) 94%, #000);
+		--chat-room-header-fg: var(--MI_THEME-fg);
 
-		color: var(--MI_THEME-fg);
+		color: var(--chat-room-header-fg);
 	}
 }
 
 .localTitle {
 	display: inline-flex;
 	align-items: center;
+	grid-area: title;
 	gap: 8px;
 	min-width: 0;
+	max-width: 260px;
+	min-height: 52px;
 	font-weight: 700;
+	color: var(--chat-room-header-fg);
 
 	> span {
 		overflow: hidden;
@@ -1840,16 +1914,69 @@ definePage(computed(() => {
 	height: 24px;
 }
 
+.localTabsShell {
+	grid-area: tabs;
+	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-items: stretch;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	border-top: solid 1px color-mix(in srgb, var(--chat-room-header-fg) 10%, transparent);
+}
+
+.localTabsShellScrollable {
+	grid-template-columns: 32px minmax(0, 1fr) 32px;
+	gap: 4px;
+}
+
 .localTabs {
 	display: flex;
 	align-items: stretch;
+	gap: 2px;
+	width: 100%;
+	max-width: 100%;
 	min-width: 0;
 	overflow-x: auto;
+	overscroll-behavior-x: contain;
 	scrollbar-width: none;
 
 	&::-webkit-scrollbar {
 		display: none;
 	}
+}
+
+.localTabsScrollButton {
+	position: relative;
+	z-index: 1;
+	align-self: center;
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 36px;
+	color: var(--chat-room-header-fg);
+	background: color-mix(in srgb, var(--chat-room-header-bg) 88%, transparent);
+	border-radius: var(--MI-radius-sm);
+	box-shadow: 0 0 12px color-mix(in srgb, var(--MI_THEME-shadow) 35%, transparent);
+
+	&:hover:not(:disabled) {
+		color: var(--MI_THEME-accent);
+		background: var(--MI_THEME-buttonHoverBg);
+	}
+
+	&:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+}
+
+.localTabsScrollButtonLeft {
+	justify-self: start;
+}
+
+.localTabsScrollButtonRight {
+	justify-self: end;
 }
 
 .localTab {
@@ -1858,10 +1985,11 @@ definePage(computed(() => {
 	align-items: center;
 	gap: 6px;
 	min-height: 52px;
-	padding: 0 12px;
-	color: var(--MI_THEME-fgTransparentWeak);
+	padding: 0 14px;
+	color: color-mix(in srgb, var(--chat-room-header-fg) 76%, transparent);
 	white-space: nowrap;
 	border-bottom: solid 3px transparent;
+	box-sizing: border-box;
 
 	&:hover {
 		color: var(--MI_THEME-accent);
@@ -1871,14 +1999,17 @@ definePage(computed(() => {
 
 .localTabActive {
 	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 10%, transparent);
 	border-bottom-color: var(--MI_THEME-accent);
 }
 
 .localMenu {
 	display: grid;
+	grid-area: menu;
 	place-items: center;
 	width: 38px;
 	height: 38px;
+	color: var(--chat-room-header-fg);
 	border-radius: 999px;
 
 	&:hover {
@@ -1889,28 +2020,17 @@ definePage(computed(() => {
 @container (max-width: 520px) {
 	.localHeader {
 		grid-template-columns: minmax(0, 1fr) auto;
-		grid-template-areas:
-			"title menu"
-			"tabs tabs";
-		padding: 0 12px;
+		padding: 0 12px 2px;
 	}
 
 	.localTitle {
-		grid-area: title;
+		max-width: none;
 		min-height: 40px;
-	}
-
-	.localTabs {
-		grid-area: tabs;
 	}
 
 	.localTab {
 		min-height: 40px;
 		padding: 0 10px;
-	}
-
-	.localMenu {
-		grid-area: menu;
 	}
 }
 
