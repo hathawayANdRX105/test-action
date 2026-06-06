@@ -76,7 +76,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<div v-if="isContextMode" :class="$style.contextModeBar">
 				<div :class="$style.contextModeText"><i class="ti ti-search"></i>{{ i18n.ts.searchResult }}</div>
-				<button class="_buttonPrimary" :class="$style.contextModeButton" @click="exitContextToLatest">{{ i18n.ts._chat.newMessage }}</button>
+				<button class="_buttonPrimary" :class="$style.contextModeButton" @click="exitContextToLatest"><i class="ti ti-arrow-down"></i>{{ i18n.ts._chat.newestMessage }}</button>
 			</div>
 
 			<div v-if="messages.length > 0" ref="timelineEl" :class="$style.timeline">
@@ -2163,6 +2163,9 @@ definePage(computed(() => {
 
 .contextModeButton {
 	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	padding: 0 12px;
 	line-height: 30px;
 	border-radius: 999px;

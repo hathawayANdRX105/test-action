@@ -153,6 +153,15 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /class="_buttonPrimary" :class="\$style\.toLatestButton"/);
 	});
 
+	test('labels the context search exit as newest message instead of unread message', () => {
+		const contextButton = roomSource.match(/<button class="_buttonPrimary" :class="\$style\.contextModeButton" @click="exitContextToLatest">(?<body>[\s\S]*?)<\/button>/);
+
+		assert.ok(contextButton?.groups?.body != null);
+		assert.match(roomSource, /<div v-if="isContextMode" :class="\$style\.contextModeBar">[\s\S]*i18n\.ts\.searchResult/);
+		assert.ok(contextButton.groups.body.includes('i18n.ts._chat.newestMessage'));
+		assert.ok(!contextButton.groups.body.includes('i18n.ts._chat.newMessage'));
+	});
+
 	test('keeps message bubble arrows pointed at the avatar side', async () => {
 		const source = await import('@/pages/chat/XMessage.vue?raw').then(module => module.default);
 
