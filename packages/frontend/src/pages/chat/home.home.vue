@@ -23,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<MkButton v-if="searchQuery.length > 0" primary rounded :wait="searchFetching" :disabled="searchQuery.trim().length < MIN_SEARCH_QUERY_LENGTH" @click="search">{{ i18n.ts.search }}</MkButton>
 
-	<MkFoldableSection v-if="searched">
+	<MkFoldableSection v-if="searched" :sticky="false">
 		<template #header>{{ i18n.ts.searchResult }}</template>
 
 		<MkLoading v-if="searchFetching"/>
@@ -49,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkResult v-else type="notFound"/>
 	</MkFoldableSection>
 
-	<MkFoldableSection>
+	<MkFoldableSection :sticky="false">
 		<template #header>{{ i18n.ts._chat.history }}</template>
 
 		<MkChatHistories/>
