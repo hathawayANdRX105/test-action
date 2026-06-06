@@ -160,7 +160,7 @@ function close() {
 }
 
 function expand() {
-	mainRouter.push(windowRouter.getCurrentFullPath(), 'forcePage');
+	window.open(url + windowRouter.getCurrentFullPath(), '_blank', 'noopener');
 	windowEl.value?.close();
 }
 
