@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div ref="rootEl" :class="$style.root">
-	<header :class="$style.header" class="_button" @click="showBody = !showBody">
+	<header :class="[$style.header, { [$style.stickyHeader]: sticky }]" class="_button" @click="showBody = !showBody">
 		<div :class="$style.title"><div><slot name="header"></slot></div></div>
 		<div :class="$style.divider"></div>
 		<button class="_button" :class="$style.button">
@@ -41,9 +41,11 @@ const miLocalStoragePrefix = 'ui:folder:' as const;
 const props = withDefaults(defineProps<{
 	expanded?: boolean;
 	persistKey?: string | null;
+	sticky?: boolean;
 }>(), {
 	expanded: true,
 	persistKey: null,
+	sticky: true,
 });
 
 const rootEl = useTemplateRef('rootEl');
@@ -106,11 +108,14 @@ onMounted(() => {
 	display: flex;
 	position: relative;
 	z-index: 10;
-	position: sticky;
-	top: var(--MI-stickyTop, 0px);
 	-webkit-backdrop-filter: var(--MI-blur, blur(8px));
 	backdrop-filter: var(--MI-blur, blur(20px));
 	background-color: color(from v-bind("parentBg ?? 'var(--MI_THEME-bg)'") srgb r g b / 0.85);
+}
+
+.stickyHeader {
+	position: sticky;
+	top: var(--MI-stickyTop, 0px);
 }
 
 .title {
