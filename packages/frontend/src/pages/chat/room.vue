@@ -243,6 +243,7 @@ const showScrollToLatestButton = ref(false);
 const showChatTabsScrollControls = ref(false);
 const canScrollChatTabsLeft = ref(false);
 const canScrollChatTabsRight = ref(false);
+const tab = ref('chat');
 
 const SCROLL_LATEST_THRESHOLD = 24;
 const SCROLL_AUTO_STICK_THRESHOLD = 4;
@@ -316,6 +317,10 @@ function shouldStickToLatestAfterLayoutShift(metrics: ScrollMetricsSnapshot): bo
 	return Math.abs(metrics.scrollTop - latestScrollMetricsSnapshot.maxScrollTop) <= SCROLL_AUTO_STICK_THRESHOLD;
 }
 
+function canUseChatScrollMetrics() {
+	return tab.value === 'chat' && chatPaneEl.value != null && chatPaneEl.value.clientHeight > 0;
+}
+
 function beginScrollRestoration() {
 	scrollRestorationDepth++;
 	isRestoringHistoryScroll.value = true;
@@ -327,6 +332,7 @@ function endScrollRestoration() {
 }
 
 function isAtLatest() {
+	if (!canUseChatScrollMetrics()) return false;
 	if (timelineEl.value == null) return true;
 
 	const scrollContainer = getScrollContainer(timelineEl.value);
@@ -589,12 +595,12 @@ async function restoreVisibleMessageAnchorAfterLayout(anchor: ScrollAnchor | nul
 // DOM changes near the latest message can shift scroll height. Only pin when
 // the user is already on the exact latest edge; otherwise preserve manual scroll.
 function scheduleStickToLatestAfterMutation() {
-	if (isRestoringHistoryScroll.value || isContextMode.value) return;
+	if (!canUseChatScrollMetrics() || isRestoringHistoryScroll.value || isContextMode.value) return;
 	if (pendingStickToLatestFrame != null) return;
 
 	pendingStickToLatestFrame = window.requestAnimationFrame(() => {
 		pendingStickToLatestFrame = null;
-		if (isRestoringHistoryScroll.value || isContextMode.value) return;
+		if (!canUseChatScrollMetrics() || isRestoringHistoryScroll.value || isContextMode.value) return;
 
 		const scrollContainer = getScrollContainer(timelineEl.value);
 		if (scrollContainer == null) return;
@@ -1181,6 +1187,7 @@ async function scrollToLatestAfterLayout(options?: { flushReadReceipt?: boolean;
 
 		const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 		if (scrollContainer == null) continue;
+		if (scrollContainer.clientHeight <= 0) continue;
 
 		const { maxScrollTop } = getChatScrollMetrics(scrollContainer);
 		scrollToLatest('instant');
@@ -1775,19 +1782,18 @@ function showMenu(ev: MouseEvent) {
 	os.popupMenu(menuItems, ev.currentTarget ?? ev.target);
 }
 
-const tab = ref('chat');
-
 async function ensureLatestOnChatTabReturn(generation: number) {
 	await nextTick();
 	await waitAnimationFrame();
 
 	if (generation !== chatTabLatestReturnGeneration || tab.value !== 'chat' || initializing.value || initializeError.value != null || joinRequiredRoom.value != null) return;
 
-	scrollToLatest('instant');
+	const sinceId = findNewestPersistedMessageId();
 	flushIncomingMessagesNow();
+	scrollToLatest('instant', { flushReadReceipt: true });
 
 	try {
-		await fetchLatestGap();
+		await fetchLatestGap(sinceId);
 	} catch (err) {
 		console.warn('Failed to refresh latest chat messages after returning to chat tab:', err);
 	}

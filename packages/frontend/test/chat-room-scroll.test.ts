@@ -137,7 +137,14 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /function scheduleLatestOnChatTabReturn\(\) \{[\s\S]*ensureLatestOnChatTabReturn/);
 		assert.match(roomSource, /v-show=\"tab === 'chat'\" ref=\"chatPaneEl\"/);
 		assert.match(roomSource, /async function scrollToLatestAfterLayout/);
-		assert.match(roomSource, /await fetchLatestGap\(\);[\s\S]*await scrollToLatestAfterLayout\(\{ flushReadReceipt: true, fillHistory: true \}\);/);
+		assert.match(roomSource, /const sinceId = findNewestPersistedMessageId\(\);[\s\S]*flushIncomingMessagesNow\(\);[\s\S]*scrollToLatest\('instant', \{ flushReadReceipt: true \}\);[\s\S]*await fetchLatestGap\(sinceId\);[\s\S]*await scrollToLatestAfterLayout\(\{ flushReadReceipt: true, fillHistory: true \}\);/);
+	});
+
+	test('does not treat hidden chat tabs as being at latest', () => {
+		assert.match(roomSource, /const tab = ref\('chat'\);/);
+		assert.match(roomSource, /function canUseChatScrollMetrics\(\) \{[\s\S]*tab\.value === 'chat'[\s\S]*chatPaneEl\.value != null[\s\S]*chatPaneEl\.value\.clientHeight > 0/);
+		assert.match(roomSource, /function isAtLatest\(\) \{[\s\S]*if \(!canUseChatScrollMetrics\(\)\) return false;/);
+		assert.match(roomSource, /function scheduleStickToLatestAfterMutation\(\) \{[\s\S]*if \(!canUseChatScrollMetrics\(\) \|\| isRestoringHistoryScroll\.value \|\| isContextMode\.value\) return;/);
 	});
 
 	test('refreshes missing latest messages when opening the new message indicator', () => {
