@@ -15,7 +15,9 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 	reversed?: boolean;
 }): void {
 	let anchorId: string | null = null;
+	let captureAnchor: (() => void) | null = null;
 	let ready = true;
+	const captureOptions: AddEventListenerOptions = { capture: true, passive: true };
 
 	watch(scrollContainerRef, (el) => {
 		if (!el) return;
@@ -23,8 +25,10 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		const onScroll = () => {
 			if (!el) return;
 			if (!ready) return;
+			if (!el.isConnected) return;
 
 			const scrollContainerRect = el.getBoundingClientRect();
+			if (scrollContainerRect.height <= 0) return;
 			const viewPosition = scrollContainerRect.top + (scrollContainerRect.height / 2);
 
 			const anchorEls = el.querySelectorAll('[data-scroll-anchor]');
@@ -45,10 +49,16 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		// https://github.com/vuejs/rfcs/pull/284
 		const throttledOnScroll = throttle(1000, onScroll);
 		el.addEventListener('scroll', throttledOnScroll, { passive: true });
+		el.addEventListener('pointerdown', onScroll, captureOptions);
+		el.addEventListener('click', onScroll, captureOptions);
+		captureAnchor = onScroll;
 		onScroll();
 
 		onUnmounted(() => {
 			el.removeEventListener('scroll', throttledOnScroll);
+			el.removeEventListener('pointerdown', onScroll, captureOptions);
+			el.removeEventListener('click', onScroll, captureOptions);
+			if (captureAnchor === onScroll) captureAnchor = null;
 		});
 	}, {
 		immediate: true,
@@ -69,6 +79,7 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 	};
 
 	onDeactivated(() => {
+		captureAnchor?.();
 		ready = false;
 	});
 

@@ -144,6 +144,8 @@ const visibility = useDocumentVisibility();
 
 let isPausingUpdate = false;
 let timerForSetPause: number | null = null;
+let lastKnownHeadState = false;
+let removeHeadStateScrollListener: (() => void) | null = null;
 const BACKGROUND_PAUSE_WAIT_SEC = 10;
 
 // 先頭が表示されているかどうかを検出
@@ -168,6 +170,12 @@ watch(rootEl, () => {
 		if (rootEl.value) scrollObserver.value?.observe(rootEl.value);
 	});
 });
+
+watch([rootEl, scrollableElement], () => {
+	removeHeadStateScrollListener?.();
+	removeHeadStateScrollListener = null;
+	nextTick(setupHeadStateScrollListener);
+}, { immediate: true });
 
 watch([backed, rootEl], () => {
 	if (!backed.value) {
@@ -360,7 +368,34 @@ const appearFetchMoreAhead = async (): Promise<void> => {
 	fetchMoreAppearTimeout();
 };
 
-const isHead = (): boolean => isBackTop.value || (props.pagination.reversed ? isTailVisible : isHeadVisible)(rootEl.value!, TOLERANCE);
+function isCurrentScrollAtHead(): boolean {
+	if (rootEl.value == null) return false;
+	return (props.pagination.reversed ? isTailVisible : isHeadVisible)(rootEl.value, TOLERANCE);
+}
+
+function rememberCurrentHeadState(): void {
+	lastKnownHeadState = isCurrentScrollAtHead();
+}
+
+function setupHeadStateScrollListener(): void {
+	removeHeadStateScrollListener?.();
+	removeHeadStateScrollListener = null;
+
+	if (rootEl.value == null) {
+		lastKnownHeadState = false;
+		return;
+	}
+
+	rememberCurrentHeadState();
+	const scrollTarget = scrollableElement.value;
+	const onScroll = () => rememberCurrentHeadState();
+	scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+	removeHeadStateScrollListener = () => {
+		scrollTarget.removeEventListener('scroll', onScroll);
+	};
+}
+
+const isHead = (): boolean => isBackTop.value || isCurrentScrollAtHead();
 
 watch(visibility, () => {
 	if (visibility.value === 'hidden') {
@@ -456,7 +491,7 @@ onActivated(() => {
 });
 
 onDeactivated(() => {
-	isBackTop.value = props.pagination.reversed ? window.scrollY >= (rootEl.value ? rootEl.value.scrollHeight - window.innerHeight : 0) : window.scrollY === 0;
+	isBackTop.value = lastKnownHeadState;
 });
 
 function toBottom() {
@@ -488,6 +523,8 @@ onBeforeUnmount(() => {
 		window.clearTimeout(preventAppearFetchMoreTimer.value);
 		preventAppearFetchMoreTimer.value = null;
 	}
+	removeHeadStateScrollListener?.();
+	removeHeadStateScrollListener = null;
 	scrollObserver.value?.disconnect();
 });
 
