@@ -6,8 +6,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <svg viewBox="0 0 21 7">
 	<rect
-		v-for="record in calendarRecords" class="day"
+		v-for="record in calendarRecords"
 		:key="`${record.date.year}-${record.date.month}-${record.date.day}-hitarea`"
+		class="day"
 		width="1" height="1"
 		:x="record.x" :y="record.date.weekday"
 		rx="1" ry="1"
@@ -16,8 +17,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<title>{{ record.date.year }}/{{ record.date.month + 1 }}/{{ record.date.day }}</title>
 	</rect>
 	<rect
-		v-for="record in calendarRecords" class="day"
+		v-for="record in calendarRecords"
 		:key="`${record.date.year}-${record.date.month}-${record.date.day}-value`"
+		class="day"
 		:width="record.v" :height="record.v"
 		:x="record.x + ((1 - record.v) / 2)" :y="record.date.weekday + ((1 - record.v) / 2)"
 		rx="1" ry="1"
