@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <PageWithHeader ref="pageComponent" :actions="[]" :tabs="[]" :swipable="false" :hideTitle="true">
-	<div :class="$style.shell">
+	<div class="xTimelineWideShell" :class="$style.shell">
 		<main :class="$style.main">
 			<header :class="$style.tabs" role="tablist" :aria-label="i18n.ts.home">
 				<button
@@ -311,6 +311,14 @@ definePage(() => ({
 	column-gap: var(--timeline-column-gap);
 	align-items: start;
 	min-height: 100%;
+}
+
+:global([class^="universal-nonTitlebarArea-"]:has(.xTimelineWideShell)),
+:global([class*=" universal-nonTitlebarArea-"]:has(.xTimelineWideShell)) {
+	width: min(100%, 1360px) !important;
+	max-width: 1360px !important;
+	margin-inline: auto !important;
+	align-self: center !important;
 }
 
 /* ---------- center column ----------

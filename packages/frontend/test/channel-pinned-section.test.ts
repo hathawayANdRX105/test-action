@@ -11,7 +11,8 @@ import foldableSectionSource from '@/components/MkFoldableSection.vue?raw';
 
 describe('channel pinned section', () => {
 	test('does not use sticky foldable headers for channel pinned notes', () => {
-		assert.match(channelSource, /<MkFoldableSection :sticky="false">[\s\S]*i18n\.ts\.pinnedNotes/);
+		assert.match(channelSource, /<MkFoldableSection :sticky="false" data-channel-pinned-section>[\s\S]*i18n\.ts\.pinnedNotes/);
+		assert.match(channelSource, /<MkFoldableSection :sticky="false" data-channel-pinned-section>/);
 		assert.match(foldableSectionSource, /sticky\?: boolean;/);
 		assert.match(foldableSectionSource, /sticky: true,/);
 		assert.match(foldableSectionSource, /:class="\[\$style\.header, \{ \[\$style\.stickyHeader\]: sticky \}\]"/);
