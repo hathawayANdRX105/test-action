@@ -794,10 +794,12 @@ bdi.block { display: block }
 }
 
 ._mfm_rainbow_fallback_ {
-	background-image: linear-gradient(to right, rgb(255, 0, 0) 0%, rgb(255, 165, 0) 17%, rgb(255, 255, 0) 33%, rgb(0, 255, 0) 50%, rgb(0, 255, 255) 67%, rgb(0, 0, 255) 83%, rgb(255, 0, 255) 100%);
+	background-image: linear-gradient(90deg, #e60000 0%, #f57c00 16%, #c7a600 32%, #1b9e4b 48%, #008fc7 64%, #3056d3 80%, #c218e8 100%);
+	background-size: 200% 100%;
 	-webkit-background-clip: text;
 	background-clip: text;
 	color: transparent;
+	-webkit-text-fill-color: transparent;
 }
 
 @keyframes mfm-spin {
@@ -896,8 +898,8 @@ bdi.block { display: block }
 }
 
 @keyframes mfm-rainbow {
-	0% { filter: hue-rotate(0deg) contrast(150%) saturate(150%); }
-	100% { filter: hue-rotate(360deg) contrast(150%) saturate(150%); }
+	0% { background-position: 0% 50%; }
+	100% { background-position: 200% 50%; }
 }
 
 @keyframes mfm-fade {

@@ -232,8 +232,10 @@ export default function MkMfm(props: MfmProps, { emit }: { emit: SetupContext<Mf
 						}
 						const speed = validTime(token.props.args.speed) ?? '1s';
 						const delay = validTime(token.props.args.delay) ?? '0s';
-						style = `animation: mfm-rainbow ${speed} linear infinite; animation-delay: ${delay};`;
-						break;
+						return h('span', {
+							class: '_mfm_rainbow_fallback_',
+							style: `animation: mfm-rainbow ${speed} linear infinite; animation-delay: ${delay};`,
+						}, genEl(token.children, scale));
 					}
 					case 'sparkle': {
 						if (!useAnim) {
