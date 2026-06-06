@@ -16,7 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						[$style.iconFrame_platinum]: ACHIEVEMENT_BADGES[achievement.name].frame === 'platinum',
 					}]"
 				>
-					<div :class="[$style.iconInner]" :style="{ background: ACHIEVEMENT_BADGES[achievement.name].bg }">
+					<div :class="[$style.iconInner]" :style="getBadgeStyle(achievement.name)">
 						<img :class="$style.iconImg" :src="ACHIEVEMENT_BADGES[achievement.name].img">
 					</div>
 				</div>
@@ -70,6 +70,11 @@ const props = withDefaults(defineProps<{
 
 const achievements = ref<Misskey.entities.UsersAchievementsResponse | null>(null);
 const lockedAchievements = computed(() => ACHIEVEMENT_TYPES.filter(x => !(achievements.value ?? []).some(a => a.name === x)));
+
+function getBadgeStyle(name: typeof ACHIEVEMENT_TYPES[number]) {
+	const bg = ACHIEVEMENT_BADGES[name].bg;
+	return bg == null ? undefined : { background: bg };
+}
 
 function fetch() {
 	misskeyApi('users/achievements', { userId: props.user.id }).then(res => {
