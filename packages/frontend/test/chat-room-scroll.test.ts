@@ -6,7 +6,7 @@
 /// <reference types="vite/client" />
 
 import { assert, describe, test } from 'vitest';
-import { ChatAutoScrollState, ChatReadReceiptBatcher, getChatScrollMetrics, isChatMessageVisibleAtLatestEdge, isNearChatLatest, mergeChatMessagesForTimeline, prependChatMessageForTimeline, sortChatMessagesForTimeline } from '@/pages/chat/room-scroll.js';
+import { appendDetachedChatMessages, ChatAutoScrollState, ChatReadReceiptBatcher, getChatScrollMetrics, isChatMessageVisibleAtLatestEdge, isNearChatLatest, mergeChatMessagesForTimeline, prependChatMessageForTimeline, sortChatMessagesForTimeline } from '@/pages/chat/room-scroll.js';
 import roomSource from '@/pages/chat/room.vue?raw';
 
 describe('chat room scroll state', () => {
@@ -194,6 +194,27 @@ describe('chat room scroll state', () => {
 		assert.strictEqual(prepended[0].id, '0501');
 		assert.strictEqual(prepended[1], current[0]);
 		assert.strictEqual(prepended[499], current[498]);
+	});
+
+	test('buffers incoming room messages while browsing detached history', () => {
+		const buffered = appendDetachedChatMessages([
+			{ id: '103' },
+			{ id: '102' },
+		], [
+			{ id: '104' },
+			{ id: '103' },
+			{ id: '100' },
+		], [
+			{ id: '101' },
+			{ id: '100' },
+		]);
+
+		assert.deepStrictEqual(buffered.map(item => item.id), ['103', '102', '104']);
+		assert.match(roomSource, /let detachedIncomingMessages: Misskey\.entities\.ChatMessageLite\[\] = \[\];/);
+		assert.match(roomSource, /if \(!wasAtLatest\) \{[\s\S]*detachedIncomingMessages = appendDetachedChatMessages\(detachedIncomingMessages, batch, messages\.value\);[\s\S]*notifyNewMessages\(otherCount\);[\s\S]*return;/);
+		assert.match(roomSource, /function scrollToLatest\(behavior: ScrollBehavior = 'smooth'[\s\S]*flushDetachedIncomingMessages\(\{ queueReadReceipt: true \}\)/);
+		assert.match(roomSource, /if \(detachedIncomingMessages\.length > 0\) \{[\s\S]*scrollToLatest\('instant', \{ flushReadReceipt: true \}\);[\s\S]*return;/);
+		assert.strictEqual(/const anchor = wasAtLatest \? null : getVisibleMessageAnchor\(\);[\s\S]*restoreVisibleMessageAnchorAfterLayout\(anchor\)/.test(roomSource), false);
 	});
 
 	test('keeps merge bounded for room timeline batches', () => {

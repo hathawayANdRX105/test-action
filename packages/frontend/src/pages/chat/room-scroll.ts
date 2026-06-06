@@ -8,6 +8,9 @@ export type ChatTimelineSortableMessage = {
 	id: string;
 	createdAt: string;
 };
+export type ChatTimelineIdentifiableMessage = {
+	id: string;
+};
 
 export function getChatScrollMetrics(scrollContainer: ChatScrollContainerMetrics): {
 	maxScrollTop: number;
@@ -107,6 +110,27 @@ export function prependChatMessageForTimeline<T extends ChatTimelineSortableMess
 	}
 
 	return mergeChatMessagesForTimeline(current, [message], options);
+}
+
+export function appendDetachedChatMessages<T extends ChatTimelineIdentifiableMessage>(
+	buffered: T[],
+	incoming: T[],
+	visible: ChatTimelineIdentifiableMessage[],
+): T[] {
+	if (buffered.length === 0 && incoming.length === 0) return buffered;
+
+	const visibleIds = new Set(visible.map(message => message.id));
+	const nextIds = new Set<string>();
+	const next: T[] = [];
+
+	for (const message of [...buffered, ...incoming]) {
+		if (visibleIds.has(message.id) || nextIds.has(message.id)) continue;
+
+		next.push(message);
+		nextIds.add(message.id);
+	}
+
+	return next;
 }
 
 type ChatReadReceiptTimer = ReturnType<typeof setTimeout>;

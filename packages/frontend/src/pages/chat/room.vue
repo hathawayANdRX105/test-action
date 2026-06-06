@@ -186,7 +186,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkAcct from '@/components/global/MkAcct.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
-import { ChatAutoScrollState, ChatReadReceiptBatcher, getChatScrollMetrics, isChatMessageVisibleAtLatestEdge, mergeChatMessagesForTimeline, prependChatMessageForTimeline } from './room-scroll.js';
+import { appendDetachedChatMessages, ChatAutoScrollState, ChatReadReceiptBatcher, getChatScrollMetrics, mergeChatMessagesForTimeline, prependChatMessageForTimeline } from './room-scroll.js';
 import { hasChatUserResolvedAvatar, mergeChatUserForCache } from './room-user-cache.js';
 
 const $i = ensureSignin();
@@ -276,6 +276,7 @@ let removeTimelineScrollListener: (() => void) | null = null;
 let pendingStickToLatestFrame: number | null = null;
 let pendingIncomingMessageFrame: number | null = null;
 let pendingIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
+let detachedIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
 let pendingUserRefreshTimer: number | null = null;
 let historyFetchArmed = true;
 let newerFetchArmed = true;
@@ -329,17 +330,28 @@ function clearNewMessageIndicator() {
 }
 
 function scrollToLatest(behavior: ScrollBehavior = 'smooth', options?: { flushReadReceipt?: boolean }) {
-	const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+	const hadDetachedIncomingMessages = flushDetachedIncomingMessages({ queueReadReceipt: true });
 	autoScrollState.markLatest();
-	const scrollTop = scrollContainer == null ? 0 : getChatScrollMetrics(scrollContainer).maxScrollTop;
-	scrollContainer?.scrollTo({
-		top: scrollTop,
-		behavior,
-	});
-	clearNewMessageIndicator();
-	showScrollToLatestButton.value = false;
-	if (options?.flushReadReceipt === true) {
-		readReceiptBatcher.flush();
+	const applyScroll = () => {
+		const latestScrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+		const scrollTop = latestScrollContainer == null ? 0 : getChatScrollMetrics(latestScrollContainer).maxScrollTop;
+		latestScrollContainer?.scrollTo({
+			top: scrollTop,
+			behavior,
+		});
+		clearNewMessageIndicator();
+		showScrollToLatestButton.value = false;
+		if (options?.flushReadReceipt === true) {
+			readReceiptBatcher.flush();
+		}
+	};
+
+	applyScroll();
+	if (hadDetachedIncomingMessages) {
+		void nextTick(async () => {
+			await waitAnimationFrame();
+			applyScroll();
+		});
 	}
 	newerFetchArmed = false;
 	historyFetchArmed = true;
@@ -370,6 +382,10 @@ function setupTimelineScrollListener() {
 		}
 
 		if (latestDistance <= SCROLL_LATEST_THRESHOLD) {
+			if (detachedIncomingMessages.length > 0) {
+				scrollToLatest('instant', { flushReadReceipt: true });
+				return;
+			}
 			clearNewMessageIndicator();
 		}
 
@@ -518,22 +534,6 @@ function scrollMessageIntoView(messageId: string, block: ScrollLogicalPosition =
 		});
 	}
 	return true;
-}
-
-function isMessageVisibleAtLatestEdge(messageId: string): boolean {
-	if (timelineEl.value == null) return false;
-
-	const scrollContainer = getScrollContainer(timelineEl.value);
-	if (scrollContainer == null) return true;
-
-	const element = timelineEl.value.querySelector<HTMLElement>(`[data-scroll-anchor="${CSS.escape(messageId)}"]`);
-	if (element == null) return false;
-
-	return isChatMessageVisibleAtLatestEdge(
-		scrollContainer.getBoundingClientRect(),
-		element.getBoundingClientRect(),
-		SCROLL_LATEST_THRESHOLD,
-	);
 }
 
 function waitAnimationFrame() {
@@ -1353,6 +1353,7 @@ function clearIncomingMessageQueue(options?: { flushReadReceipt?: boolean }) {
 	}
 
 	pendingIncomingMessages = [];
+	detachedIncomingMessages = [];
 	if (pendingIncomingMessageFrame != null) {
 		window.cancelAnimationFrame(pendingIncomingMessageFrame);
 		pendingIncomingMessageFrame = null;
@@ -1360,6 +1361,26 @@ function clearIncomingMessageQueue(options?: { flushReadReceipt?: boolean }) {
 	if (options?.flushReadReceipt !== true) {
 		readReceiptBatcher.cancel();
 	}
+}
+
+function flushDetachedIncomingMessages(options?: { queueReadReceipt?: boolean }) {
+	if (detachedIncomingMessages.length === 0) return false;
+
+	const normalized = detachedIncomingMessages.map(message => normalizeMessage(message));
+	detachedIncomingMessages = [];
+	if (normalized.length === 0) return false;
+
+	const newestOtherMessage = getNewestMessage(normalized.filter(message => message.fromUserId !== $i.id));
+	const current = removeMatchingPendingMessagesFrom(messages.value, normalized);
+	messages.value = normalized.length === 1
+		? prependChatMessageForTimeline(current, normalized[0], { limit: messageLimit() })
+		: mergeChatMessagesForTimeline(current, normalized, { limit: messageLimit() });
+
+	if (options?.queueReadReceipt === true && newestOtherMessage != null && !window.document.hidden && isActivated) {
+		readReceiptBatcher.queue(newestOtherMessage.id);
+	}
+
+	return true;
 }
 
 function getNewestMessage(messages: NormalizedChatMessage[]): NormalizedChatMessage | null {
@@ -1386,17 +1407,24 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) 
 	}
 
 	const wasAtLatest = isAtLatest();
-	const anchor = wasAtLatest ? null : getVisibleMessageAnchor();
-	if (!wasAtLatest) {
-		beginScrollRestoration();
-	}
+	const normalized = batch.map(message => normalizeMessage(message));
+	const newestOtherMessage = getNewestMessage(normalized.filter(message => message.fromUserId !== $i.id));
+	const otherCount = normalized.filter(message => message.fromUserId !== $i.id).length;
 
 	if (room.value?.isMuted !== true) {
 		sound.playMisskeySfx('chatMessage');
 	}
 
-	const normalized = batch.map(message => normalizeMessage(message));
-	const newestOtherMessage = getNewestMessage(normalized.filter(message => message.fromUserId !== $i.id));
+	if (!wasAtLatest) {
+		detachedIncomingMessages = appendDetachedChatMessages(detachedIncomingMessages, batch, messages.value);
+		removeMatchingPendingMessagesFrom(messages.value, normalized);
+		if (otherCount > 0) {
+			notifyNewMessages(otherCount);
+		}
+		showScrollToLatestButton.value = true;
+		return;
+	}
+
 	const firstNormalized = normalized[0];
 	if (firstNormalized == null) return;
 
@@ -1404,13 +1432,6 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) 
 	messages.value = normalized.length === 1
 		? prependChatMessageForTimeline(current, firstNormalized, { limit: messageLimit() })
 		: mergeChatMessagesForTimeline(current, normalized, { limit: messageLimit() });
-	if (!wasAtLatest) {
-		void restoreVisibleMessageAnchorAfterLayout(anchor).finally(() => {
-			historyFetchArmed = true;
-			newerFetchArmed = true;
-			endScrollRestoration();
-		});
-	}
 
 	// TODO: DOM的にバックグラウンドになっていないかどうかも考慮する
 	if (newestOtherMessage != null && !window.document.hidden && isActivated) {
@@ -1422,15 +1443,6 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) 
 			nextTick(() => {
 				scrollToLatest('instant');
 				clearNewMessageIndicator();
-			});
-		} else {
-			nextTick(async () => {
-				await waitAnimationFrame();
-				if (isMessageVisibleAtLatestEdge(newestOtherMessage.id)) {
-					clearNewMessageIndicator();
-				} else {
-					notifyNewMessages(normalized.filter(message => message.fromUserId !== $i.id).length);
-				}
 			});
 		}
 	}
