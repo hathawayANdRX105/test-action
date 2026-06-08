@@ -15,6 +15,7 @@ import backendConstSource from '../../backend/src/const.ts?raw';
 import endpointListSource from '../../backend/src/server/api/endpoint-list.ts?raw';
 import apiCallServiceSource from '../../backend/src/server/api/ApiCallService.ts?raw';
 import apiAccessUtilsSource from '../../backend/src/server/api/api-access-utils.ts?raw';
+import legacyAppCreateSource from '../../backend/src/server/api/endpoints/app/create.ts?raw';
 import authSessionGenerateSource from '../../backend/src/server/api/endpoints/auth/session/generate.ts?raw';
 import authAcceptSource from '../../backend/src/server/api/endpoints/auth/accept.ts?raw';
 import authUserkeySource from '../../backend/src/server/api/endpoints/auth/session/userkey.ts?raw';
@@ -82,6 +83,7 @@ describe('API developer center', () => {
 		assert.include(apiCallServiceSource, 'token.app ? token.app.userId : token.userId');
 		assert.include(apiCallServiceSource, 'API_TOKEN_RATE_LIMIT_EXCEEDED');
 		assert.include(apiAccessUtilsSource, 'const values = input ?? defaultApiPublicPermissions');
+		assert.include(legacyAppCreateSource, "this.instanceMeta.apiAccessMode === 'closed'");
 		assert.include(authSessionGenerateSource, "this.instanceMeta.apiAccessMode === 'closed'");
 		assert.include(authSessionGenerateSource, "app.status !== 'approved'");
 		assert.include(authAcceptSource, "this.instanceMeta.apiAccessMode === 'closed'");

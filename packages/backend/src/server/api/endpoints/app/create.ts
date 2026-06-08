@@ -59,6 +59,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private idService: IdService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			if (this.instanceMeta.apiAccessMode === 'closed') {
+				throw new ApiError(apiAccessErrors.apiClosed);
+			}
+
 			if (this.instanceMeta.apiAccessMode !== 'open' || this.instanceMeta.apiRequireAppApproval) {
 				throw new ApiError(apiAccessErrors.apiApprovalRequired);
 			}
