@@ -99,7 +99,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchMessage);
 			}
 
-			const context = await this.chatService.messageContext(message, ps.limitBefore, ps.limitAfter);
+			if (message.toRoomId != null && message.fromUserId !== me.id && await this.chatService.isRoomUserMuted(me.id, message.toRoomId, message.fromUserId)) {
+				throw new ApiError(meta.errors.noSuchMessage);
+			}
+
+			const context = await this.chatService.messageContext(message, ps.limitBefore, ps.limitAfter, me.id);
 			const messages = [...context.after, context.target, ...context.before];
 			const packed = await this.chatEntityService.packMessagesDetailed(messages, me);
 			const packedById = new Map(packed.map(item => [item.id, item]));

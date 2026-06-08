@@ -263,7 +263,7 @@ describe('chat room scroll state', () => {
 
 		assert.deepStrictEqual(buffered.map(item => item.id), ['103', '102', '104']);
 		assert.match(roomSource, /let detachedIncomingMessages: Misskey\.entities\.ChatMessageLite\[\] = \[\];/);
-		assert.match(roomSource, /if \(!wasAtLatest\) \{[\s\S]*detachedIncomingMessages = appendDetachedChatMessages\(detachedIncomingMessages, batch, messages\.value\);[\s\S]*notifyNewMessages\(otherCount\);[\s\S]*return;/);
+		assert.match(roomSource, /if \(!wasAtLatest\) \{[\s\S]*detachedIncomingMessages = appendDetachedChatMessages\(detachedIncomingMessages, visibleBatch, messages\.value\);[\s\S]*notifyNewMessages\(otherCount\);[\s\S]*return;/);
 		assert.match(roomSource, /function scrollToLatest\(behavior: ScrollBehavior = 'smooth'[\s\S]*flushDetachedIncomingMessages\(\{ queueReadReceipt: true \}\)/);
 		assert.match(roomSource, /if \(detachedIncomingMessages\.length > 0\) \{[\s\S]*scrollToLatest\('instant', \{ flushReadReceipt: true \}\);[\s\S]*return;/);
 		assert.strictEqual(/const anchor = wasAtLatest \? null : getVisibleMessageAnchor\(\);[\s\S]*restoreVisibleMessageAnchorAfterLayout\(anchor\)/.test(roomSource), false);

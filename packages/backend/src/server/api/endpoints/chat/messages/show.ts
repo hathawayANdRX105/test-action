@@ -67,6 +67,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchMessage);
 			}
 
+			if (message.toRoomId != null && message.fromUserId !== me.id && await this.chatService.isRoomUserMuted(me.id, message.toRoomId, message.fromUserId)) {
+				throw new ApiError(meta.errors.noSuchMessage);
+			}
+
 			return await this.chatEntityService.packMessageDetailed(message, me);
 		});
 	}

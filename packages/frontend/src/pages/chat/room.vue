@@ -94,7 +94,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					tag="div" :class="$style.messageList"
 				>
 					<div v-for="item in timeline.toReversed()" :key="item.id" :class="[$style.messageItem, { [$style.contextTarget]: item.type === 'item' && item.id === contextTargetMessageId }]" :data-scroll-anchor="item.type === 'item' ? item.id : undefined">
-						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" :canDeleteAnyMessage="canDeleteAnyMessage" :canManageRoomUsers="canManageRoomUsers" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)" @mention="mentionUser" @openReference="openReferenceMessage" @deletedMany="onDeletedMany"/>
+						<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" :enableRoomUserMute="true" :canDeleteAnyMessage="canDeleteAnyMessage" :canManageRoomUsers="canManageRoomUsers" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)" @mention="mentionUser" @muteUser="muteUserInRoom" @openReference="openReferenceMessage" @deletedMany="onDeletedMany"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 							<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -129,6 +129,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-if="tab === 'members'" :class="$style.tabPane">
 		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: min(100%, 840px);">
 			<XMembers v-if="room != null" :room="room" @inviteUser="inviteUser"/>
+		</div>
+	</div>
+
+	<div v-if="tab === 'mutedUsers'" :class="$style.tabPane">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: min(100%, 840px);">
+			<XMutedUsers v-if="room != null" :room="room" :refreshKey="mutedUsersRefreshKey" @unmuted="onRoomUserUnmuted"/>
 		</div>
 	</div>
 
@@ -167,6 +173,7 @@ import XMessage from './XMessage.vue';
 import XForm from './room.form.vue';
 import XSearch from './room.search.vue';
 import XMembers from './room.members.vue';
+import XMutedUsers from './room.user-mutes.vue';
 import XInfo from './room.info.vue';
 import XManagement from './room.management.vue';
 import type { MenuItem } from '@/types/menu.js';
@@ -239,6 +246,8 @@ const usersById = ref(new Map<string, Misskey.entities.UserLite>());
 const usersRefreshingById = new Set<string>();
 const usersRefreshFailedById = new Set<string>();
 const usersRefreshQueue = new Map<string, Misskey.entities.UserLite>();
+const mutedRoomUserIds = ref<Set<string>>(new Set());
+const mutedUsersRefreshKey = ref(0);
 const showScrollToLatestButton = ref(false);
 const showChatTabsScrollControls = ref(false);
 const canScrollChatTabsLeft = ref(false);
@@ -828,6 +837,20 @@ function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.en
 	};
 }
 
+function isRoomUserMuted(userId: string): boolean {
+	return room.value != null && userId !== $i.id && mutedRoomUserIds.value.has(userId);
+}
+
+function filterMutedRoomMessages<T extends Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage>(items: T[]): T[] {
+	if (room.value == null || mutedRoomUserIds.value.size === 0) return items;
+	return items.filter(item => !isRoomUserMuted(item.fromUserId));
+}
+
+function filterMutedNormalizedMessages(items: NormalizedChatMessage[]): NormalizedChatMessage[] {
+	if (room.value == null || mutedRoomUserIds.value.size === 0) return items;
+	return items.filter(item => !isRoomUserMuted(item.fromUserId));
+}
+
 function isPendingMessage(message: NormalizedChatMessage): boolean {
 	return message.sendStatus === 'pending';
 }
@@ -860,11 +883,11 @@ function prependMessage(message: NormalizedChatMessage) {
 }
 
 function appendFetchedMessages(fetched: Misskey.entities.ChatMessageLite[]) {
-	messages.value = mergeMessages(messages.value, fetched.map(x => normalizeMessage(x)));
+	messages.value = mergeMessages(messages.value, filterMutedRoomMessages(fetched).map(x => normalizeMessage(x)));
 }
 
 function replaceMessages(fetched: (Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage)[]) {
-	messages.value = mergeMessages(fetched.map(x => normalizeMessage(x)));
+	messages.value = mergeMessages(filterMutedRoomMessages(fetched).map(x => normalizeMessage(x)));
 }
 
 function isSameOutgoingMessage(a: NormalizedChatMessage, b: NormalizedChatMessage): boolean {
@@ -1060,6 +1083,19 @@ async function loadLatestTimeline() {
 	await fetchLatestGap();
 }
 
+async function loadMutedRoomUsers() {
+	if (room.value == null || room.value.isJoined === false) {
+		mutedRoomUserIds.value = new Set();
+		return;
+	}
+
+	const res = await misskeyApi('chat/rooms/user-mutes/list', {
+		roomId: room.value.id,
+		limit: 100,
+	});
+	mutedRoomUserIds.value = new Set(res.map(item => item.muteeId));
+}
+
 function clearMessageContextRoute() {
 	if (props.messageId == null) return;
 
@@ -1234,6 +1270,7 @@ async function initialize() {
 
 	try {
 		if (props.userId) {
+			mutedRoomUserIds.value = new Set();
 			const u = await misskeyApi('users/show', { userId: props.userId });
 			user.value = u;
 			rememberUser(u);
@@ -1261,6 +1298,7 @@ async function initialize() {
 			rememberUser(room.value.owner);
 
 			if (room.value.isJoined === false) {
+				mutedRoomUserIds.value = new Set();
 				messages.value = [];
 				if (room.value.joinMode === 'open') {
 					joinRequiredRoom.value = room.value;
@@ -1271,6 +1309,8 @@ async function initialize() {
 				}
 				return;
 			}
+
+			await loadMutedRoomUsers();
 
 			connectStream();
 			await waitChannelConnected();
@@ -1438,7 +1478,8 @@ function clearIncomingMessageQueue(options?: { flushReadReceipt?: boolean }) {
 function flushDetachedIncomingMessages(options?: { queueReadReceipt?: boolean }) {
 	if (detachedIncomingMessages.length === 0) return false;
 
-	const normalized = detachedIncomingMessages.map(message => normalizeMessage(message));
+	const filtered = filterMutedRoomMessages(detachedIncomingMessages);
+	const normalized = filtered.map(message => normalizeMessage(message));
 	detachedIncomingMessages = [];
 	if (normalized.length === 0) return false;
 
@@ -1468,8 +1509,11 @@ function getNewestMessage(messages: NormalizedChatMessage[]): NormalizedChatMess
 function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) {
 	if (batch.length === 0) return;
 
+	const visibleBatch = filterMutedRoomMessages(batch);
+	if (visibleBatch.length === 0) return;
+
 	if (isContextMode.value) {
-		const normalized = batch.map(message => normalizeMessage(message));
+		const normalized = visibleBatch.map(message => normalizeMessage(message));
 		messages.value = removeMatchingPendingMessagesFrom(messages.value, normalized);
 		const otherCount = normalized.filter(message => message.fromUserId !== $i.id).length;
 		if (otherCount > 0) {
@@ -1479,7 +1523,7 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) 
 	}
 
 	const wasAtLatest = isAtLatest();
-	const normalized = batch.map(message => normalizeMessage(message));
+	const normalized = visibleBatch.map(message => normalizeMessage(message));
 	const newestOtherMessage = getNewestMessage(normalized.filter(message => message.fromUserId !== $i.id));
 	const otherCount = normalized.filter(message => message.fromUserId !== $i.id).length;
 
@@ -1488,7 +1532,7 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) 
 	}
 
 	if (!wasAtLatest) {
-		detachedIncomingMessages = appendDetachedChatMessages(detachedIncomingMessages, batch, messages.value);
+		detachedIncomingMessages = appendDetachedChatMessages(detachedIncomingMessages, visibleBatch, messages.value);
 		removeMatchingPendingMessagesFrom(messages.value, normalized);
 		if (otherCount > 0) {
 			notifyNewMessages(otherCount);
@@ -1760,6 +1804,33 @@ function onRoomUpdated(updated: Misskey.entities.ChatRoom) {
 	rememberUser(updated.owner);
 }
 
+async function muteUserInRoom(user: Misskey.entities.UserLite) {
+	if (room.value == null || user.id === $i.id || mutedRoomUserIds.value.has(user.id)) return;
+
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.ts._chat.muteUserInRoomConfirm,
+	});
+	if (canceled) return;
+
+	await os.apiWithDialog('chat/rooms/user-mutes/create', {
+		roomId: room.value.id,
+		userId: user.id,
+	});
+	mutedRoomUserIds.value = new Set([...mutedRoomUserIds.value, user.id]);
+	messages.value = filterMutedNormalizedMessages(messages.value);
+	pendingIncomingMessages = filterMutedRoomMessages(pendingIncomingMessages);
+	detachedIncomingMessages = filterMutedRoomMessages(detachedIncomingMessages);
+	mutedUsersRefreshKey.value++;
+}
+
+function onRoomUserUnmuted(userId: string) {
+	if (!mutedRoomUserIds.value.has(userId)) return;
+	const next = new Set(mutedRoomUserIds.value);
+	next.delete(userId);
+	mutedRoomUserIds.value = next;
+}
+
 function showMenu(ev: MouseEvent) {
 	const menuItems: MenuItem[] = [];
 
@@ -1841,6 +1912,10 @@ const headerTabs = computed(() => room.value ? room.value.isJoined ? [{
 	key: 'members',
 	title: i18n.ts._chat.members,
 	icon: 'ti ti-users',
+}, {
+	key: 'mutedUsers',
+	title: i18n.ts._chat.mutedUsers,
+	icon: 'ti ti-eye-off',
 }, {
 	key: 'search',
 	title: i18n.ts.search,

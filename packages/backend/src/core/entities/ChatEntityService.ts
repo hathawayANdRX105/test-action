@@ -6,7 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as mfm from 'mfm-js';
 import { DI } from '@/di-symbols.js';
-import type { MiUser, ChatMessagesRepository, MiChatMessage, ChatRoomsRepository, MiChatRoom, MiChatRoomInvitation, ChatRoomInvitationsRepository, MiChatRoomMembership, ChatRoomMembershipsRepository } from '@/models/_.js';
+import type { MiUser, ChatMessagesRepository, MiChatMessage, ChatRoomsRepository, MiChatRoom, MiChatRoomInvitation, ChatRoomInvitationsRepository, MiChatRoomMembership, ChatRoomMembershipsRepository, MiChatRoomUserMuting, ChatRoomUserMutingsRepository } from '@/models/_.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
 import type { Packed } from '@/misc/json-schema.js';
 import type { } from '@/models/Blocking.js';
@@ -43,6 +43,9 @@ export class ChatEntityService {
 
 		@Inject(DI.chatRoomMembershipsRepository)
 		private chatRoomMembershipsRepository: ChatRoomMembershipsRepository,
+
+		@Inject(DI.chatRoomUserMutingsRepository)
+		private chatRoomUserMutingsRepository: ChatRoomUserMutingsRepository,
 
 		@Inject(DI.meta)
 		private meta: MiMeta,
@@ -157,6 +160,7 @@ export class ChatEntityService {
 	@bindThis
 	private async packMessageReference(
 		src: MiChatMessage['id'] | MiChatMessage | null,
+		me?: { id: MiUser['id'] },
 		options?: {
 			_hint_?: {
 				packedUsers?: Map<MiUser['id'], Packed<'UserLite'>>;
@@ -168,6 +172,14 @@ export class ChatEntityService {
 		const packedUsers = options?._hint_?.packedUsers;
 		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneBy({ id: src });
 		if (message == null) return null;
+		if (me != null && message.toRoomId != null && message.fromUserId !== me.id) {
+			const muted = await this.chatRoomUserMutingsRepository.existsBy({
+				roomId: message.toRoomId,
+				muterId: me.id,
+				muteeId: message.fromUserId,
+			});
+			if (muted) return null;
+		}
 
 		return {
 			id: message.id,
@@ -226,9 +238,9 @@ export class ChatEntityService {
 			fileId: message.fileId,
 			file: message.fileId ? (packedFiles?.get(message.fileId) ?? await this.driveFileEntityService.pack(message.file ?? message.fileId)) : null,
 			replyId: message.replyId,
-			reply: message.replyId ? await this.packMessageReference(message.reply ?? message.replyId, { _hint_: { packedUsers } }) : null,
+			reply: message.replyId ? await this.packMessageReference(message.reply ?? message.replyId, me, { _hint_: { packedUsers } }) : null,
 			quoteId: message.quoteId,
-			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId, { _hint_: { packedUsers } }) : null,
+			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId, me, { _hint_: { packedUsers } }) : null,
 			mentionedUserIds: message.toRoomId ? mentionedUserIds : undefined,
 			hasMentionForMe: message.toRoomId ? (me != null && message.fromUserId !== me.id && mentionedUserIds.includes(me.id)) : undefined,
 			reactions,
@@ -633,5 +645,41 @@ export class ChatEntityService {
 		]);
 
 		return await Promise.all(memberships.map(membership => this.packRoomMembership(membership, me, { ...options, _hint_: { packedUsers, packedRooms } })));
+	}
+
+	@bindThis
+	public async packRoomUserMuting(
+		src: MiChatRoomUserMuting['id'] | MiChatRoomUserMuting,
+		me: { id: MiUser['id'] },
+		options?: {
+			_hint_?: {
+				packedUsers: Map<MiChatRoomUserMuting['muteeId'], Packed<'UserLite'>>;
+			};
+		},
+	): Promise<Packed<'ChatRoomUserMuting'>> {
+		const muting = typeof src === 'object' ? src : await this.chatRoomUserMutingsRepository.findOneByOrFail({ id: src });
+
+		return {
+			id: muting.id,
+			createdAt: muting.createdAt.toISOString(),
+			roomId: muting.roomId,
+			muterId: muting.muterId,
+			muteeId: muting.muteeId,
+			user: options?._hint_?.packedUsers.get(muting.muteeId) ?? await this.userEntityService.pack(muting.mutee ?? muting.muteeId, me),
+		};
+	}
+
+	@bindThis
+	public async packRoomUserMutings(
+		mutings: MiChatRoomUserMuting[],
+		me: { id: MiUser['id'] },
+	) {
+		if (mutings.length === 0) return [];
+
+		const users = mutings.map(x => x.mutee ?? x.muteeId);
+		const packedUsers = await this.userEntityService.packMany(users, me)
+			.then(users => new Map(users.map(u => [u.id, u])));
+
+		return await Promise.all(mutings.map(muting => this.packRoomUserMuting(muting, me, { _hint_: { packedUsers } })));
 	}
 }

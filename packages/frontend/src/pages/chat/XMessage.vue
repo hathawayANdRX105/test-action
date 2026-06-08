@@ -114,6 +114,7 @@ const props = defineProps<{
 	message: NormalizedChatMessage | Misskey.entities.ChatMessage;
 	isSearchResult?: boolean;
 	enableReferenceActions?: boolean;
+	enableRoomUserMute?: boolean;
 	canDeleteAnyMessage?: boolean;
 	canManageRoomUsers?: boolean;
 	canModerateUsers?: boolean;
@@ -123,6 +124,7 @@ const emit = defineEmits<{
 	(ev: 'reply', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
 	(ev: 'quote', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
 	(ev: 'mention', user: Misskey.entities.UserLite): void;
+	(ev: 'muteUser', user: Misskey.entities.UserLite): void;
 	(ev: 'openReference', messageId: string): void;
 	(ev: 'deletedMany', messageIds: string[]): void;
 }>();
@@ -147,6 +149,7 @@ const isMe = computed(() => props.message.fromUserId === $i.id);
 const isRoomChat = computed(() => props.message.toRoomId != null);
 const isPending = computed(() => (props.message as MessageWithSendState).sendStatus === 'pending');
 const canDelete = computed(() => !isPending.value && (isMe.value || props.canDeleteAnyMessage === true || (props.canManageRoomUsers === true && props.message.toRoomId != null)) && $i.policies.chatAvailability === 'available');
+const canMuteRoomSender = computed(() => props.enableRoomUserMute === true && !isPending.value && isRoomChat.value && !isMe.value && props.message.fromUser != null && $i.policies.chatAvailability === 'available');
 const canManageSender = computed(() => !isPending.value && props.canManageRoomUsers === true && !isMe.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
 const canModerateSender = computed(() => !isPending.value && props.canModerateUsers === true && !isMe.value && props.message.fromUser != null);
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
@@ -378,11 +381,15 @@ function getAvatarMenu(): MenuItem[] {
 	}];
 	const roomId = props.message.toRoomId;
 
-	if (!isMe.value && props.message.toRoomId != null && $i.policies.chatAvailability === 'available') {
+	if (canMuteRoomSender.value) {
 		menu.push({
 			text: i18n.ts.mention,
 			icon: 'ti ti-at',
 			action: () => emit('mention', user),
+		}, {
+			text: i18n.ts._chat.muteUserInRoom,
+			icon: 'ti ti-eye-off',
+			action: () => emit('muteUser', user),
 		});
 	}
 

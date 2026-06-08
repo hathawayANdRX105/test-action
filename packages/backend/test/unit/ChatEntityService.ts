@@ -59,6 +59,17 @@ describe('ChatEntityService chat message mention cache', () => {
 			countBy: jest.fn(async () => 0),
 			createQueryBuilder: jest.fn(() => chatRoomMembershipsQueryBuilder),
 		};
+		const chatRoomUserMutingsRepository: any = {
+			existsBy: jest.fn(async () => false),
+			findOneByOrFail: jest.fn(async () => ({
+				id: 'room-user-muting-id',
+				createdAt: new Date(0),
+				roomId: 'room',
+				muterId: 'me',
+				muteeId: 'sender',
+				mutee: { id: 'sender' },
+			})),
+		};
 		const chatRoomsRepository: any = {
 			find: jest.fn(async () => []),
 			findOneByOrFail: jest.fn(),
@@ -81,6 +92,7 @@ describe('ChatEntityService chat message mention cache', () => {
 			chatRoomsRepository as never,
 			{} as never,
 			chatRoomMembershipsRepository as never,
+			chatRoomUserMutingsRepository as never,
 			{ chatRoomDefaultMemberLimit: 500 } as never,
 			redisClient as never,
 			userEntityService as never,
@@ -112,6 +124,7 @@ describe('ChatEntityService chat message mention cache', () => {
 			chatRoomsRepository,
 			chatRoomMembershipsRepository,
 			chatRoomMembershipsQueryBuilder,
+			chatRoomUserMutingsRepository,
 			roleService,
 			mfmService,
 			remoteUserResolveService,

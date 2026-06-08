@@ -87,6 +87,7 @@ describe('ChatService large room fast path', () => {
 			delete: jest.fn(async () => ({ affected: 1 })),
 		};
 		const chatMessagesQueryBuilder: any = {
+			alias: 'message',
 			update: jest.fn(function (this: any) { return this; }),
 			set: jest.fn(function (this: any) { return this; }),
 			where: jest.fn(function (this: any) { return this; }),
@@ -96,8 +97,33 @@ describe('ChatService large room fast path', () => {
 			orderBy: jest.fn(function (this: any) { return this; }),
 			take: jest.fn(function (this: any) { return this; }),
 			setParameter: jest.fn(function (this: any) { return this; }),
+			setParameters: jest.fn(function (this: any) { return this; }),
 			execute: jest.fn(async () => ({ affected: 1 })),
 			getMany: jest.fn(async () => []),
+		};
+		const chatRoomUserMutingQueryBuilder: any = {
+			select: jest.fn(function (this: any) { return this; }),
+			where: jest.fn(function (this: any) { return this; }),
+			andWhere: jest.fn(function (this: any) { return this; }),
+			insert: jest.fn(function (this: any) { return this; }),
+			values: jest.fn(function (this: any) { return this; }),
+			orIgnore: jest.fn(function (this: any) { return this; }),
+			execute: jest.fn(async () => ({ identifiers: [] })),
+			getQuery: jest.fn(() => 'room-user-muting-subquery'),
+			getParameters: jest.fn(() => ({ roomUserMutingMuterId: 'reader' })),
+		};
+		const chatRoomUserMutingsRepository: any = {
+			createQueryBuilder: jest.fn(() => chatRoomUserMutingQueryBuilder),
+			existsBy: jest.fn(async () => false),
+			findOneOrFail: jest.fn(async () => ({
+				id: 'room-user-muting-id',
+				createdAt: new Date(0),
+				roomId: 'room',
+				muterId: 'sender',
+				muteeId: 'target',
+				mutee: { id: 'target' },
+			})),
+			delete: jest.fn(async () => ({ affected: 1 })),
 		};
 		const chatMessagesRepository: any = {
 			insertOne: jest.fn(async (message: any) => ({ ...message, reactions: [] })),
@@ -148,6 +174,7 @@ describe('ChatService large room fast path', () => {
 			pushNotification: jest.fn(),
 		};
 		const timeService: any = {
+			now: 0,
 			startTimer: jest.fn(),
 		};
 		const idService: any = {
@@ -185,6 +212,9 @@ describe('ChatService large room fast path', () => {
 			isAdministrator: jest.fn(async () => false),
 			isModerator: jest.fn(async () => false),
 		};
+		const queryService: any = {
+			makePaginationQuery: jest.fn((query) => query),
+		};
 		const service = new ChatService(
 			{} as never,
 			redisClient as never,
@@ -195,6 +225,7 @@ describe('ChatService large room fast path', () => {
 			chatRoomsRepository as never,
 			chatRoomInvitationsRepository as never,
 			chatRoomMembershipsRepository as never,
+			chatRoomUserMutingsRepository as never,
 			{} as never,
 			userEntityService as never,
 			chatEntityService as never,
@@ -205,7 +236,7 @@ describe('ChatService large room fast path', () => {
 			pushNotificationService as never,
 			{} as never,
 			{} as never,
-			{} as never,
+			queryService as never,
 			roleService as never,
 			{} as never,
 			customEmojiService as never,
@@ -227,6 +258,9 @@ describe('ChatService large room fast path', () => {
 			chatRoomMembershipsRepository,
 			chatRoomInvitationsRepository,
 			chatRoomsRepository,
+			chatRoomUserMutingsRepository,
+			chatRoomUserMutingQueryBuilder,
+			queryService,
 			appLockService,
 			unlockChatRoomJoin,
 			chatEntityService,
@@ -241,6 +275,7 @@ describe('ChatService large room fast path', () => {
 
 	function createMessageQueryBuilder(rows: unknown[]) {
 		return {
+			alias: 'message',
 			where: jest.fn(function (this: any) { return this; }),
 			orWhere: jest.fn(function (this: any) { return this; }),
 			andWhere: jest.fn(function (this: any) { return this; }),
@@ -248,9 +283,33 @@ describe('ChatService large room fast path', () => {
 			orderBy: jest.fn(function (this: any) { return this; }),
 			take: jest.fn(function (this: any) { return this; }),
 			setParameter: jest.fn(function (this: any) { return this; }),
+			setParameters: jest.fn(function (this: any) { return this; }),
 			getMany: jest.fn(async () => rows),
 		};
 	}
+
+	test('room timeline filters messages from muted room users for the current user only', async () => {
+		const ctx = createService(2);
+		const query = createMessageQueryBuilder([{ id: 'visible-message' }]);
+		ctx.chatMessagesRepository.createQueryBuilder.mockReturnValueOnce(query);
+
+		await expect(ctx.service.roomTimeline('reader', 'room', 30)).resolves.toEqual([{ id: 'visible-message' }]);
+
+		expect(ctx.chatRoomUserMutingsRepository.createQueryBuilder).toHaveBeenCalledWith('roomUserMuting');
+		expect(ctx.chatRoomUserMutingQueryBuilder.andWhere).toHaveBeenCalledWith('roomUserMuting.roomId = message.toRoomId');
+		expect(ctx.chatRoomUserMutingQueryBuilder.andWhere).toHaveBeenCalledWith('roomUserMuting.muteeId = message.fromUserId');
+		expect(query.andWhere).toHaveBeenCalledWith('NOT EXISTS (room-user-muting-subquery)');
+		expect(query.setParameters).toHaveBeenCalledWith({ roomUserMutingMuterId: 'reader' });
+
+		const adminQuery = createMessageQueryBuilder([{ id: 'admin-visible-message' }]);
+		ctx.chatMessagesRepository.createQueryBuilder.mockReturnValueOnce(adminQuery);
+		ctx.chatRoomUserMutingsRepository.createQueryBuilder.mockClear();
+
+		await expect(ctx.service.roomTimeline(null, 'room', 30)).resolves.toEqual([{ id: 'admin-visible-message' }]);
+
+		expect(ctx.chatRoomUserMutingsRepository.createQueryBuilder).not.toHaveBeenCalled();
+		expect(adminQuery.andWhere).not.toHaveBeenCalledWith('NOT EXISTS (room-user-muting-subquery)');
+	});
 
 	test('large rooms skip per-member unread and push fanout', async () => {
 		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);

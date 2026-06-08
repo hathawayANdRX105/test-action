@@ -6,7 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as mfm from 'mfm-js';
 import * as Redis from 'ioredis';
-import { Brackets, In } from 'typeorm';
+import { Brackets, In, type ObjectLiteral, type SelectQueryBuilder } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
 import { QueueService } from '@/core/QueueService.js';
@@ -17,7 +17,7 @@ import { CHAT_MESSAGE_MENTION_CACHE_TTL, ChatEntityService, chatMessageMentionCa
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
 import { PushNotificationService } from '@/core/PushNotificationService.js';
 import { bindThis } from '@/decorators.js';
-import type { ChatApprovalsRepository, ChatMessagesRepository, ChatRoomInvitationsRepository, ChatRoomMembershipsRepository, ChatRoomsRepository, MiChatMessage, MiChatRoom, MiChatRoomMembership, MiDriveFile, MiUser, MutingsRepository, UsersRepository } from '@/models/_.js';
+import type { ChatApprovalsRepository, ChatMessagesRepository, ChatRoomInvitationsRepository, ChatRoomMembershipsRepository, ChatRoomUserMutingsRepository, ChatRoomsRepository, MiChatMessage, MiChatRoom, MiChatRoomMembership, MiChatRoomUserMuting, MiDriveFile, MiUser, MutingsRepository, UsersRepository } from '@/models/_.js';
 import { UserBlockingService } from '@/core/UserBlockingService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { RoleService } from '@/core/RoleService.js';
@@ -120,6 +120,9 @@ export class ChatService {
 
 		@Inject(DI.chatRoomMembershipsRepository)
 		private chatRoomMembershipsRepository: ChatRoomMembershipsRepository,
+
+		@Inject(DI.chatRoomUserMutingsRepository)
+		private chatRoomUserMutingsRepository: ChatRoomUserMutingsRepository,
 
 		@Inject(DI.mutingsRepository)
 		private mutingsRepository: MutingsRepository,
@@ -769,6 +772,88 @@ export class ChatService {
 	}
 
 	@bindThis
+	private applyRoomUserMutingFilter<T extends ObjectLiteral>(
+		query: SelectQueryBuilder<T>,
+		muterId: MiUser['id'],
+		messageAlias = query.alias,
+	) {
+		const subQuery = this.chatRoomUserMutingsRepository.createQueryBuilder('roomUserMuting')
+			.select('1')
+			.where('roomUserMuting.muterId = :roomUserMutingMuterId', { roomUserMutingMuterId: muterId })
+			.andWhere(`roomUserMuting.roomId = ${messageAlias}.toRoomId`)
+			.andWhere(`roomUserMuting.muteeId = ${messageAlias}.fromUserId`);
+
+		return query
+			.andWhere(`NOT EXISTS (${subQuery.getQuery()})`)
+			.setParameters(subQuery.getParameters());
+	}
+
+	@bindThis
+	private applyRoomUserMutingFilterIfNeeded<T extends ObjectLiteral>(
+		query: SelectQueryBuilder<T>,
+		muterId?: MiUser['id'] | null,
+		messageAlias = query.alias,
+	) {
+		if (muterId == null) return query;
+		return this.applyRoomUserMutingFilter(query, muterId, messageAlias);
+	}
+
+	@bindThis
+	public async isRoomUserMuted(muterId: MiUser['id'], roomId: MiChatRoom['id'], muteeId: MiUser['id']) {
+		return await this.chatRoomUserMutingsRepository.existsBy({
+			roomId,
+			muterId,
+			muteeId,
+		});
+	}
+
+	@bindThis
+	public async createRoomUserMute(muterId: MiUser['id'], roomId: MiChatRoom['id'], muteeId: MiUser['id']) {
+		if (muterId === muteeId) {
+			throw new Error('cannot mute yourself');
+		}
+
+		const id = this.idService.gen();
+		await this.chatRoomUserMutingsRepository.createQueryBuilder()
+			.insert()
+			.values({
+				id,
+				createdAt: new Date(this.timeService.now),
+				roomId,
+				muterId,
+				muteeId,
+			})
+			.orIgnore()
+			.execute();
+
+		return await this.chatRoomUserMutingsRepository.findOneOrFail({
+			where: { roomId, muterId, muteeId },
+			relations: {
+				mutee: true,
+			},
+		});
+	}
+
+	@bindThis
+	public async deleteRoomUserMute(muterId: MiUser['id'], roomId: MiChatRoom['id'], muteeId: MiUser['id']) {
+		await this.chatRoomUserMutingsRepository.delete({
+			roomId,
+			muterId,
+			muteeId,
+		});
+	}
+
+	@bindThis
+	public async getRoomUserMutesWithPagination(muterId: MiUser['id'], roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatRoomUserMuting['id'] | null, untilId?: MiChatRoomUserMuting['id'] | null) {
+		const query = this.queryService.makePaginationQuery(this.chatRoomUserMutingsRepository.createQueryBuilder('muting'), sinceId, untilId)
+			.andWhere('muting.roomId = :roomId', { roomId })
+			.andWhere('muting.muterId = :muterId', { muterId })
+			.leftJoinAndSelect('muting.mutee', 'mutee');
+
+		return await query.take(limit).getMany();
+	}
+
+	@bindThis
 	public async userTimeline(meId: MiUser['id'], otherId: MiUser['id'], limit: number, sinceId?: MiChatMessage['id'] | null, untilId?: MiChatMessage['id'] | null) {
 		const query = this.queryService.makePaginationQuery(this.chatMessagesRepository.createQueryBuilder('message'), sinceId, untilId)
 			.leftJoinAndSelect('message.file', 'file')
@@ -800,7 +885,7 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async roomTimeline(roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatMessage['id'] | null, untilId?: MiChatMessage['id'] | null) {
+	public async roomTimeline(meId: MiUser['id'] | null, roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatMessage['id'] | null, untilId?: MiChatMessage['id'] | null) {
 		const query = this.queryService.makePaginationQuery(this.chatMessagesRepository.createQueryBuilder('message'), sinceId, untilId)
 			.andWhere('message.toRoomId = :roomId', { roomId })
 			.leftJoinAndSelect('message.file', 'file')
@@ -811,6 +896,8 @@ export class ChatService {
 			.leftJoinAndSelect('message.quote', 'quote')
 			.leftJoinAndSelect('quote.file', 'quoteFile')
 			.leftJoinAndSelect('quote.fromUser', 'quoteFromUser');
+
+		this.applyRoomUserMutingFilterIfNeeded(query, meId, 'message');
 
 		const messages = await query.take(limit).getMany();
 
@@ -834,10 +921,14 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async messageContext(message: MiChatMessage, limitBefore: number, limitAfter: number) {
+	public async messageContext(message: MiChatMessage, limitBefore: number, limitAfter: number, meId?: MiUser['id']) {
 		const addScope = (query = this.withMessageRelations()) => {
 			if (message.toRoomId != null) {
-				return query.andWhere('message.toRoomId = :roomId', { roomId: message.toRoomId });
+				query.andWhere('message.toRoomId = :roomId', { roomId: message.toRoomId });
+				if (meId != null) {
+					this.applyRoomUserMutingFilter(query, meId, 'message');
+				}
+				return query;
 			}
 
 			return query.andWhere(new Brackets(qb => {
@@ -941,6 +1032,8 @@ export class ChatService {
 			.addOrderBy('latest.id', 'DESC')
 			.setParameters(memberRoomsQuery.getParameters())
 			.setParameters(ownedRoomsQuery.getParameters());
+
+		this.applyRoomUserMutingFilter(latestMessageIdsQuery, meId, 'latest');
 
 		return await this.chatMessagesRepository.createQueryBuilder('message')
 			.where(`message.id IN (${latestMessageIdsQuery.getQuery()})`)
@@ -1458,6 +1551,8 @@ export class ChatService {
 		if (params.fromUserId) {
 			q.andWhere('message.fromUserId = :fromUserId', { fromUserId: params.fromUserId });
 		}
+
+		this.applyRoomUserMutingFilter(q, meId, 'message');
 
 		q.andWhere('message.text IS NOT NULL');
 		q.andWhere('LOWER(message.text) LIKE :q', { q: `%${ sqlLikeEscape(normalizedQuery) }%` });

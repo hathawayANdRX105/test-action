@@ -63,7 +63,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
-			const messages = await this.chatService.roomTimeline(room.id, ps.limit, ps.sinceId, ps.untilId);
+			const messages = await this.chatService.roomTimeline(null, room.id, ps.limit, ps.sinceId, ps.untilId);
 
 			return await this.chatEntityService.packMessagesLiteForRoom(messages);
 		});
