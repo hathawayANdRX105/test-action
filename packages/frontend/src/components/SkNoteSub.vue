@@ -34,7 +34,7 @@ For example, when viewing a reply on the timeline, SkNoteSub will be used to dis
 			<MkReactionsViewer ref="reactionsViewer" :note="note"/>
 			<footer :class="$style.footer" class="_gaps _h_gaps" tabindex="0" role="group" :aria-label="i18n.ts.noteFooterLabel">
 				<button class="_button" :class="$style.noteFooterButton" @click="reply()">
-					<i class="ph-arrow-u-up-left ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="reply"/>
 					<p v-if="note.repliesCount > 0" :class="$style.noteFooterButtonCount">{{ note.repliesCount }}</p>
 				</button>
 				<button
@@ -46,7 +46,7 @@ For example, when viewing a reply on the timeline, SkNoteSub will be used to dis
 					:style="appearNote.isRenoted ? 'color: var(--MI_THEME-accent) !important;' : ''"
 					@click.stop="appearNote.isRenoted ? undoRenote() : boostVisibility($event.shiftKey)"
 				>
-					<i class="ph-rocket-launch ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="repost"/>
 					<p v-if="note.renoteCount > 0" :class="$style.noteFooterButtonCount">{{ note.renoteCount }}</p>
 				</button>
 				<button
@@ -56,16 +56,16 @@ For example, when viewing a reply on the timeline, SkNoteSub will be used to dis
 					:class="$style.noteFooterButton"
 					@click.stop="quote()"
 				>
-					<i class="ph-quotes ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="views"/>
 				</button>
 				<button v-else class="_button" :class="$style.noteFooterButton" disabled>
 					<i class="ph-prohibit ph-bold ph-lg"></i>
 				</button>
 				<button v-if="note.myReaction == null && note.reactionAcceptance !== 'likeOnly'" ref="likeButton" :class="$style.noteFooterButton" class="_button" @click.stop="like()">
-					<i class="ph-heart ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="like"/>
 				</button>
 				<button v-if="note.myReaction == null" ref="reactButton" :class="$style.noteFooterButton" class="_button" @click.stop="react()">
-					<i v-if="note.reactionAcceptance === 'likeOnly'" class="ph-heart ph-bold ph-lg"></i>
+					<XNoteFooterIcon v-if="note.reactionAcceptance === 'likeOnly'" type="like"/>
 					<i v-else class="ph-smiley ph-bold ph-lg"></i>
 				</button>
 				<button v-if="note.myReaction != null" ref="reactButton" class="_button" :class="[$style.noteFooterButton, $style.reacted]" @click="undoReact(note)">
@@ -100,6 +100,7 @@ import type { Ref } from 'vue';
 import type { Visibility } from '@/utility/boost-quote.js';
 import type { OpenOnRemoteOptions } from '@/utility/please-login.js';
 import SkNoteHeader from '@/components/SkNoteHeader.vue';
+import XNoteFooterIcon from '@/components/XNoteFooterIcon.vue';
 import MkReactionsViewer from '@/components/MkReactionsViewer.vue';
 import MkSubNoteContent from '@/components/MkSubNoteContent.vue';
 import MkCwButton from '@/components/MkCwButton.vue';

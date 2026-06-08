@@ -58,6 +58,8 @@ describe('wide layout sizing', () => {
 		assert.match(timelineSource, /scroller\.scrollTop \+= rightRailShift === 0 \? deltaY : rightRailShift \* 0\.22;/);
 		assert.match(timelineSource, /shiftRightRailOffset\(normalizeWheelDeltaY\(ev,\s*scroller\)\)/);
 		assert.match(timelineSource, /\.rightRail\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*var\(--right-rail-sticky-top,\s*0px\);[\s\S]*height:\s*auto;[\s\S]*overflow:\s*visible;[\s\S]*overscroll-behavior:\s*auto;[\s\S]*scrollbar-gutter:\s*auto;/);
+		assert.match(timelineSource, /footer\._gaps > button > :is\(i,\s*svg\)/);
+		assert.match(timelineSource, /footer\._gaps > button:hover > :is\(i,\s*svg\)/);
 		assert.notMatch(timelineSource, /overflow-y:\s*auto;/);
 		assert.notMatch(timelineSource, /height:\s*100dvh;/);
 		assert.notMatch(timelineSource, /overscroll-behavior:\s*contain;/);

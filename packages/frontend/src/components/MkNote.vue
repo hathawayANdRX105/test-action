@@ -122,7 +122,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkReactionsViewer>
 			<footer :class="$style.footer" class="_gaps _h_gaps" tabindex="0" role="group" :aria-label="i18n.ts.noteFooterLabel">
 				<button :class="[$style.footerButton, $style.replyButton]" class="_button" @click.stop @click="reply()">
-					<i class="ti ti-arrow-back-up"></i>
+					<XNoteFooterIcon type="reply"/>
 					<p v-if="appearNote.repliesCount > 0" :class="$style.footerButtonCount">{{ number(appearNote.repliesCount) }}</p>
 				</button>
 				<button
@@ -135,7 +135,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					@click.stop
 					@mousedown.prevent="appearNote.isRenoted ? undoRenote(appearNote) : boostVisibility($event.shiftKey)"
 				>
-					<i class="ti ti-repeat"></i>
+					<XNoteFooterIcon type="repost"/>
 					<p v-if="appearNote.renoteCount > 0" :class="$style.footerButtonCount">{{ number(appearNote.renoteCount) }}</p>
 				</button>
 				<button v-else :class="$style.footerButton" class="_button" disabled>
@@ -149,15 +149,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 					@click.stop
 					@mousedown="quote()"
 				>
-					<i class="ph-quotes ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="views"/>
 				</button>
 				<button v-if="appearNote.myReaction == null && appearNote.reactionAcceptance !== 'likeOnly'" ref="likeButton" :class="[$style.footerButton, $style.likeButton]" class="_button" @click.stop @click="like()">
-					<i class="ph-heart ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="like"/>
 				</button>
 				<button ref="reactButton" :class="[$style.footerButton, $style.likeButton]" class="_button" @click="toggleReact()" @click.stop>
-					<i v-if="appearNote.reactionAcceptance === 'likeOnly' && appearNote.myReaction != null" class="ti ti-heart-filled" style="color: var(--MI_THEME-love);"></i>
+					<XNoteFooterIcon v-if="appearNote.reactionAcceptance === 'likeOnly' && appearNote.myReaction != null" type="like" style="color: var(--MI_THEME-love);"/>
 					<i v-else-if="appearNote.myReaction != null" class="ti ti-minus" style="color: var(--MI_THEME-accent);"></i>
-					<i v-else-if="appearNote.reactionAcceptance === 'likeOnly'" class="ti ti-heart"></i>
+					<XNoteFooterIcon v-else-if="appearNote.reactionAcceptance === 'likeOnly'" type="like"/>
 					<i v-else class="ph-smiley ph-bold ph-lg"></i>
 					<p v-if="(appearNote.reactionAcceptance === 'likeOnly' || prefer.s.showReactionsCount) && appearNote.reactionCount > 0" :class="$style.footerButtonCount">{{ number(appearNote.reactionCount) }}</p>
 				</button>
@@ -189,6 +189,7 @@ import type { OpenOnRemoteOptions } from '@/utility/please-login.js';
 import type { Keymap } from '@/utility/hotkey.js';
 import type { Visibility } from '@/utility/boost-quote.js';
 import MkNoteSub from '@/components/MkNoteSub.vue';
+import XNoteFooterIcon from '@/components/XNoteFooterIcon.vue';
 import MkNoteHeader from '@/components/MkNoteHeader.vue';
 import MkNoteSimple from '@/components/MkNoteSimple.vue';
 import MkReactionsViewer from '@/components/MkReactionsViewer.vue';

@@ -61,16 +61,16 @@ Displays an old version of an edited note.
 					<MkTime :time="appearNote.createdAt" mode="detail"/>
 				</div>
 				<button class="_button" :class="$style.noteFooterButton">
-					<i class="ph-arrow-u-up-left ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="reply"/>
 				</button>
 				<button class="_button" :class="$style.noteFooterButton">
-					<i class="ph-rocket-launch ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="repost"/>
 				</button>
 				<button class="_button" :class="$style.noteFooterButton">
-					<i class="ph-quotes ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="views"/>
 				</button>
 				<button class="_button" :class="$style.noteFooterButton">
-					<i class="ph-heart ph-bold ph-lg"></i>
+					<XNoteFooterIcon type="like"/>
 				</button>
 			</footer>
 		</article>
@@ -83,6 +83,7 @@ import { inject, onMounted, ref, shallowRef, computed } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import MkNoteSimple from '@/components/MkNoteSimple.vue';
+import XNoteFooterIcon from '@/components/XNoteFooterIcon.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
 import MkCwButton from '@/components/MkCwButton.vue';
 import MkWindow from '@/components/MkWindow.vue';

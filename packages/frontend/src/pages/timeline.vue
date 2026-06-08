@@ -808,7 +808,7 @@ definePage(() => ({
 }
 
 // Icon sizing to match X's ~18px glyphs.
-.xFeed :deep(footer._gaps > button > i) {
+.xFeed :deep(footer._gaps > button > :is(i, svg)) {
 	font-size: 18px;
 	border-radius: 50%;
 	padding: 6px;
@@ -819,19 +819,19 @@ definePage(() => ({
 // Reply (1st) hovers blue, retweet (2nd) green, like/react hovers pink/red —
 // the classic X colour cues. Children index is stable across SkNote's footer.
 .xFeed :deep(footer._gaps > button:hover) { color: var(--x-blue); }
-.xFeed :deep(footer._gaps > button:hover > i) {
+.xFeed :deep(footer._gaps > button:hover > :is(i, svg)) {
 	background: color-mix(in srgb, var(--x-blue) 14%, transparent);
 	color: var(--x-blue);
 }
 .xFeed :deep(footer._gaps > button:nth-child(2):hover) { color: #00ba7c; }
-.xFeed :deep(footer._gaps > button:nth-child(2):hover > i) {
+.xFeed :deep(footer._gaps > button:nth-child(2):hover > :is(i, svg)) {
 	background: color-mix(in srgb, #00ba7c 14%, transparent);
 	color: #00ba7c;
 }
 .xFeed :deep(footer._gaps > button:nth-child(4):hover),
 .xFeed :deep(footer._gaps > button:nth-child(5):hover) { color: #f91880; }
-.xFeed :deep(footer._gaps > button:nth-child(4):hover > i),
-.xFeed :deep(footer._gaps > button:nth-child(5):hover > i) {
+.xFeed :deep(footer._gaps > button:nth-child(4):hover > :is(i, svg)),
+.xFeed :deep(footer._gaps > button:nth-child(5):hover > :is(i, svg)) {
 	background: color-mix(in srgb, #f91880 14%, transparent);
 	color: #f91880;
 }
