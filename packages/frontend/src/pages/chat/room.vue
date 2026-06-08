@@ -16,7 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-chevron-left"></i>
 			</button>
 			<div ref="localTabsEl" :class="$style.localTabs" @scroll="updateChatTabsScrollState">
-				<button v-for="t in headerTabs" :key="t.key" class="_button" :class="[$style.localTab, { [$style.localTabActive]: tab === t.key }]" :data-chat-room-tab-key="t.key" @click="selectTab(t.key)">
+				<button v-for="t in headerTabs" :key="t.key" class="_button" :class="[$style.localTab, { [$style.localTabActive]: tab === t.key }]" :data-chat-room-tab-key="t.key" :title="t.title" :aria-label="t.title" @click="selectTab(t.key)">
 					<i :class="t.icon"></i>
 					<span>{{ t.title }}</span>
 				</button>
@@ -25,7 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-chevron-right"></i>
 			</button>
 		</div>
-		<button v-if="headerActions.length > 0" class="_button" :class="$style.localMenu" @click="headerActions[0].handler">
+		<button v-if="headerActions.length > 0" class="_button" :class="$style.localMenu" :title="headerActions[0].text" :aria-label="headerActions[0].text" @click="headerActions[0].handler">
 			<i :class="headerActions[0].icon"></i>
 		</button>
 	</div>
@@ -74,17 +74,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div v-if="isContextMode" :class="$style.contextModeBar">
-				<div :class="$style.contextModeText"><i class="ti ti-search"></i>{{ i18n.ts.searchResult }}</div>
-				<button class="_buttonPrimary" :class="$style.contextModeButton" @click="exitContextToLatest"><i class="ti ti-arrow-down"></i>{{ i18n.ts._chat.newestMessage }}</button>
-			</div>
+				<div v-if="messages.length > 0" ref="timelineEl" :class="$style.timeline">
+					<div v-if="canFetchMore || moreFetching" :class="$style.more">
+						<MkLoading v-if="moreFetching" :mini="true"/>
+					</div>
 
-			<div v-if="messages.length > 0" ref="timelineEl" :class="$style.timeline">
-				<div v-if="canFetchMore || moreFetching" :class="$style.more">
-					<MkLoading v-if="moreFetching" :mini="true"/>
-				</div>
-
-				<SkTransitionGroup
+					<SkTransitionGroup
 					:enterActiveClass="$style.transition_x_enterActive"
 					:leaveActiveClass="$style.transition_x_leaveActive"
 					:enterFromClass="$style.transition_x_enterFrom"
@@ -117,7 +112,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<Transition name="fade">
-		<button v-show="tab === 'chat' && showScrollToLatestButton && !showIndicator" class="_buttonPrimary" :class="$style.toLatestButton" :title="i18n.ts.bottom" @click="onIndicatorClick">
+		<button v-show="tab === 'chat' && (isContextMode || showScrollToLatestButton) && !showIndicator" class="_buttonPrimary" :class="$style.toLatestButton" :title="i18n.ts.bottom" @click="onIndicatorClick">
 			<i class="ti ti-arrow-down"></i>
 		</button>
 	</Transition>
@@ -292,6 +287,7 @@ let timelineResizeObserver: ResizeObserver | null = null;
 let pendingStickToLatestFrame: number | null = null;
 let pendingIncomingMessageFrame: number | null = null;
 let pendingIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
+let pendingIncomingShouldStickToLatest = false;
 let detachedIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
 let pendingUserRefreshTimer: number | null = null;
 let streamRecoveryTimer: number | null = null;
@@ -371,6 +367,34 @@ function isAtLatest() {
 	return autoScrollState.canAutoFollowLatest(latestDistance);
 }
 
+function shouldAutoRevealLatestMessages() {
+	if (!canUseChatScrollMetrics()) return false;
+	if (timelineEl.value == null) return true;
+
+	const scrollContainer = getScrollContainer(timelineEl.value);
+	if (scrollContainer == null) return true;
+
+	const previousMetrics = latestScrollMetricsSnapshot;
+	const metrics = getChatScrollMetrics(scrollContainer);
+	rememberLatestScrollMetrics(metrics);
+
+	if (metrics.latestDistance <= SCROLL_LATEST_THRESHOLD) {
+		autoScrollState.markLatest();
+		return true;
+	}
+
+	if (
+		previousMetrics != null &&
+		previousMetrics.latestDistance <= SCROLL_LATEST_THRESHOLD &&
+		Math.abs(metrics.scrollTop - previousMetrics.maxScrollTop) <= SCROLL_LATEST_THRESHOLD
+	) {
+		autoScrollState.markLatest();
+		return true;
+	}
+
+	return autoScrollState.canAutoFollowLatest(metrics.latestDistance);
+}
+
 function clearNewMessageIndicator() {
 	if (!showIndicator.value && newMessageCount.value === 0) return;
 
@@ -413,6 +437,12 @@ function scrollToLatest(behavior: ScrollBehavior = 'smooth', options?: { flushRe
 	historyFetchArmed = true;
 }
 
+async function revealLatestMessagesAfterLayout(options?: { behavior?: ScrollBehavior; flushReadReceipt?: boolean }) {
+	await nextTick();
+	await waitAnimationFrame();
+	scrollToLatest(options?.behavior ?? 'instant', { flushReadReceipt: options?.flushReadReceipt });
+}
+
 function setupTimelineScrollListener() {
 	removeTimelineScrollListener?.();
 	removeTimelineScrollListener = null;
@@ -439,13 +469,15 @@ function setupTimelineScrollListener() {
 			fetchMore();
 		}
 
-		if (latestDistance <= SCROLL_LATEST_THRESHOLD) {
-			if (detachedIncomingMessages.length > 0) {
-				scrollToLatest('instant', { flushReadReceipt: true });
-				return;
+			if (latestDistance <= SCROLL_LATEST_THRESHOLD) {
+				if (!isContextMode.value && detachedIncomingMessages.length > 0) {
+					scrollToLatest('instant', { flushReadReceipt: true });
+					return;
+				}
+				if (!isContextMode.value) {
+					clearNewMessageIndicator();
+				}
 			}
-			clearNewMessageIndicator();
-		}
 
 		if (latestDistance >= SCROLL_TAIL_THRESHOLD) {
 			newerFetchArmed = true;
@@ -1067,7 +1099,7 @@ function startStreamRecoveryPolling() {
 		if (isRoomViewDisposed) return;
 
 		if (canSyncLatestMessages()) {
-			const shouldStickToLatest = isAtLatest();
+			const shouldStickToLatest = shouldAutoRevealLatestMessages();
 			try {
 				await syncLatestMessages({ stickToLatest: shouldStickToLatest, flushReadReceipt: shouldStickToLatest });
 			} catch (err) {
@@ -1094,7 +1126,7 @@ function scheduleStreamRecovery(reason: 'connected' | 'visible' | 'manual' = 'ma
 		streamRecoveryTimer = null;
 		if (!canSyncLatestMessages()) return;
 
-		const shouldStickToLatest = isAtLatest();
+		const shouldStickToLatest = shouldAutoRevealLatestMessages();
 		const sinceId = streamRecoverySinceId;
 		streamRecoverySinceId = undefined;
 		try {
@@ -1156,20 +1188,21 @@ async function syncLatestMessages(options?: { stickToLatest?: boolean; flushRead
 	const generation = ++latestSyncGeneration;
 	const run = async () => {
 		const sinceId = options?.sinceId ?? findNewestPersistedMessageId();
-		flushIncomingMessagesNow();
+		const shouldStickToLatest = options?.stickToLatest === true || shouldAutoRevealLatestMessages();
+		flushIncomingMessagesNow({ stickToLatest: shouldStickToLatest });
 		let newVisibleMessages: LatestGapMessage[] = [];
 
 		try {
-			newVisibleMessages = await fetchLatestGap(sinceId, { maxPages: STREAM_LATEST_GAP_MAX_PAGES, bufferOnly: options?.stickToLatest !== true });
+			newVisibleMessages = await fetchLatestGap(sinceId, { maxPages: STREAM_LATEST_GAP_MAX_PAGES, bufferOnly: !shouldStickToLatest });
 		} catch (err) {
 			console.warn('Failed to sync latest chat messages:', err);
 		}
 
 		const isLatestSync = generation === latestSyncGeneration;
 
-		if (options?.stickToLatest === true) {
+		if (shouldStickToLatest) {
 			if (!isLatestSync) return;
-			await scrollToLatestAfterLayout({ flushReadReceipt: options.flushReadReceipt });
+			await scrollToLatestAfterLayout({ flushReadReceipt: options?.flushReadReceipt });
 		} else {
 			const otherCount = newVisibleMessages.filter(message => message.fromUserId !== $i.id).length;
 			if (otherCount > 0) {
@@ -1264,6 +1297,20 @@ function clearMessageContextRoute() {
 
 	suppressNextMessageIdClearInitialize = true;
 	router.replace(path);
+}
+
+async function finishContextAtLatest() {
+	if (!isContextMode.value) return;
+
+	clearMessageContextRoute();
+	contextTargetMessageId.value = null;
+	pendingContextScrollId.value = null;
+	canFetchNewer.value = false;
+	newerFetchArmed = false;
+	showScrollToLatestButton.value = false;
+	clearNewMessageIndicator();
+	await revealLatestMessagesAfterLayout({ behavior: 'instant', flushReadReceipt: true });
+	await syncLatestMessages({ stickToLatest: true, flushReadReceipt: true });
 }
 
 async function exitContextToLatest() {
@@ -1594,6 +1641,8 @@ async function fetchNewer() {
 	if (!canFetchNewer.value || newerFetching.value || sinceId == null) return;
 
 	const anchor = getVisibleMessageAnchor();
+	const wasContextMode = isContextMode.value;
+	let reachedLatestInContext = false;
 	beginScrollRestoration();
 	newerFetching.value = true;
 
@@ -1610,15 +1659,21 @@ async function fetchNewer() {
 
 		appendFetchedMessages(newMessages);
 		canFetchNewer.value = newMessages.length === LIMIT;
+		reachedLatestInContext = wasContextMode && !canFetchNewer.value;
 	} finally {
 		newerFetching.value = false;
-		await restoreVisibleMessageAnchorAfterLayout(anchor);
-		endScrollRestoration();
-		nextTick(() => {
-			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
-			if (scrollContainer == null) return;
-			newerFetchArmed = getChatScrollMetrics(scrollContainer).latestDistance >= SCROLL_TAIL_THRESHOLD;
-		});
+		if (reachedLatestInContext) {
+			endScrollRestoration();
+			await finishContextAtLatest();
+		} else {
+			await restoreVisibleMessageAnchorAfterLayout(anchor);
+			endScrollRestoration();
+			nextTick(() => {
+				const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+				if (scrollContainer == null) return;
+				newerFetchArmed = getChatScrollMetrics(scrollContainer).latestDistance >= SCROLL_TAIL_THRESHOLD;
+			});
+		}
 	}
 }
 
@@ -1628,6 +1683,7 @@ function clearIncomingMessageQueue(options?: { flushReadReceipt?: boolean }) {
 	}
 
 	pendingIncomingMessages = [];
+	pendingIncomingShouldStickToLatest = false;
 	detachedIncomingMessages = [];
 	if (pendingIncomingMessageFrame != null) {
 		window.cancelAnimationFrame(pendingIncomingMessageFrame);
@@ -1669,24 +1725,33 @@ function getNewestMessage(messages: NormalizedChatMessage[]): NormalizedChatMess
 	return newest;
 }
 
-function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) {
+function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[], options?: { stickToLatest?: boolean }) {
 	if (batch.length === 0) return;
 
 	const visibleBatch = filterMutedRoomMessages(batch);
 	if (visibleBatch.length === 0) return;
 	const batchNewestId = visibleBatch.reduce<string | null>((acc, message) => acc == null || message.id > acc ? message.id : acc, null);
+	const shouldStickToLatest = options?.stickToLatest === true || shouldAutoRevealLatestMessages();
 
 	if (isContextMode.value) {
-		const normalized = visibleBatch.map(message => normalizeMessage(message));
-		messages.value = removeMatchingPendingMessagesFrom(messages.value, normalized);
-		const otherCount = normalized.filter(message => message.fromUserId !== $i.id).length;
-		if (otherCount > 0) {
-			notifyNewMessages(otherCount);
+		if (shouldStickToLatest) {
+			clearMessageContextRoute();
+			contextTargetMessageId.value = null;
+			pendingContextScrollId.value = null;
+			canFetchNewer.value = false;
+			newerFetchArmed = false;
+		} else {
+			const normalized = visibleBatch.map(message => normalizeMessage(message));
+			messages.value = removeMatchingPendingMessagesFrom(messages.value, normalized);
+			const otherCount = normalized.filter(message => message.fromUserId !== $i.id).length;
+			if (otherCount > 0) {
+				notifyNewMessages(otherCount);
+			}
+			return;
 		}
-		return;
 	}
 
-	const wasAtLatest = isAtLatest();
+	const wasAtLatest = shouldStickToLatest || isAtLatest();
 	const shouldRecoverGap = batchNewestId != null && findNewestPersistedMessageId() != null && batchNewestId > findNewestPersistedMessageId()!;
 	const normalized = visibleBatch.map(message => normalizeMessage(message));
 	const newestOtherMessage = getNewestMessage(normalized.filter(message => message.fromUserId !== $i.id));
@@ -1722,36 +1787,36 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[]) 
 		readReceiptBatcher.queue(newestOtherMessage.id);
 	}
 
-	if (wasAtLatest) {
-		nextTick(() => {
-			scrollToLatest('instant');
-			clearNewMessageIndicator();
-		});
-		if (shouldRecoverGap) {
-			scheduleStreamRecovery('manual');
-		}
+	void revealLatestMessagesAfterLayout({ behavior: 'instant', flushReadReceipt: true });
+	if (shouldRecoverGap) {
+		scheduleStreamRecovery('manual');
 	}
 }
 
 function flushIncomingMessages() {
 	pendingIncomingMessageFrame = null;
 	const batch = pendingIncomingMessages;
+	const shouldStickToLatest = pendingIncomingShouldStickToLatest;
 	pendingIncomingMessages = [];
-	processIncomingMessageBatch(batch);
+	pendingIncomingShouldStickToLatest = false;
+	processIncomingMessageBatch(batch, { stickToLatest: shouldStickToLatest });
 }
 
-function flushIncomingMessagesNow() {
+function flushIncomingMessagesNow(options?: { stickToLatest?: boolean }) {
 	if (pendingIncomingMessageFrame != null) {
 		window.cancelAnimationFrame(pendingIncomingMessageFrame);
 		pendingIncomingMessageFrame = null;
 	}
 
 	const batch = pendingIncomingMessages;
+	const shouldStickToLatest = pendingIncomingShouldStickToLatest || options?.stickToLatest === true;
 	pendingIncomingMessages = [];
-	processIncomingMessageBatch(batch);
+	pendingIncomingShouldStickToLatest = false;
+	processIncomingMessageBatch(batch, { stickToLatest: shouldStickToLatest });
 }
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {
+	pendingIncomingShouldStickToLatest = pendingIncomingShouldStickToLatest || shouldAutoRevealLatestMessages();
 	pendingIncomingMessages.push(message);
 	rememberStreamRecoverySinceId(findNewestPersistedMessageId());
 	if (pendingIncomingMessageFrame == null) {
@@ -2048,7 +2113,7 @@ async function ensureLatestOnChatTabReturn(generation: number) {
 	if (generation !== chatTabLatestReturnGeneration || tab.value !== 'chat' || initializing.value || initializeError.value != null || joinRequiredRoom.value != null) return;
 
 	const sinceId = findNewestPersistedMessageId();
-	flushIncomingMessagesNow();
+	flushIncomingMessagesNow({ stickToLatest: true });
 	scrollToLatest('instant', { flushReadReceipt: true });
 
 	try {
@@ -2133,7 +2198,7 @@ const headerActions = computed<PageHeaderItem[]>(() => {
 
 	return [{
 		icon: 'ti ti-dots',
-		text: '',
+		text: i18n.ts.menu,
 		handler: showMenu,
 	}];
 });
@@ -2407,43 +2472,6 @@ definePage(computed(() => {
 .contextTarget {
 	border-radius: 22px;
 	animation: contextTargetPulse 2.2s ease-out 1;
-}
-
-.contextModeBar {
-	position: sticky;
-	top: 0;
-	z-index: 2;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 10px;
-	padding: 8px 10px;
-	border-radius: 14px;
-	background: light-dark(rgb(255 255 255 / 0.86), rgb(23 35 47 / 0.9));
-	box-shadow: 0 1px 4px rgb(0 0 0 / 0.14);
-	-webkit-backdrop-filter: var(--MI-blur, blur(8px));
-	backdrop-filter: var(--MI-blur, blur(8px));
-}
-
-.contextModeText {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	min-width: 0;
-	color: var(--MI_THEME-fgTransparentWeak);
-	font-size: 0.9em;
-	font-weight: 700;
-}
-
-.contextModeButton {
-	flex-shrink: 0;
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 0 12px;
-	line-height: 30px;
-	border-radius: 999px;
-	font-size: 0.9em;
 }
 
 .more {

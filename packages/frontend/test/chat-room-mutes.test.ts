@@ -13,9 +13,12 @@ import chatServiceSource from '../../backend/src/core/ChatService.ts?raw';
 import endpointListSource from '../../backend/src/server/api/endpoint-list.ts?raw';
 
 describe('chat room user mutes', () => {
-		test('adds a room tab and avatar menu action for user mutes', () => {
+	test('adds a room tab and avatar menu action for user mutes', () => {
 		assert.match(roomSource, /key: 'mutedUsers'/);
 		assert.match(roomSource, /title: i18n\.ts\._chat\.mutedUsers/);
+		assert.match(roomSource, /:title="t\.title" :aria-label="t\.title"/);
+		assert.match(roomSource, /text: i18n\.ts\.menu/);
+		assert.match(roomSource, /:title="headerActions\[0\]\.text" :aria-label="headerActions\[0\]\.text"/);
 		assert.match(roomSource, /:enableRoomUserMute="true"/);
 		assert.match(roomSource, /<XMutedUsers[^>]+@unmuted="onRoomUserUnmuted"/);
 		assert.match(messageSource, /enableRoomUserMute\?: boolean;/);
