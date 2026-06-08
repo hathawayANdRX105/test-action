@@ -6,9 +6,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div class="_gaps" :class="$style.root">
 	<div :class="$style.summary">
-		<div>
+		<div :class="$style.summaryIcon" aria-hidden="true"><i class="ti ti-eye-off"></i></div>
+		<div :class="$style.summaryBody">
 			<div :class="$style.summaryTitle">{{ i18n.ts._chat.mutedUsers }}</div>
-			<div :class="$style.summarySub">{{ i18n.ts._chat.muteUserInRoomConfirm }}</div>
+			<div :class="$style.summarySub">{{ i18n.ts._chat.mutedUsersDescription }}</div>
+			<div :class="$style.summaryMeta">{{ i18n.ts._chat.mutedUsersScope }}</div>
 		</div>
 	</div>
 
@@ -16,12 +18,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkError v-else-if="error" @retry="init"/>
 	<div v-else-if="mutings.length === 0" :class="$style.empty">
 		<i class="ti ti-eye-off"></i>
-		<span>{{ i18n.ts._chat.noMutedUsers }}</span>
+		<div :class="$style.emptyTitle">{{ i18n.ts._chat.noMutedUsers }}</div>
+		<div :class="$style.emptySub">{{ i18n.ts._chat.noMutedUsersDescription }}</div>
 	</div>
 	<div v-else :class="$style.userList">
 		<div v-for="muting in mutings" :key="muting.id" :class="$style.userRow">
 			<MkUserCardMini :user="muting.user" :withChart="false"/>
-			<div :class="$style.meta">{{ dateString(muting.createdAt) }}</div>
+			<div :class="$style.meta">
+				<span :class="$style.metaLabel">{{ i18n.ts._chat.mutedAt }}</span>
+				<span>{{ dateString(muting.createdAt) }}</span>
+			</div>
 			<MkButton rounded :wait="unmutingUserId === muting.user.id" @click="unmute(muting)">
 				<i class="ti ti-eye"></i> {{ i18n.ts._chat.unmuteUserInRoom }}
 			</MkButton>
@@ -152,22 +158,55 @@ onBeforeUnmount(() => {
 .summary {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 16px;
+	gap: 14px;
 	padding: 16px;
 	border: solid 1px color(from var(--MI_THEME-fg) srgb r g b / 0.12);
 	border-radius: var(--MI-radius);
 	background: color(from var(--MI_THEME-panel) srgb r g b / 0.55);
 }
 
+.summaryIcon {
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	width: 42px;
+	height: 42px;
+	border-radius: 999px;
+	color: var(--MI_THEME-accent);
+	background: color(from var(--MI_THEME-accent) srgb r g b / 0.12);
+
+	i {
+		font-size: 20px;
+	}
+}
+
+.summaryBody {
+	min-width: 0;
+}
+
 .summaryTitle {
 	font-weight: 700;
+	font-size: 1.05em;
 }
 
 .summarySub {
 	margin-top: 4px;
 	color: color(from var(--MI_THEME-fg) srgb r g b / 0.65);
 	font-size: 0.9em;
+}
+
+.summaryMeta {
+	display: inline-flex;
+	align-items: center;
+	width: fit-content;
+	max-width: 100%;
+	margin-top: 10px;
+	padding: 4px 8px;
+	border-radius: 999px;
+	color: color(from var(--MI_THEME-fg) srgb r g b / 0.72);
+	background: color(from var(--MI_THEME-fg) srgb r g b / 0.08);
+	font-size: 0.82em;
+	line-height: 1.35;
 }
 
 .empty {
@@ -180,6 +219,18 @@ onBeforeUnmount(() => {
 	i {
 		font-size: 2em;
 	}
+}
+
+.emptyTitle {
+	font-weight: 700;
+	color: var(--MI_THEME-fg);
+}
+
+.emptySub {
+	max-width: 420px;
+	text-align: center;
+	font-size: 0.92em;
+	line-height: 1.6;
 }
 
 .userList {
@@ -200,9 +251,16 @@ onBeforeUnmount(() => {
 }
 
 .meta {
+	display: grid;
+	gap: 2px;
 	color: color(from var(--MI_THEME-fg) srgb r g b / 0.55);
 	font-size: 0.85em;
 	white-space: nowrap;
+}
+
+.metaLabel {
+	color: color(from var(--MI_THEME-fg) srgb r g b / 0.72);
+	font-weight: 700;
 }
 
 .moreButton {

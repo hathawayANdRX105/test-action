@@ -10,7 +10,7 @@ import { appendDetachedChatMessages, ChatAutoScrollState, ChatReadReceiptBatcher
 import roomSource from '@/pages/chat/room.vue?raw';
 
 describe('chat room scroll state', () => {
-	test('does not auto-follow after the user starts scrolling away from latest', () => {
+	test('keeps auto-follow while the user is still at latest', () => {
 		let now = 0;
 		const state = new ChatAutoScrollState({
 			latestThreshold: 24,
@@ -22,7 +22,7 @@ describe('chat room scroll state', () => {
 		assert.strictEqual(state.canAutoFollowLatest(0), true);
 
 		state.markUserInteraction();
-		assert.strictEqual(state.canAutoFollowLatest(1), false);
+		assert.strictEqual(state.canAutoFollowLatest(1), true);
 
 		now = 1300;
 		state.updateFromScroll(80);
@@ -32,7 +32,7 @@ describe('chat room scroll state', () => {
 		assert.strictEqual(state.canAutoFollowLatest(0), true);
 	});
 
-	test('keeps mutation auto-stick limited to the real latest edge', () => {
+	test('keeps mutation auto-stick limited to the real latest edge after detaching', () => {
 		let now = 0;
 		const state = new ChatAutoScrollState({
 			latestThreshold: 24,
@@ -44,9 +44,12 @@ describe('chat room scroll state', () => {
 		assert.strictEqual(state.shouldStickToLatest(20, 4), false);
 
 		state.markUserInteraction();
-		assert.strictEqual(state.shouldStickToLatest(0, 4), false);
+		assert.strictEqual(state.shouldStickToLatest(0, 4), true);
 
 		now = 1300;
+		state.updateFromScroll(80);
+		assert.strictEqual(state.shouldStickToLatest(0, 4), false);
+
 		state.markLatest();
 		assert.strictEqual(state.shouldStickToLatest(0, 4), true);
 	});
@@ -165,10 +168,44 @@ describe('chat room scroll state', () => {
 	});
 
 	test('refreshes missing latest messages when opening the new message indicator', () => {
-		assert.match(roomSource, /async function fetchLatestGap\(sinceId = findNewestPersistedMessageId\(\)\)/);
+		assert.match(roomSource, /async function fetchLatestGap\(sinceId = findNewestPersistedMessageId\(\), options\?: \{ maxPages\?: number; bufferOnly\?: boolean \}\)/);
+		assert.match(roomSource, /async function syncLatestMessages\(options\?: \{ stickToLatest\?: boolean; flushReadReceipt\?: boolean; sinceId\?: string \}\)/);
+		assert.match(roomSource, /const syncPromise = \(latestSyncPromise \?\? Promise\.resolve\(\)\)\.then\(run, run\);/);
 		assert.match(roomSource, /async function showLatestMessages\(behavior: ScrollBehavior = 'smooth'\)/);
-		assert.match(roomSource, /const sinceId = findNewestPersistedMessageId\(\);[\s\S]*flushIncomingMessagesNow\(\);[\s\S]*scrollToLatest\(behavior, \{ flushReadReceipt: true \}\);[\s\S]*await fetchLatestGap\(sinceId\);[\s\S]*await scrollToLatestAfterLayout\(\{ flushReadReceipt: true \}\);/);
+		assert.match(roomSource, /scrollToLatest\(behavior, \{ flushReadReceipt: true \}\);[\s\S]*await syncLatestMessages\(\{ stickToLatest: true, flushReadReceipt: true \}\);/);
 		assert.match(roomSource, /function onIndicatorClick\(\) \{[\s\S]*void showLatestMessages\('smooth'\);/);
+	});
+
+	test('recovers missed latest messages after stream reconnect and visibility restore', () => {
+		assert.match(roomSource, /const STREAM_RECOVERY_DEBOUNCE_MS = 250;/);
+		assert.match(roomSource, /const STREAM_RECOVERY_POLL_INTERVAL_MS = 5000;/);
+		assert.match(roomSource, /const STREAM_LATEST_GAP_MAX_PAGES = 5;/);
+		assert.match(roomSource, /let streamRecoveryTimer: number \| null = null;/);
+		assert.match(roomSource, /let streamRecoveryPollingTimer: number \| null = null;/);
+		assert.match(roomSource, /let streamRecoverySinceId: string \| undefined;/);
+		assert.match(roomSource, /let isRoomViewDisposed = false;/);
+		assert.match(roomSource, /function startStreamRecoveryPolling\(\)/);
+		assert.match(roomSource, /if \(isRoomViewDisposed\) return;/);
+		assert.match(roomSource, /function scheduleStreamRecovery\(reason: 'connected' \| 'visible' \| 'manual' = 'manual', options\?: \{ sinceId\?: string \}\)/);
+		assert.match(roomSource, /if \(reason === 'connected'\) \{[\s\S]*await waitChannelConnected\(\);[\s\S]*\}/);
+		assert.match(roomSource, /await syncLatestMessages\(\{ stickToLatest: shouldStickToLatest, flushReadReceipt: shouldStickToLatest, sinceId \}\);/);
+		assert.match(roomSource, /function onStreamConnected\(\) \{[\s\S]*scheduleStreamRecovery\('connected'\);[\s\S]*\}/);
+		assert.match(roomSource, /function onStreamDisconnected\(\) \{[\s\S]*showScrollToLatestButton\.value = true;[\s\S]*startStreamRecoveryPolling\(\);[\s\S]*\}/);
+		assert.match(roomSource, /function onVisibilitychange\(\) \{[\s\S]*readReceiptBatcher\.flush\(\);[\s\S]*startStreamRecoveryPolling\(\);[\s\S]*scheduleStreamRecovery\('visible'\);[\s\S]*\}/);
+		assert.match(roomSource, /useStream\(\)\.on\('_connected_', onStreamConnected\);/);
+		assert.match(roomSource, /useStream\(\)\.off\('_connected_', onStreamConnected\);/);
+		assert.match(roomSource, /clearStreamRecoveryPollingTimer\(\);/);
+	});
+
+	test('fills realtime message gaps without blocking latest auto-scroll', () => {
+		assert.match(roomSource, /function rememberStreamRecoverySinceId\(sinceId: string \| undefined\)/);
+		assert.match(roomSource, /function onMessage\(message: Misskey\.entities\.ChatMessageLite\) \{[\s\S]*rememberStreamRecoverySinceId\(findNewestPersistedMessageId\(\)\);/);
+		assert.match(roomSource, /const batchNewestId = visibleBatch\.reduce<string \| null>/);
+		assert.match(roomSource, /const shouldRecoverGap = batchNewestId != null && findNewestPersistedMessageId\(\) != null && batchNewestId > findNewestPersistedMessageId\(\)!;/);
+		assert.match(roomSource, /scheduleStreamRecovery\('manual'\);/);
+		assert.match(roomSource, /newVisibleMessages = await fetchLatestGap\(sinceId, \{ maxPages: STREAM_LATEST_GAP_MAX_PAGES, bufferOnly: options\?\.stickToLatest !== true \}\);/);
+		assert.match(roomSource, /function bufferFetchedLatestMessages\(fetched: Misskey\.entities\.ChatMessageLite\[\]\): LatestGapMessage\[\]/);
+		assert.match(roomSource, /if \(options\?\.stickToLatest === true\) \{[\s\S]*await scrollToLatestAfterLayout\(\{ flushReadReceipt: options\.flushReadReceipt \}\);[\s\S]*\} else \{[\s\S]*notifyNewMessages\(otherCount\);/);
 	});
 
 	test('shows a direct latest button while detached from the chat bottom', () => {
@@ -264,6 +301,7 @@ describe('chat room scroll state', () => {
 		assert.deepStrictEqual(buffered.map(item => item.id), ['103', '102', '104']);
 		assert.match(roomSource, /let detachedIncomingMessages: Misskey\.entities\.ChatMessageLite\[\] = \[\];/);
 		assert.match(roomSource, /if \(!wasAtLatest\) \{[\s\S]*detachedIncomingMessages = appendDetachedChatMessages\(detachedIncomingMessages, visibleBatch, messages\.value\);[\s\S]*notifyNewMessages\(otherCount\);[\s\S]*return;/);
+		assert.match(roomSource, /if \(wasAtLatest\) \{[\s\S]*nextTick\(\(\) => \{[\s\S]*scrollToLatest\('instant'\);[\s\S]*clearNewMessageIndicator\(\);[\s\S]*\}\);[\s\S]*\}/);
 		assert.match(roomSource, /function scrollToLatest\(behavior: ScrollBehavior = 'smooth'[\s\S]*flushDetachedIncomingMessages\(\{ queueReadReceipt: true \}\)/);
 		assert.match(roomSource, /if \(detachedIncomingMessages\.length > 0\) \{[\s\S]*scrollToLatest\('instant', \{ flushReadReceipt: true \}\);[\s\S]*return;/);
 		assert.strictEqual(/const anchor = wasAtLatest \? null : getVisibleMessageAnchor\(\);[\s\S]*restoreVisibleMessageAnchorAfterLayout\(anchor\)/.test(roomSource), false);

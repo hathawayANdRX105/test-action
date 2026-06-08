@@ -21,7 +21,12 @@ describe('chat room user mutes', () => {
 		assert.match(messageSource, /enableRoomUserMute\?: boolean;/);
 		assert.match(messageSource, /\(ev: 'muteUser', user: Misskey\.entities\.UserLite\): void;/);
 		assert.match(messageSource, /props\.enableRoomUserMute === true/);
-		assert.match(messageSource, /text: i18n\.ts\._chat\.muteUserInRoom[\s\S]*icon: 'ti ti-eye-off'[\s\S]*emit\('muteUser', user\)/);
+		assert.match(messageSource, /text: i18n\.ts\._chat\.muteUserInRoom[\s\S]*caption: i18n\.ts\._chat\.muteUserInRoomCaption[\s\S]*icon: 'ti ti-eye-off'[\s\S]*emit\('muteUser', user\)/);
+		assert.match(mutedUsersSource, /i18n\.ts\._chat\.mutedUsersDescription/);
+		assert.match(mutedUsersSource, /i18n\.ts\._chat\.mutedUsersScope/);
+		assert.match(mutedUsersSource, /i18n\.ts\._chat\.noMutedUsersDescription/);
+		assert.match(mutedUsersSource, /i18n\.ts\._chat\.mutedAt/);
+		assert.match(mutedUsersSource, /<i class="ti ti-eye"><\/i> \{\{ i18n\.ts\._chat\.unmuteUserInRoom \}\}/);
 	});
 
 	test('filters muted room users from fetched and realtime messages', () => {

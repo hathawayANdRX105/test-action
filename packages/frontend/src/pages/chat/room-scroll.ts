@@ -215,6 +215,7 @@ export class ChatReadReceiptBatcher {
 export class ChatAutoScrollState {
 	private userScrollLockUntil = 0;
 	private detachedFromLatest = false;
+	private wasAtLatest = false;
 	private readonly latestThreshold: number;
 	private readonly interactionLockMs: number;
 	private readonly now: () => number;
@@ -236,10 +237,13 @@ export class ChatAutoScrollState {
 	public markLatest(): void {
 		this.userScrollLockUntil = 0;
 		this.detachedFromLatest = false;
+		this.wasAtLatest = true;
 	}
 
 	public updateFromScroll(latestDistance: number): void {
-		this.detachedFromLatest = latestDistance > this.latestThreshold;
+		const atLatest = latestDistance <= this.latestThreshold;
+		this.wasAtLatest = atLatest;
+		this.detachedFromLatest = !atLatest;
 	}
 
 	public isUserInteracting(): boolean {
@@ -247,10 +251,11 @@ export class ChatAutoScrollState {
 	}
 
 	public canAutoFollowLatest(latestDistance: number): boolean {
-		return latestDistance <= this.latestThreshold && !this.detachedFromLatest && !this.isUserInteracting();
+		return latestDistance <= this.latestThreshold && !this.detachedFromLatest;
 	}
 
 	public shouldStickToLatest(latestDistance: number, stickThreshold: number): boolean {
-		return latestDistance <= stickThreshold && !this.detachedFromLatest && !this.isUserInteracting();
+		if (latestDistance <= stickThreshold && !this.detachedFromLatest) return true;
+		return this.wasAtLatest && latestDistance <= this.latestThreshold && !this.detachedFromLatest;
 	}
 }

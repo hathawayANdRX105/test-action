@@ -388,6 +388,7 @@ function getAvatarMenu(): MenuItem[] {
 			action: () => emit('mention', user),
 		}, {
 			text: i18n.ts._chat.muteUserInRoom,
+			caption: i18n.ts._chat.muteUserInRoomCaption,
 			icon: 'ti ti-eye-off',
 			action: () => emit('muteUser', user),
 		});
