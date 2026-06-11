@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onMounted, nextTick, useTemplateRef, ref } from 'vue';
+import { onMounted, onBeforeUnmount, nextTick, useTemplateRef, ref } from 'vue';
 import { Chart } from 'chart.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { store } from '@/store.js';
@@ -26,6 +26,7 @@ initChart();
 const rootEl = useTemplateRef('rootEl');
 const chartEl = useTemplateRef('chartEl');
 let chartInstance: Chart | null = null;
+let disposed = false;
 const fetching = ref(true);
 
 const { handler: externalTooltipHandler } = useChartTooltip({
@@ -43,7 +44,16 @@ async function renderChart() {
 
 	const maxDays = wide ? 10 : narrow ? 5 : 7;
 
-	let raw = await misskeyApi('retention', { });
+	let raw;
+	try {
+		raw = await misskeyApi('retention', { });
+	} catch (err) {
+		console.error(err);
+		fetching.value = false;
+		return;
+	}
+
+	if (disposed) return;
 
 	raw = raw.slice(0, maxDays + 1);
 
@@ -74,6 +84,7 @@ async function renderChart() {
 	fetching.value = false;
 
 	await nextTick();
+	if (disposed || chartEl.value == null) return;
 
 	const color = store.s.darkMode ? '#b4e900' : '#86b300';
 
@@ -87,8 +98,6 @@ async function renderChart() {
 	const max = (createdAt: string) => raw.find(x => x.createdAt === createdAt)!.users;
 
 	const marginEachCell = 12;
-
-	if (chartEl.value == null) return;
 
 	chartInstance = new Chart(chartEl.value, {
 		type: 'matrix',
@@ -205,5 +214,13 @@ async function renderChart() {
 
 onMounted(async () => {
 	renderChart();
+});
+
+onBeforeUnmount(() => {
+	disposed = true;
+	if (chartInstance) {
+		chartInstance.destroy();
+		chartInstance = null;
+	}
 });
 </script>

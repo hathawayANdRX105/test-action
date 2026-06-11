@@ -23,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:class="$style.circle"
 		:stroke="color"
 	/>
-	<text x="50%" y="50%" dy="0.05" text-anchor="middle" :class="$style.text">{{ (value * 100).toFixed(0) }}%</text>
+	<text x="50%" y="50%" dy="0.05" text-anchor="middle" :class="$style.text">{{ percentage }}%</text>
 </svg>
 </template>
 
@@ -36,8 +36,14 @@ const props = defineProps<{
 
 const r = 0.45;
 
-const color = computed(() => `hsl(${180 - (props.value * 180)}, 80%, 70%)`);
-const strokeDashoffset = computed(() => (1 - props.value) * (Math.PI * (r * 2)));
+const safeValue = computed(() => {
+	if (!Number.isFinite(props.value)) return 0;
+	return Math.min(1, Math.max(0, props.value));
+});
+
+const color = computed(() => `hsl(${180 - (safeValue.value * 180)}, 80%, 70%)`);
+const strokeDashoffset = computed(() => (1 - safeValue.value) * (Math.PI * (r * 2)));
+const percentage = computed(() => (safeValue.value * 100).toFixed(0));
 </script>
 
 <style lang="scss" module>

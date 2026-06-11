@@ -32,10 +32,19 @@ const used = ref<number>(0);
 const free = ref<number>(0);
 
 function onStats(stats: Misskey.entities.ServerStats) {
-	usage.value = stats.mem.active / props.meta.mem.total;
-	total.value = props.meta.mem.total;
-	used.value = stats.mem.active;
-	free.value = total.value - used.value;
+	total.value = positiveFinite(props.meta.mem?.total);
+	used.value = positiveFinite(stats.mem?.active);
+	usage.value = total.value > 0 ? clampRatio(used.value / total.value) : 0;
+	free.value = Math.max(0, total.value - used.value);
+}
+
+function positiveFinite(value: unknown): number {
+	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function clampRatio(value: number): number {
+	if (!Number.isFinite(value)) return 0;
+	return Math.min(1, Math.max(0, value));
 }
 
 onMounted(() => {

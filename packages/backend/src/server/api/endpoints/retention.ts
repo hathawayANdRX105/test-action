@@ -45,10 +45,13 @@ export const meta = {
 	allowGet: true,
 	cacheSec: 60 * 60,
 
-	// 2 calls per second
+	// Admin overview can mount multiple retention charts at once; keep this read-only,
+	// cacheable endpoint tolerant of refreshes without tripping normal page use.
 	limit: {
-		duration: 1000,
-		max: 2,
+		type: 'bucket',
+		size: 60,
+		dripSize: 10,
+		dripRate: 1000,
 	},
 } as const;
 

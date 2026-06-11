@@ -95,10 +95,10 @@ const cpuPolylinePoints = ref<string>('');
 const memPolylinePoints = ref<string>('');
 const cpuPolygonPoints = ref<string>('');
 const memPolygonPoints = ref<string>('');
-const cpuHeadX = ref<number>();
-const cpuHeadY = ref<number>();
-const memHeadX = ref<number>();
-const memHeadY = ref<number>();
+const cpuHeadX = ref<number>(viewBoxX.value);
+const cpuHeadY = ref<number>(viewBoxY.value);
+const memHeadX = ref<number>(viewBoxX.value);
+const memHeadY = ref<number>(viewBoxY.value);
 const cpuP = ref<string>('');
 const memP = ref<string>('');
 
@@ -119,27 +119,60 @@ function onStats(connStats: Misskey.entities.ServerStats) {
 	stats.value.push(connStats);
 	if (stats.value.length > 50) stats.value.shift();
 
-	let cpuPolylinePointsStats = stats.value.map((s, i) => [viewBoxX.value - ((stats.value.length - 1) - i), (1 - s.cpu) * viewBoxY.value]);
-	let memPolylinePointsStats = stats.value.map((s, i) => [viewBoxX.value - ((stats.value.length - 1) - i), (1 - (s.mem.active / props.meta.mem.total)) * viewBoxY.value]);
+	const totalMem = positiveFinite(props.meta.mem?.total);
+	const cpuPolylinePointsStats = stats.value.map((s, i) => [getPointX(i), getPointY(getCpuRatio(s))]);
+	const memPolylinePointsStats = stats.value.map((s, i) => [getPointX(i), getPointY(getMemRatio(s, totalMem))]);
 	cpuPolylinePoints.value = cpuPolylinePointsStats.map(xy => `${xy[0]},${xy[1]}`).join(' ');
 	memPolylinePoints.value = memPolylinePointsStats.map(xy => `${xy[0]},${xy[1]}`).join(' ');
 
 	cpuPolygonPoints.value = `${viewBoxX.value - (stats.value.length - 1)},${viewBoxY.value} ${cpuPolylinePoints.value} ${viewBoxX.value},${viewBoxY.value}`;
 	memPolygonPoints.value = `${viewBoxX.value - (stats.value.length - 1)},${viewBoxY.value} ${memPolylinePoints.value} ${viewBoxX.value},${viewBoxY.value}`;
 
-	cpuHeadX.value = cpuPolylinePointsStats.at(-1)![0];
-	cpuHeadY.value = cpuPolylinePointsStats.at(-1)![1];
-	memHeadX.value = memPolylinePointsStats.at(-1)![0];
-	memHeadY.value = memPolylinePointsStats.at(-1)![1];
+	const cpuHead = cpuPolylinePointsStats.at(-1) ?? [viewBoxX.value, viewBoxY.value];
+	const memHead = memPolylinePointsStats.at(-1) ?? [viewBoxX.value, viewBoxY.value];
+	cpuHeadX.value = cpuHead[0];
+	cpuHeadY.value = cpuHead[1];
+	memHeadX.value = memHead[0];
+	memHeadY.value = memHead[1];
 
-	cpuP.value = (connStats.cpu * 100).toFixed(0);
-	memP.value = (connStats.mem.active / props.meta.mem.total * 100).toFixed(0);
+	cpuP.value = (getCpuRatio(connStats) * 100).toFixed(0);
+	memP.value = (getMemRatio(connStats, totalMem) * 100).toFixed(0);
 }
 
 function onStatsLog(statsLog: Misskey.entities.ServerStatsLog) {
 	for (const revStats of statsLog.toReversed()) {
 		onStats(revStats);
 	}
+}
+
+function getPointX(index: number): number {
+	return viewBoxX.value - ((stats.value.length - 1) - index);
+}
+
+function getPointY(ratio: number): number {
+	return (1 - clampRatio(ratio)) * viewBoxY.value;
+}
+
+function getCpuRatio(statsItem: Misskey.entities.ServerStats): number {
+	return clampRatio(finiteNumber(statsItem.cpu));
+}
+
+function getMemRatio(statsItem: Misskey.entities.ServerStats, totalMem: number): number {
+	return totalMem > 0 ? clampRatio(finiteNumber(statsItem.mem?.active) / totalMem) : 0;
+}
+
+function finiteNumber(value: unknown): number {
+	return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function positiveFinite(value: unknown): number {
+	const number = finiteNumber(value);
+	return number > 0 ? number : 0;
+}
+
+function clampRatio(value: number): number {
+	if (!Number.isFinite(value)) return 0;
+	return Math.min(1, Math.max(0, value));
 }
 </script>
 

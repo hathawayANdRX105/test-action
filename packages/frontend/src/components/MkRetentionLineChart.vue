@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onMounted, useTemplateRef } from 'vue';
+import { onMounted, onBeforeUnmount, useTemplateRef } from 'vue';
 import { Chart } from 'chart.js';
 import tinycolor from 'tinycolor2';
 import { useChartTooltip } from '@/use/use-chart-tooltip.js';
@@ -24,6 +24,7 @@ const chartEl = useTemplateRef('chartEl');
 const { handler: externalTooltipHandler } = useChartTooltip();
 
 let chartInstance: Chart | null = null;
+let disposed = false;
 
 const getYYYYMMDD = (date: Date) => {
 	const y = date.getFullYear().toString().padStart(2, '0');
@@ -39,12 +40,18 @@ const getDate = (ymd: string) => {
 };
 
 onMounted(async () => {
-	let raw = await misskeyApi('retention', { });
+	let raw;
+	try {
+		raw = await misskeyApi('retention', { });
+	} catch (err) {
+		console.error(err);
+		return;
+	}
+
+	if (disposed || chartEl.value == null) return;
 
 	const accent = tinycolor(getComputedStyle(window.document.documentElement).getPropertyValue('--MI_THEME-accent'));
 	const color = accent.toHex();
-
-	if (chartEl.value == null) return;
 
 	chartInstance = new Chart(chartEl.value, {
 		type: 'line',
@@ -127,5 +134,13 @@ onMounted(async () => {
 		},
 		plugins: [chartVLine()],
 	});
+});
+
+onBeforeUnmount(() => {
+	disposed = true;
+	if (chartInstance) {
+		chartInstance.destroy();
+		chartInstance = null;
+	}
 });
 </script>

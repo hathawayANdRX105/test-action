@@ -65,10 +65,10 @@ const inPolylinePoints = ref<string>('');
 const outPolylinePoints = ref<string>('');
 const inPolygonPoints = ref<string>('');
 const outPolygonPoints = ref<string>('');
-const inHeadX = ref<number>();
-const inHeadY = ref<number>();
-const outHeadX = ref<number>();
-const outHeadY = ref<number>();
+const inHeadX = ref<number>(viewBoxX.value);
+const inHeadY = ref<number>(viewBoxY.value);
+const outHeadX = ref<number>(viewBoxX.value);
+const outHeadY = ref<number>(viewBoxY.value);
 const inRecent = ref<number>(0);
 const outRecent = ref<number>(0);
 
@@ -89,30 +89,56 @@ function onStats(connStats: Misskey.entities.ServerStats) {
 	stats.value.push(connStats);
 	if (stats.value.length > 50) stats.value.shift();
 
-	const inPeak = Math.max(1024 * 64, Math.max(...stats.value.map(s => s.net.rx)));
-	const outPeak = Math.max(1024 * 64, Math.max(...stats.value.map(s => s.net.tx)));
+	const inValues = stats.value.map(s => positiveFinite(s.net?.rx));
+	const outValues = stats.value.map(s => positiveFinite(s.net?.tx));
+	const inPeak = getPeak(inValues);
+	const outPeak = getPeak(outValues);
 
-	let inPolylinePointsStats = stats.value.map((s, i) => [viewBoxX.value - ((stats.value.length - 1) - i), (1 - (s.net.rx / inPeak)) * viewBoxY.value]);
-	let outPolylinePointsStats = stats.value.map((s, i) => [viewBoxX.value - ((stats.value.length - 1) - i), (1 - (s.net.tx / outPeak)) * viewBoxY.value]);
+	const inPolylinePointsStats = inValues.map((value, i) => [getPointX(i), getPointY(value, inPeak)]);
+	const outPolylinePointsStats = outValues.map((value, i) => [getPointX(i), getPointY(value, outPeak)]);
 	inPolylinePoints.value = inPolylinePointsStats.map(xy => `${xy[0]},${xy[1]}`).join(' ');
 	outPolylinePoints.value = outPolylinePointsStats.map(xy => `${xy[0]},${xy[1]}`).join(' ');
 
 	inPolygonPoints.value = `${viewBoxX.value - (stats.value.length - 1)},${viewBoxY.value} ${inPolylinePoints.value} ${viewBoxX.value},${viewBoxY.value}`;
 	outPolygonPoints.value = `${viewBoxX.value - (stats.value.length - 1)},${viewBoxY.value} ${outPolylinePoints.value} ${viewBoxX.value},${viewBoxY.value}`;
 
-	inHeadX.value = inPolylinePointsStats.at(-1)![0];
-	inHeadY.value = inPolylinePointsStats.at(-1)![1];
-	outHeadX.value = outPolylinePointsStats.at(-1)![0];
-	outHeadY.value = outPolylinePointsStats.at(-1)![1];
+	const inHead = inPolylinePointsStats.at(-1) ?? [viewBoxX.value, viewBoxY.value];
+	const outHead = outPolylinePointsStats.at(-1) ?? [viewBoxX.value, viewBoxY.value];
+	inHeadX.value = inHead[0];
+	inHeadY.value = inHead[1];
+	outHeadX.value = outHead[0];
+	outHeadY.value = outHead[1];
 
-	inRecent.value = connStats.net.rx;
-	outRecent.value = connStats.net.tx;
+	inRecent.value = positiveFinite(connStats.net?.rx);
+	outRecent.value = positiveFinite(connStats.net?.tx);
 }
 
 function onStatsLog(statsLog: Misskey.entities.ServerStatsLog) {
 	for (const revStats of statsLog.toReversed()) {
 		onStats(revStats);
 	}
+}
+
+function getPointX(index: number): number {
+	return viewBoxX.value - ((stats.value.length - 1) - index);
+}
+
+function getPointY(value: number, peak: number): number {
+	return (1 - clampRatio(peak > 0 ? value / peak : 0)) * viewBoxY.value;
+}
+
+function getPeak(values: number[]): number {
+	const peak = Math.max(1024 * 64, ...values);
+	return peak > 0 && Number.isFinite(peak) ? peak : 1024 * 64;
+}
+
+function positiveFinite(value: unknown): number {
+	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function clampRatio(value: number): number {
+	if (!Number.isFinite(value)) return 0;
+	return Math.min(1, Math.max(0, value));
 }
 </script>
 

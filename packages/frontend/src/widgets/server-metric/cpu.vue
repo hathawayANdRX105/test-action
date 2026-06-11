@@ -27,7 +27,11 @@ const props = defineProps<{
 const usage = ref<number>(0);
 
 function onStats(stats: Misskey.entities.ServerStats) {
-	usage.value = stats.cpu;
+	usage.value = clampRatio(stats.cpu);
+}
+
+function clampRatio(value: unknown): number {
+	return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
 
 onMounted(() => {

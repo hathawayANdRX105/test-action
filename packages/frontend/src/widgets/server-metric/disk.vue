@@ -25,10 +25,22 @@ const props = defineProps<{
 	meta: Misskey.entities.ServerInfoResponse;
 }>();
 
-const usage = computed(() => props.meta.fs.used / props.meta.fs.total);
-const total = computed(() => props.meta.fs.total);
-const used = computed(() => props.meta.fs.used);
-const available = computed(() => props.meta.fs.total - props.meta.fs.used);
+const usage = computed(() => {
+	const diskTotal = total.value;
+	return diskTotal > 0 ? clampRatio(used.value / diskTotal) : 0;
+});
+const total = computed(() => positiveFinite(props.meta.fs?.total));
+const used = computed(() => positiveFinite(props.meta.fs?.used));
+const available = computed(() => Math.max(0, total.value - used.value));
+
+function positiveFinite(value: unknown): number {
+	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function clampRatio(value: number): number {
+	if (!Number.isFinite(value)) return 0;
+	return Math.min(1, Math.max(0, value));
+}
 </script>
 
 <style lang="scss" scoped>
