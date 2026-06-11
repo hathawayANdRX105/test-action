@@ -1832,5 +1832,12 @@ defineExpose({
 	.colorBar {
 		display: none;
 	}
+
+	&.root .text {
+		min-height: calc(1.55em * 4);
+		height: calc(1.55em * 4);
+		max-height: calc(1.55em * 4);
+		resize: none;
+	}
 }
 </style>
