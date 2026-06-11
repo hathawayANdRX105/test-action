@@ -6,6 +6,8 @@
 // https://vitejs.dev/config/build-options.html#build-modulepreload
 import 'vite/modulepreload-polyfill';
 
+(window as Window & { __sharkeyFrontendBuild?: string }).__sharkeyFrontendBuild = '20260611-cache-repair';
+
 import '@/style.scss';
 import { mainBoot } from '@/boot/main-boot.js';
 import { subBoot } from '@/boot/sub-boot.js';

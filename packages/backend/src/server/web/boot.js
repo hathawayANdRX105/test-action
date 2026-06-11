@@ -9,10 +9,19 @@
 (async () => {
 	window.onerror = (e) => {
 		console.error(e);
+		if (isFrontendAssetLoadError(e)) {
+			void repairAndReload(e);
+			return;
+		}
 		renderError('SOMETHING_HAPPENED', e);
 	};
 	window.onunhandledrejection = (e) => {
 		console.error(e);
+		if (isFrontendAssetLoadError(e)) {
+			e.preventDefault?.();
+			void repairAndReload(e?.reason ?? e);
+			return;
+		}
 		renderError('SOMETHING_HAPPENED_IN_PROMISE', e);
 	};
 
@@ -48,6 +57,25 @@
 				localStorage.removeItem(key);
 			}
 		}
+	}
+
+	/**
+	 * @param {unknown} reason
+	 * @returns {boolean}
+	 */
+	function isFrontendAssetLoadError(reason) {
+		const value = reason?.reason ?? reason;
+		const message = typeof value === 'string'
+			? value
+			: value instanceof Error
+				? value.message
+				: typeof value?.message === 'string'
+					? value.message
+					: String(value ?? '');
+		const target = reason?.target ?? value?.target;
+		const targetUrl = typeof target?.src === 'string' ? target.src : typeof target?.href === 'string' ? target.href : '';
+		return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Loading chunk .* failed|Failed to load module script|NetworkError|Load failed/i.test(message) ||
+			/\.(?:js|css)(?:\?|$)/i.test(targetUrl);
 	}
 
 	/**
