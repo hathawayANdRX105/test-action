@@ -12,6 +12,7 @@ import WebSocket from '../../node_modules/ws/wrapper.mjs';
 const argv = new Map();
 for (let i = 2; i < process.argv.length; i++) {
 	const arg = process.argv[i];
+	if (arg === '--') continue;
 	if (!arg.startsWith('--')) continue;
 	const key = arg.slice(2);
 	const next = process.argv[i + 1];
@@ -67,6 +68,12 @@ const setupPassword = option('setup-password', '');
 const readReceipts = option('read-receipts', 'false') === 'true';
 const reuseTokens = option('reuse-tokens', 'false') === 'true';
 const connectTimeoutMs = intOption('connect-timeout-ms', 30000);
+const initialTimeline = option('initial-timeline', 'true') === 'true';
+const recoveryRequests = intOption('recovery-requests', 0);
+const recoveryConcurrency = intOption('recovery-concurrency', Math.min(200, clients));
+const minNetworkDelayMs = intOption('min-network-delay-ms', 0);
+const maxNetworkDelayMs = intOption('max-network-delay-ms', 0);
+const reconnectClients = intOption('reconnect-clients', 0);
 
 if (clients === 0) throw new Error('--clients must be greater than 0');
 if (senders === 0) throw new Error('--senders must be greater than 0');
@@ -74,6 +81,7 @@ if (senders > clients) throw new Error('--senders cannot exceed --clients');
 if (!createUsers && tokenPrefix === '' && tokensFile === '') throw new Error('Provide --tokens-file, --token-prefix, or pass --create-users true for a local non-production test instance.');
 if (createUsers && adminToken === '' && setupPassword === '') throw new Error('--create-users requires --admin-token, or --setup-password for first account setup.');
 if (createUsersOnly && tokensOut === '') throw new Error('--create-users-only requires --tokens-out.');
+if (maxNetworkDelayMs < minNetworkDelayMs) throw new Error('--max-network-delay-ms must be >= --min-network-delay-ms');
 
 const httpOrigin = new URL(baseUrl);
 const wsOrigin = new URL(baseUrl);
@@ -190,6 +198,11 @@ function assertRoomResponse(value) {
 }
 
 async function api(endpoint, body, token) {
+	if (maxNetworkDelayMs > 0) {
+		const jitter = minNetworkDelayMs + Math.random() * (maxNetworkDelayMs - minNetworkDelayMs);
+		await sleep(jitter);
+	}
+
 	const getRateLimitResetMs = payload => {
 		const maybeError = payload != null && typeof payload === 'object' ? payload.error : null;
 		const maybeInfo = maybeError != null && typeof maybeError === 'object' ? maybeError.info : null;
@@ -392,6 +405,31 @@ async function connectClients(tokens, roomId, stats) {
 	return await mapLimit(tokens, connectConcurrency, async (token, index) => connectClient(token, roomId, index, stats));
 }
 
+async function hitRoomTimeline(tokens, roomId, stats, options = {}) {
+	const limit = options.limit ?? 20;
+	const startedAt = performance.now();
+	const latencies = [];
+	await mapLimit(tokens, recoveryConcurrency, async token => {
+		const requestStartedAt = performance.now();
+		await api('chat/messages/room-timeline', {
+			roomId,
+			limit,
+			...(options.sinceId ? { sinceId: options.sinceId } : {}),
+		}, token);
+		latencies.push(performance.now() - requestStartedAt);
+		stats.timelineRequests++;
+	});
+
+	return {
+		requests: tokens.length,
+		totalMs: Number((performance.now() - startedAt).toFixed(1)),
+		p50: formatMs(percentile(latencies, 0.50)),
+		p95: formatMs(percentile(latencies, 0.95)),
+		p99: formatMs(percentile(latencies, 0.99)),
+		max: formatMs(Math.max(...latencies, 0)),
+	};
+}
+
 async function sendMessages(tokens, roomId, stats) {
 	const senderTokens = tokens.slice(0, senders);
 	const sendLatencies = [];
@@ -430,6 +468,7 @@ const stats = {
 	lastDeliveryAt: 0,
 	closed: 0,
 	errors: 0,
+	timelineRequests: 0,
 };
 
 const setupStart = performance.now();
@@ -453,6 +492,12 @@ console.log(JSON.stringify({
 	readReceipts,
 	reuseTokens,
 	connectTimeoutMs,
+	initialTimeline,
+	recoveryRequests,
+	recoveryConcurrency,
+	minNetworkDelayMs,
+	maxNetworkDelayMs,
+	reconnectClients,
 }));
 
 const processSampler = startProcessSampler(pid, statsIntervalMs);
@@ -470,10 +515,32 @@ logProgress('join-ready', { roomId, uniqueTokens: new Set(tokens).size });
 const sockets = await connectClients(tokens, roomId, stats);
 const setupMs = performance.now() - setupStart;
 console.log(JSON.stringify({ event: 'connected', roomId, clients: sockets.length, setupMs }));
+let initialTimelineResult = null;
+if (initialTimeline) {
+	initialTimelineResult = await hitRoomTimeline(tokens, roomId, stats);
+	console.log(JSON.stringify({ event: 'initial-timeline', ...initialTimelineResult }));
+}
 
 const messageStart = performance.now();
 const latencies = await sendMessages(tokens, roomId, stats);
 const sendDoneAt = performance.now();
+let recoveryTimelineResults = [];
+for (let i = 0; i < recoveryRequests; i++) {
+	const result = await hitRoomTimeline(tokens, roomId, stats);
+	recoveryTimelineResults.push(result);
+	console.log(JSON.stringify({ event: 'recovery-timeline', round: i + 1, ...result }));
+}
+if (reconnectClients > 0) {
+	const targets = sockets.slice(0, Math.min(reconnectClients, sockets.length));
+	for (const target of targets) {
+		target.ws.close();
+	}
+	const reconnectTokens = tokens.slice(0, targets.length);
+	const reconnected = await connectClients(reconnectTokens, roomId, stats);
+	sockets.splice(0, targets.length, ...reconnected);
+	console.log(JSON.stringify({ event: 'reconnected', clients: reconnected.length }));
+	recoveryTimelineResults.push(await hitRoomTimeline(reconnectTokens, roomId, stats));
+}
 await waitForDeliveries(stats, messages * clients);
 const end = performance.now();
 await processSampler.stop();
@@ -491,6 +558,7 @@ const result = {
 	delivered: stats.delivered,
 	closed: stats.closed,
 	errors: stats.errors,
+	timelineRequests: stats.timelineRequests,
 	setupMs: Number(setupMs.toFixed(1)),
 	sendMs: Number((sendDoneAt - messageStart).toFixed(1)),
 	totalMs: Number((end - messageStart).toFixed(1)),
@@ -502,6 +570,8 @@ const result = {
 		p99: formatMs(percentile(latencies, 0.99)),
 		max: formatMs(Math.max(...latencies, 0)),
 	},
+	initialTimeline: initialTimelineResult,
+	recoveryTimeline: recoveryTimelineResults,
 	process: pid > 0 ? {
 		pid,
 		samples: processSampler.samples.length,

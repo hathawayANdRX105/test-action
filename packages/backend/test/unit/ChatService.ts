@@ -9,7 +9,7 @@ import { CHAT_MESSAGE_MENTION_CACHE_TTL, chatMessageMentionCacheKey } from '@/co
 
 describe('ChatService large room fast path', () => {
 	function createService(memberCount: number, senderIsMember = true) {
-		const redisState = new Map<string, string>();
+		const redisState = new Map<string, any>();
 		const redisPipeline: any = {
 			set: jest.fn((key: string, value: string) => {
 				redisState.set(key, value);
@@ -65,6 +65,28 @@ describe('ChatService large room fast path', () => {
 				return 'OK';
 			}),
 			del: jest.fn(async (key: string) => redisState.delete(key) ? 1 : 0),
+			lrange: jest.fn(async (key: string, start: number, stop: number) => {
+				const list = redisState.get(key) ?? [];
+				const end = stop < 0 ? list.length + stop + 1 : stop + 1;
+				return list.slice(start, end);
+			}),
+			lpush: jest.fn(async (key: string, ...values: string[]) => {
+				const list = redisState.get(key) ?? [];
+				redisState.set(key, [...values, ...list]);
+				return redisState.get(key).length;
+			}),
+			rpush: jest.fn(async (key: string, ...values: string[]) => {
+				const list = redisState.get(key) ?? [];
+				redisState.set(key, [...list, ...values]);
+				return redisState.get(key).length;
+			}),
+			ltrim: jest.fn(async (key: string, start: number, stop: number) => {
+				const list = redisState.get(key) ?? [];
+				const end = stop < 0 ? list.length + stop + 1 : stop + 1;
+				redisState.set(key, list.slice(start, end));
+				return 'OK';
+			}),
+			expire: jest.fn(async () => 1),
 			scard: jest.fn(async () => 0),
 			eval: jest.fn(async (_script: string, _numberOfKeys: number, newRoomKey: string, mentionKey: string, _newMessagesSetKey: string, latestKey: string, readKey: string) => {
 				const latest = redisState.get(latestKey) ?? null;
@@ -115,6 +137,7 @@ describe('ChatService large room fast path', () => {
 		const chatRoomUserMutingsRepository: any = {
 			createQueryBuilder: jest.fn(() => chatRoomUserMutingQueryBuilder),
 			existsBy: jest.fn(async () => false),
+			find: jest.fn(async () => []),
 			findOneOrFail: jest.fn(async () => ({
 				id: 'room-user-muting-id',
 				createdAt: new Date(0),
@@ -152,6 +175,22 @@ describe('ChatService large room fast path', () => {
 				mentionedUserIds: options?.mentionedUserIds ?? [],
 				reactions: [],
 			})),
+			packMessagesLiteForRoom: jest.fn(async (messages: any[]) => messages.map(message => ({
+				id: message.id,
+				createdAt: new Date(0).toISOString(),
+				fromUserId: message.fromUserId,
+				fromUser: { id: message.fromUserId },
+				toRoomId: message.toRoomId ?? 'room',
+				text: message.text ?? null,
+				fileId: message.fileId ?? null,
+				file: null,
+				replyId: message.replyId ?? null,
+				reply: null,
+				quoteId: message.quoteId ?? null,
+				quote: null,
+				mentionedUserIds: [],
+				reactions: [],
+			}))),
 			packMessageDetailed: jest.fn(async (message: any, _me?: any, options?: { mentionedUserIds?: string[] }) => ({
 				id: message.id,
 				createdAt: new Date(0).toISOString(),
@@ -309,6 +348,54 @@ describe('ChatService large room fast path', () => {
 
 		expect(ctx.chatRoomUserMutingsRepository.createQueryBuilder).not.toHaveBeenCalled();
 		expect(adminQuery.andWhere).not.toHaveBeenCalledWith('NOT EXISTS (room-user-muting-subquery)');
+	});
+
+	test('packed room timeline serves latest messages from redis hot cache', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		const cached = [
+			{ id: 'm3', fromUserId: 'u3', fromUser: { id: 'u3' }, toRoomId: 'room', text: 'three', fileId: null, file: null, replyId: null, reply: null, quoteId: null, quote: null, mentionedUserIds: [], reactions: [] },
+			{ id: 'm2', fromUserId: 'u2', fromUser: { id: 'u2' }, toRoomId: 'room', text: 'two', fileId: null, file: null, replyId: null, reply: null, quoteId: null, quote: null, mentionedUserIds: [], reactions: [] },
+		];
+		ctx.redisState.set('chat:room:room:timeline:v1', cached.map(message => JSON.stringify(message)));
+		ctx.redisState.set('chat:room:room:timeline:v1:meta', JSON.stringify({ warmedAt: 1, complete: true }));
+
+		await expect(ctx.service.packedRoomTimeline('reader', 'room', 2)).resolves.toEqual(cached);
+
+		expect(ctx.chatMessagesRepository.createQueryBuilder).not.toHaveBeenCalled();
+		expect(ctx.chatEntityService.packMessagesLiteForRoom).not.toHaveBeenCalled();
+	});
+
+	test('packed room timeline filters muted users from redis hot cache', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		const cached = [
+			{ id: 'm3', fromUserId: 'muted', fromUser: { id: 'muted' }, toRoomId: 'room', text: 'hidden', fileId: null, file: null, replyId: null, reply: null, quoteId: null, quote: null, mentionedUserIds: [], reactions: [] },
+			{ id: 'm2', fromUserId: 'visible', fromUser: { id: 'visible' }, toRoomId: 'room', text: 'visible', fileId: null, file: null, replyId: null, reply: null, quoteId: null, quote: null, mentionedUserIds: [], reactions: [] },
+		];
+		ctx.redisState.set('chat:room:room:timeline:v1', cached.map(message => JSON.stringify(message)));
+		ctx.redisState.set('chat:room:room:timeline:v1:meta', JSON.stringify({ warmedAt: 1, complete: true }));
+		ctx.chatRoomUserMutingsRepository.find.mockResolvedValueOnce([{ muteeId: 'muted' }]);
+
+		await expect(ctx.service.packedRoomTimeline('reader', 'room', 2)).resolves.toEqual([cached[1]]);
+		expect(ctx.chatRoomUserMutingsRepository.find).toHaveBeenCalledWith({
+			select: { muteeId: true },
+			where: { roomId: 'room', muterId: 'reader' },
+		});
+	});
+
+	test('packed room timeline coalesces cache warmup db fallback', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		const query = createMessageQueryBuilder([{ id: 'm2', fromUserId: 'u2' }]);
+		ctx.chatMessagesRepository.createQueryBuilder.mockReturnValue(query);
+		ctx.chatEntityService.packMessagesLiteForRoom.mockResolvedValue([{ id: 'm2', fromUserId: 'u2', fromUser: { id: 'u2' }, toRoomId: 'room', text: null, fileId: null, file: null, replyId: null, reply: null, quoteId: null, quote: null, mentionedUserIds: [], reactions: [] }]);
+
+		const [a, b] = await Promise.all([
+			ctx.service.packedRoomTimeline('reader', 'room', 20),
+			ctx.service.packedRoomTimeline('reader', 'room', 20),
+		]);
+
+		expect(a).toEqual(b);
+		expect(ctx.chatMessagesRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+		expect(ctx.chatEntityService.packMessagesLiteForRoom).toHaveBeenCalledTimes(1);
 	});
 
 	test('large rooms skip per-member unread and push fanout', async () => {

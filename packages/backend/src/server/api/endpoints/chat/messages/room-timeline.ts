@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import { DI } from '@/di-symbols.js';
 import { ChatService } from '@/core/ChatService.js';
-import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
 import { ApiError } from '@/server/api/error.js';
 
 export const meta = {
@@ -50,7 +48,6 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
-		private chatEntityService: ChatEntityService,
 		private chatService: ChatService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -65,11 +62,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
-			const messages = await this.chatService.roomTimeline(me.id, room.id, ps.limit, ps.sinceId, ps.untilId);
+			const messages = await this.chatService.packedRoomTimeline(me.id, room.id, ps.limit, ps.sinceId, ps.untilId);
 
-			this.chatService.readRoomChatMessage(me.id, room.id);
+			void this.chatService.readRoomChatMessage(me.id, room.id).catch(err => {
+				console.warn('Failed to update room chat read state:', err);
+			});
 
-			return await this.chatEntityService.packMessagesLiteForRoom(messages);
+			return messages;
 		});
 	}
 }

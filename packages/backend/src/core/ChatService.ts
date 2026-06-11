@@ -52,6 +52,10 @@ const ROOM_MESSAGE_TARGET_CACHE_TTL_MS = ROOM_MESSAGE_TARGET_CACHE_TTL * 1000;
 const ROOM_SENDER_MEMBERSHIP_CACHE_TTL_MS = ROOM_SENDER_MEMBERSHIP_CACHE_TTL * 1000;
 const MAX_REACTIONS_PER_MESSAGE = 100;
 const ROOM_CHAT_MESSAGE_READ_TTL = 60 * 60 * 24 * 30;
+const ROOM_TIMELINE_CACHE_LIMIT = 300;
+const ROOM_TIMELINE_CACHE_TTL = 60 * 60 * 24 * 2;
+const ROOM_TIMELINE_MUTED_USERS_CACHE_TTL = 60 * 5;
+const ROOM_TIMELINE_HTTP_READ_THROTTLE_TTL = 2;
 const READ_ROOM_CHAT_MESSAGE_SCRIPT = `
 local latest = redis.call('GET', KEYS[4])
 redis.call('DEL', KEYS[1])
@@ -65,6 +69,20 @@ return latest
 const isCustomEmojiRegexp = /^:([\w+-]+)(?:@\.)?:$/;
 type ChatMessageReference = Pick<MiChatMessage, 'id' | 'toUserId' | 'toRoomId'>;
 type ChatRoomMessageTarget = Pick<MiChatRoom, 'id' | 'ownerId'>;
+type PackedRoomChatMessage = Packed<'ChatMessageLiteForRoom'>;
+type RoomTimelineCacheMeta = {
+	warmedAt: number;
+	complete: boolean;
+};
+type RoomTimelineStats = {
+	requests: number;
+	cacheHits: number;
+	cacheMisses: number;
+	dbFallbacks: number;
+	cacheWrites: number;
+	cacheErrors: number;
+	readSkips: number;
+};
 
 // TODO: ReactionServiceのやつと共通化
 function normalizeEmojiString(x: string) {
@@ -92,6 +110,17 @@ export class ChatService {
 	private readonly roomMessageTargetLoads = new Map<MiChatRoom['id'], Promise<ChatRoomMessageTarget | null>>();
 	private readonly roomSenderMembershipCache = new Map<string, { expiresAt: number; }>();
 	private readonly roomSenderMembershipLoads = new Map<string, Promise<boolean>>();
+	private readonly roomTimelineWarmLoads = new Map<MiChatRoom['id'], Promise<PackedRoomChatMessage[]>>();
+	private roomTimelineStatsTimer: ReturnType<typeof setInterval> | null = null;
+	private roomTimelineStats: RoomTimelineStats = {
+		requests: 0,
+		cacheHits: 0,
+		cacheMisses: 0,
+		dbFallbacks: 0,
+		cacheWrites: 0,
+		cacheErrors: 0,
+		readSkips: 0,
+	};
 
 	constructor(
 		@Inject(DI.config)
@@ -147,6 +176,309 @@ export class ChatService {
 		private readonly mfmService: MfmService,
 		private readonly remoteUserResolveService: RemoteUserResolveService,
 	) {
+		this.startRoomTimelineStatsLogger();
+	}
+
+	@bindThis
+	private roomTimelineCacheKey(roomId: MiChatRoom['id']): string {
+		return `chat:room:${roomId}:timeline:v1`;
+	}
+
+	@bindThis
+	private roomTimelineCacheMetaKey(roomId: MiChatRoom['id']): string {
+		return `chat:room:${roomId}:timeline:v1:meta`;
+	}
+
+	@bindThis
+	private roomTimelineMutedUsersCacheKey(roomId: MiChatRoom['id'], userId: MiUser['id']): string {
+		return `chat:room:${roomId}:muted:${userId}`;
+	}
+
+	@bindThis
+	private startRoomTimelineStatsLogger(): void {
+		if (process.env.NODE_ENV === 'test' || this.roomTimelineStatsTimer != null) return;
+
+		this.roomTimelineStatsTimer = setInterval(() => {
+			const stats = this.roomTimelineStats;
+			const total = Object.values(stats).reduce((sum, value) => sum + value, 0);
+			if (total === 0) return;
+
+			console.info(JSON.stringify({
+				type: 'chat_room_timeline_stats',
+				...stats,
+				cacheHitRate: stats.cacheHits + stats.cacheMisses > 0
+					? Number((stats.cacheHits / (stats.cacheHits + stats.cacheMisses)).toFixed(4))
+					: null,
+			}));
+			this.roomTimelineStats = {
+				requests: 0,
+				cacheHits: 0,
+				cacheMisses: 0,
+				dbFallbacks: 0,
+				cacheWrites: 0,
+				cacheErrors: 0,
+				readSkips: 0,
+			};
+		}, 60 * 1000);
+		this.roomTimelineStatsTimer.unref?.();
+	}
+
+	@bindThis
+	private parseRoomTimelineCacheMeta(raw: string | null): RoomTimelineCacheMeta | null {
+		if (raw == null) return null;
+		try {
+			const parsed = JSON.parse(raw) as Partial<RoomTimelineCacheMeta>;
+			return {
+				warmedAt: typeof parsed.warmedAt === 'number' ? parsed.warmedAt : 0,
+				complete: parsed.complete === true,
+			};
+		} catch {
+			return null;
+		}
+	}
+
+	@bindThis
+	private parsePackedRoomMessage(raw: string): PackedRoomChatMessage | null {
+		try {
+			const parsed = JSON.parse(raw) as Partial<PackedRoomChatMessage>;
+			if (typeof parsed.id !== 'string' || typeof parsed.fromUserId !== 'string') return null;
+			return parsed as PackedRoomChatMessage;
+		} catch {
+			return null;
+		}
+	}
+
+	@bindThis
+	private selectPackedRoomTimeline(
+		packed: PackedRoomChatMessage[],
+		complete: boolean,
+		limit: number,
+		mutedUserIds: Set<MiUser['id']>,
+		sinceId?: MiChatMessage['id'] | null,
+	): PackedRoomChatMessage[] | null {
+		const visible = (items: PackedRoomChatMessage[]) => mutedUserIds.size === 0
+			? items
+			: items.filter(message => !mutedUserIds.has(message.fromUserId));
+
+		if (sinceId != null) {
+			if (packed.length === 0) return complete ? [] : null;
+			const oldestCached = packed[packed.length - 1].id;
+			if (sinceId < oldestCached) return null;
+			return visible(packed.filter(message => message.id > sinceId).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, limit);
+		}
+
+		const filtered = visible(packed);
+		if (filtered.length >= limit) return filtered.slice(0, limit);
+		return complete ? filtered : null;
+	}
+
+	@bindThis
+	private async getMutedRoomUserIds(userId: MiUser['id'] | null, roomId: MiChatRoom['id']): Promise<Set<MiUser['id']>> {
+		if (userId == null) return new Set();
+
+		const cacheKey = this.roomTimelineMutedUsersCacheKey(roomId, userId);
+		try {
+			const cached = await this.redisClient.get(cacheKey);
+			if (cached != null) {
+				const parsed = JSON.parse(cached) as unknown;
+				if (Array.isArray(parsed) && parsed.every(value => typeof value === 'string')) {
+					return new Set(parsed);
+				}
+			}
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+		}
+
+		const rows = await this.chatRoomUserMutingsRepository.find({
+			select: {
+				muteeId: true,
+			},
+			where: {
+				roomId,
+				muterId: userId,
+			},
+		});
+		const mutedUserIds = rows.map(row => row.muteeId);
+
+		try {
+			await this.redisClient.set(cacheKey, JSON.stringify(mutedUserIds), 'EX', ROOM_TIMELINE_MUTED_USERS_CACHE_TTL);
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+		}
+
+		return new Set(mutedUserIds);
+	}
+
+	@bindThis
+	private async readPackedRoomTimelineCache(
+		roomId: MiChatRoom['id'],
+		limit: number,
+		mutedUserIds: Set<MiUser['id']>,
+		sinceId?: MiChatMessage['id'] | null,
+	): Promise<PackedRoomChatMessage[] | null> {
+		try {
+			const [rawMessages, rawMeta] = await Promise.all([
+				this.redisClient.lrange(this.roomTimelineCacheKey(roomId), 0, ROOM_TIMELINE_CACHE_LIMIT - 1),
+				this.redisClient.get(this.roomTimelineCacheMetaKey(roomId)),
+			]);
+			const meta = this.parseRoomTimelineCacheMeta(rawMeta);
+			const packed = rawMessages.map(raw => this.parsePackedRoomMessage(raw)).filter((message): message is PackedRoomChatMessage => message != null);
+
+			return this.selectPackedRoomTimeline(packed, meta?.complete === true, limit, mutedUserIds, sinceId);
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+			return null;
+		}
+	}
+
+	@bindThis
+	private async replacePackedRoomTimelineCache(roomId: MiChatRoom['id'], packed: PackedRoomChatMessage[], complete: boolean): Promise<void> {
+		const cacheKey = this.roomTimelineCacheKey(roomId);
+		const metaKey = this.roomTimelineCacheMetaKey(roomId);
+		try {
+			await this.redisClient.del(cacheKey);
+			if (packed.length > 0) {
+				await this.redisClient.rpush(cacheKey, ...packed.slice(0, ROOM_TIMELINE_CACHE_LIMIT).map(message => JSON.stringify(message)));
+				await this.redisClient.expire(cacheKey, ROOM_TIMELINE_CACHE_TTL);
+			}
+			await this.redisClient.set(metaKey, JSON.stringify({ warmedAt: this.timeService.now, complete }), 'EX', ROOM_TIMELINE_CACHE_TTL);
+			this.roomTimelineStats.cacheWrites++;
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+		}
+	}
+
+	@bindThis
+	private async warmPackedRoomTimelineCache(roomId: MiChatRoom['id']): Promise<PackedRoomChatMessage[]> {
+		const current = this.roomTimelineWarmLoads.get(roomId);
+		if (current != null) return await current;
+
+		const load = (async () => {
+			const messages = await this.roomTimeline(null, roomId, ROOM_TIMELINE_CACHE_LIMIT);
+			const packed = await this.chatEntityService.packMessagesLiteForRoom(messages);
+			await this.replacePackedRoomTimelineCache(roomId, packed, messages.length < ROOM_TIMELINE_CACHE_LIMIT);
+			return packed;
+		})();
+		this.roomTimelineWarmLoads.set(roomId, load);
+
+		try {
+			return await load;
+		} finally {
+			this.timeService.startTimer(() => {
+				if (this.roomTimelineWarmLoads.get(roomId) === load) {
+					this.roomTimelineWarmLoads.delete(roomId);
+				}
+			}, 200);
+		}
+	}
+
+	@bindThis
+	private async appendPackedRoomTimelineCache(roomId: MiChatRoom['id'], message: PackedRoomChatMessage): Promise<void> {
+		try {
+			const cacheKey = this.roomTimelineCacheKey(roomId);
+			const metaKey = this.roomTimelineCacheMetaKey(roomId);
+			const meta = this.parseRoomTimelineCacheMeta(await this.redisClient.get(metaKey));
+			const nextLength = await this.redisClient.lpush(cacheKey, JSON.stringify(message));
+			await this.redisClient.ltrim(cacheKey, 0, ROOM_TIMELINE_CACHE_LIMIT - 1);
+			await this.redisClient.expire(cacheKey, ROOM_TIMELINE_CACHE_TTL);
+			const nextMeta: RoomTimelineCacheMeta = meta == null
+				? { warmedAt: this.timeService.now, complete: false }
+				: { ...meta, complete: meta.complete && nextLength <= ROOM_TIMELINE_CACHE_LIMIT };
+			await this.redisClient.set(metaKey, JSON.stringify(nextMeta), 'EX', ROOM_TIMELINE_CACHE_TTL);
+			this.roomTimelineStats.cacheWrites++;
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+		}
+	}
+
+	@bindThis
+	private async removePackedRoomTimelineCacheMessages(roomId: MiChatRoom['id'], ids: Iterable<MiChatMessage['id']>): Promise<void> {
+		const idSet = new Set(ids);
+		if (idSet.size === 0) return;
+
+		try {
+			const cacheKey = this.roomTimelineCacheKey(roomId);
+			const rawMessages = await this.redisClient.lrange(cacheKey, 0, ROOM_TIMELINE_CACHE_LIMIT - 1);
+			if (rawMessages.length === 0) return;
+
+			const next = rawMessages
+				.map(raw => this.parsePackedRoomMessage(raw))
+				.filter((message): message is PackedRoomChatMessage => message != null && !idSet.has(message.id));
+			await this.redisClient.del(cacheKey);
+			if (next.length > 0) {
+				await this.redisClient.rpush(cacheKey, ...next.map(message => JSON.stringify(message)));
+				await this.redisClient.expire(cacheKey, ROOM_TIMELINE_CACHE_TTL);
+			}
+			this.roomTimelineStats.cacheWrites++;
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+		}
+	}
+
+	@bindThis
+	private async removePackedRoomTimelineCacheBefore(roomId: MiChatRoom['id'], cutoffId: MiChatMessage['id']): Promise<void> {
+		try {
+			const cacheKey = this.roomTimelineCacheKey(roomId);
+			const rawMessages = await this.redisClient.lrange(cacheKey, 0, ROOM_TIMELINE_CACHE_LIMIT - 1);
+			if (rawMessages.length === 0) return;
+
+			const next = rawMessages
+				.map(raw => this.parsePackedRoomMessage(raw))
+				.filter((message): message is PackedRoomChatMessage => message != null && message.id >= cutoffId);
+			await this.redisClient.del(cacheKey);
+			if (next.length > 0) {
+				await this.redisClient.rpush(cacheKey, ...next.map(message => JSON.stringify(message)));
+				await this.redisClient.expire(cacheKey, ROOM_TIMELINE_CACHE_TTL);
+			}
+			this.roomTimelineStats.cacheWrites++;
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+		}
+	}
+
+	@bindThis
+	private async clearPackedRoomTimelineCache(roomId: MiChatRoom['id']): Promise<void> {
+		try {
+			await this.redisClient.del(this.roomTimelineCacheKey(roomId), this.roomTimelineCacheMetaKey(roomId));
+			this.roomTimelineStats.cacheWrites++;
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+		}
+	}
+
+	@bindThis
+	private async updatePackedRoomTimelineCacheReaction(
+		roomId: MiChatRoom['id'],
+		messageId: MiChatMessage['id'],
+		reaction: { user: Packed<'UserLite'>; reaction: string; },
+		mode: 'add' | 'remove',
+	): Promise<void> {
+		try {
+			const cacheKey = this.roomTimelineCacheKey(roomId);
+			const rawMessages = await this.redisClient.lrange(cacheKey, 0, ROOM_TIMELINE_CACHE_LIMIT - 1);
+			if (rawMessages.length === 0) return;
+
+			let changed = false;
+			const next = rawMessages.map(raw => {
+				const message = this.parsePackedRoomMessage(raw);
+				if (message == null || message.id !== messageId) return raw;
+				changed = true;
+				const reactions = mode === 'add'
+					? message.reactions.some(item => item.user.id === reaction.user.id && item.reaction === reaction.reaction)
+						? message.reactions
+						: message.reactions.concat(reaction)
+					: message.reactions.filter(item => !(item.user.id === reaction.user.id && item.reaction === reaction.reaction));
+				return JSON.stringify({ ...message, reactions });
+			});
+			if (!changed) return;
+
+			await this.redisClient.del(cacheKey);
+			await this.redisClient.rpush(cacheKey, ...next);
+			await this.redisClient.expire(cacheKey, ROOM_TIMELINE_CACHE_TTL);
+			this.roomTimelineStats.cacheWrites++;
+		} catch {
+			this.roomTimelineStats.cacheErrors++;
+		}
 	}
 
 	@bindThis
@@ -420,6 +752,7 @@ export class ChatService {
 			await redisPipeline.exec();
 
 			const packedMessage = await this.chatEntityService.packMessageLiteForRoom(inserted, { mentionedUserIds });
+			await this.appendPackedRoomTimelineCache(toRoom.id, packedMessage);
 			await this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
 			if (mentionedUserIds.length > 0) {
@@ -479,6 +812,7 @@ export class ChatService {
 		await redisPipeline.exec();
 
 		const packedMessage = await this.chatEntityService.packMessageLiteForRoom(inserted, { mentionedUserIds });
+		await this.appendPackedRoomTimelineCache(toRoom.id, packedMessage);
 		await this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
 		// 3秒経っても既読にならなかったらイベント発行
@@ -527,6 +861,13 @@ export class ChatService {
 		readerId: MiUser['id'],
 		roomId: MiChatRoom['id'],
 	): Promise<void> {
+		const throttleKey = `readRoomChatMessageThrottle:${readerId}:${roomId}`;
+		const shouldRead = await this.redisClient.set(throttleKey, '1', 'EX', ROOM_TIMELINE_HTTP_READ_THROTTLE_TTL, 'NX');
+		if (shouldRead !== 'OK') {
+			this.roomTimelineStats.readSkips++;
+			return;
+		}
+
 		await this.redisClient.eval(
 			READ_ROOM_CHAT_MESSAGE_SCRIPT,
 			5,
@@ -608,6 +949,7 @@ export class ChatService {
 				//this.queueService.deliver(fromUser, activity, toUser.inbox);
 			}
 		} else if (message.toRoomId) {
+			await this.removePackedRoomTimelineCacheMessages(message.toRoomId, [message.id]);
 			this.globalEventService.publishChatRoomStream(message.toRoomId, 'deleted', message.id);
 		}
 	}
@@ -651,6 +993,7 @@ export class ChatService {
 		redisPipeline.del(`latestRoomChatMessage:${room.id}`);
 		await redisPipeline.exec();
 
+		await this.clearPackedRoomTimelineCache(room.id);
 		this.globalEventService.publishChatRoomStream(room.id, 'cleared', null);
 	}
 
@@ -693,6 +1036,7 @@ export class ChatService {
 		}
 		await redisPipeline.exec();
 
+		await this.removePackedRoomTimelineCacheMessages(room.id, ids);
 		this.globalEventService.publishChatRoomStream(room.id, 'deletedMany', ids);
 		return ids;
 	}
@@ -713,6 +1057,7 @@ export class ChatService {
 		const deleteResult = await this.chatMessagesRepository.delete(targets.map(target => target.id));
 		const deleted = deleteResult.affected ?? targets.length;
 		if (deleted > 0) {
+			await this.removePackedRoomTimelineCacheBefore(room.id, cutoffId);
 			this.globalEventService.publishChatRoomStream(room.id, 'pruned', { cutoffId });
 		}
 		return deleted;
@@ -826,6 +1171,10 @@ export class ChatService {
 			.orIgnore()
 			.execute();
 
+		await this.redisClient.del(this.roomTimelineMutedUsersCacheKey(roomId, muterId)).catch(() => {
+			this.roomTimelineStats.cacheErrors++;
+		});
+
 		return await this.chatRoomUserMutingsRepository.findOneOrFail({
 			where: { roomId, muterId, muteeId },
 			relations: {
@@ -840,6 +1189,9 @@ export class ChatService {
 			roomId,
 			muterId,
 			muteeId,
+		});
+		await this.redisClient.del(this.roomTimelineMutedUsersCacheKey(roomId, muterId)).catch(() => {
+			this.roomTimelineStats.cacheErrors++;
 		});
 	}
 
@@ -902,6 +1254,32 @@ export class ChatService {
 		const messages = await query.take(limit).getMany();
 
 		return messages;
+	}
+
+	@bindThis
+	public async packedRoomTimeline(meId: MiUser['id'], roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatMessage['id'] | null, untilId?: MiChatMessage['id'] | null): Promise<PackedRoomChatMessage[]> {
+		this.roomTimelineStats.requests++;
+
+		if (untilId == null) {
+			const mutedUserIds = await this.getMutedRoomUserIds(meId, roomId);
+			const cached = await this.readPackedRoomTimelineCache(roomId, limit, mutedUserIds, sinceId);
+			if (cached != null) {
+				this.roomTimelineStats.cacheHits++;
+				return cached;
+			}
+			this.roomTimelineStats.cacheMisses++;
+
+			const warmed = await this.warmPackedRoomTimelineCache(roomId);
+			const fromWarmed = this.selectPackedRoomTimeline(warmed, warmed.length < ROOM_TIMELINE_CACHE_LIMIT, limit, mutedUserIds, sinceId);
+			if (fromWarmed != null) {
+				this.roomTimelineStats.cacheHits++;
+				return fromWarmed;
+			}
+		}
+
+		this.roomTimelineStats.dbFallbacks++;
+		const messages = await this.roomTimeline(meId, roomId, limit, sinceId, untilId);
+		return await this.chatEntityService.packMessagesLiteForRoom(messages);
 	}
 
 	@bindThis
@@ -1624,9 +2002,14 @@ export class ChatService {
 			});
 
 		if (room) {
+			const packedUser = await this.userEntityService.pack(userId);
+			await this.updatePackedRoomTimelineCacheReaction(room.id, message.id, {
+				user: packedUser,
+				reaction,
+			}, 'add');
 			this.globalEventService.publishChatRoomStream(room.id, 'react', {
 				messageId: message.id,
-				user: await this.userEntityService.pack(userId),
+				user: packedUser,
 				reaction,
 			});
 		} else {
@@ -1679,9 +2062,14 @@ export class ChatService {
 		if (updated.affected === 0) return;
 
 		if (room) {
+			const packedUser = await this.userEntityService.pack(userId);
+			await this.updatePackedRoomTimelineCacheReaction(room.id, message.id, {
+				user: packedUser,
+				reaction,
+			}, 'remove');
 			this.globalEventService.publishChatRoomStream(room.id, 'unreact', {
 				messageId: message.id,
-				user: await this.userEntityService.pack(userId),
+				user: packedUser,
 				reaction,
 			});
 		} else {
