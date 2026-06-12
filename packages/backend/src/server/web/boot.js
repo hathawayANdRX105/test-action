@@ -33,10 +33,13 @@
 
 	// Force update when locales change
 	const bootVersion = typeof window.VERSION === 'string' ? window.VERSION : 'unknown';
+	const clientEntry = typeof window.CLIENT_ENTRY === 'string' ? window.CLIENT_ENTRY : 'unknown';
 	const langsVersionKey = /** @type {keyof Window} */ ('LA' + 'NGS' + '_VERSION');
 	const injectedLangsVersion = window[langsVersionKey];
 	const langsVersion = typeof injectedLangsVersion === 'string' ? injectedLangsVersion : bootVersion;
 	const repairKey = `sharkey:boot-repair:${bootVersion}:${langsVersion}`;
+	const deploymentFingerprint = `${bootVersion}:${langsVersion}:${clientEntry}`;
+	const deploymentFingerprintKey = 'sharkey:frontend-deployment';
 	const maxRepairAttempts = 2;
 
 	function clearStartupStorage() {
@@ -57,6 +60,43 @@
 				localStorage.removeItem(key);
 			}
 		}
+	}
+
+	async function clearBrowserRuntimeCaches() {
+		try {
+			if ('caches' in window) {
+				await Promise.all((await caches.keys()).map(key => caches.delete(key)));
+			}
+		} catch (err) {
+			console.warn('Failed to clear caches during boot repair.', err);
+		}
+
+		try {
+			if ('serviceWorker' in navigator) {
+				const registrations = await navigator.serviceWorker.getRegistrations();
+				await Promise.all(registrations.map(registration => registration.unregister()));
+			}
+		} catch (err) {
+			console.warn('Failed to unregister service workers during boot repair.', err);
+		}
+	}
+
+	async function clearStaleDeploymentCaches() {
+		const previousFingerprint = localStorage.getItem(deploymentFingerprintKey);
+		if (previousFingerprint === deploymentFingerprint) return;
+
+		localStorage.setItem(deploymentFingerprintKey, deploymentFingerprint);
+		if (previousFingerprint != null) {
+			console.info('Frontend deployment changed. Clearing stale runtime caches.', {
+				previousFingerprint,
+				deploymentFingerprint,
+			});
+		}
+		localStorage.removeItem('localeVersion');
+		localStorage.removeItem('locale');
+		localStorage.removeItem('instance');
+		localStorage.removeItem('instanceCachedAt');
+		await clearBrowserRuntimeCaches();
 	}
 
 	/**
@@ -99,25 +139,13 @@
 		console.warn('Boot failed. Clearing stale client caches and reloading once.', reason);
 		localStorage.removeItem('localeVersion');
 		localStorage.removeItem('locale');
-		try {
-			if ('caches' in window) {
-				await Promise.all((await caches.keys()).map(key => caches.delete(key)));
-			}
-		} catch (err) {
-			console.warn('Failed to clear caches during boot repair.', err);
-		}
-		try {
-			if ('serviceWorker' in navigator) {
-				const registrations = await navigator.serviceWorker.getRegistrations();
-				await Promise.all(registrations.map(registration => registration.unregister()));
-			}
-		} catch (err) {
-			console.warn('Failed to unregister service workers during boot repair.', err);
-		}
+		await clearBrowserRuntimeCaches();
 		const url = new URL(location.href);
 		url.searchParams.set('_bootRepair', Date.now().toString());
 		location.replace(url.toString());
 	}
+
+	await clearStaleDeploymentCaches();
 
 	const localeVersion = localStorage.getItem('localeVersion');
 	if (localeVersion !== langsVersion) {

@@ -27,7 +27,7 @@ import { miLocalStorage } from '@/local-storage.js';
 import { fetchCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
 import { $i } from '@/i.js';
-import { repairFrontendRuntimeCaches, restoreDisplayStateNow } from '@/utility/frontend-consistency.js';
+import { assertFrontendAssetsCurrent, repairFrontendRuntimeCaches, restoreDisplayStateNow } from '@/utility/frontend-consistency.js';
 
 export async function common(createVue: () => Promise<App<Element>>) {
 	console.info(`Universe Federation v${version}`);
@@ -116,6 +116,26 @@ export async function common(createVue: () => Promise<App<Element>>) {
 		if (path !== null) window.location.href = path;
 		else window.location.reload();
 	});
+
+	let lastFrontendAssetCheckAt = 0;
+	function checkFrontendAssetsSoon() {
+		if (_DEV_) return;
+
+		const now = Date.now();
+		if (now - lastFrontendAssetCheckAt < 60_000) return;
+		lastFrontendAssetCheckAt = now;
+
+		void assertFrontendAssetsCurrent().catch(err => {
+			console.warn('Failed to check frontend asset freshness.', err);
+		});
+	}
+
+	checkFrontendAssetsSoon();
+	window.addEventListener('focus', checkFrontendAssetsSoon, { passive: true });
+	window.document.addEventListener('visibilitychange', () => {
+		if (window.document.visibilityState === 'visible') checkFrontendAssetsSoon();
+	});
+	window.setInterval(checkFrontendAssetsSoon, 5 * 60_000);
 
 	// If mobile, insert the viewport meta tag
 	if (['smartphone', 'tablet'].includes(deviceKind)) {
