@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.top">
 		<div :class="$style.banner" :style="{ backgroundImage: `url(${ instanceBannerUrl })` }"></div>
 		<button class="_button" :class="$style.instance" @click="openInstanceMenu">
-			<img :src="instance.iconUrl || instance.sidebarLogoUrl || '/apple-touch-icon.png'" alt="" :class="$style.instanceIcon"/>
+			<img :key="instanceIconUrl" :src="instanceIconUrl" alt="" :class="$style.instanceIcon" decoding="async" draggable="false"/>
 		</button>
 	</div>
 	<div :class="$style.middle">
@@ -68,7 +68,33 @@ if ($i != null) {
 	}
 }
 const filteredMenu = computed(() => prefer.r.menu.value.filter(item => item !== 'search'));
-const instanceBannerUrl = computed(() => instance.bannerUrl || instance.backgroundImageUrl || '/client-assets/universe-federation-bg.svg');
+
+const BRAND_ASSET_VERSION = 'uf3';
+const DEFAULT_BRAND_ICON_URL = `/client-assets/about-icon.png?v=${BRAND_ASSET_VERSION}`;
+const DEFAULT_BRAND_BACKGROUND_URL = `/client-assets/universe-federation-bg.webp?v=${BRAND_ASSET_VERSION}`;
+const BUILT_IN_BRAND_ASSETS = new Set([
+	'/client-assets/about-icon.png',
+	'/client-assets/universe-federation-bg.webp',
+	'/client-assets/universe-federation-bg.svg',
+]);
+
+function withBrandAssetVersion(url: string | null | undefined): string | null {
+	if (!url) return null;
+
+	const [path] = url.split('?');
+	if (BUILT_IN_BRAND_ASSETS.has(path)) {
+		return `${path}?v=${BRAND_ASSET_VERSION}`;
+	}
+
+	return url;
+}
+
+const instanceIconUrl = computed(() => {
+	return withBrandAssetVersion(instance.iconUrl) ?? withBrandAssetVersion(instance.sidebarLogoUrl) ?? DEFAULT_BRAND_ICON_URL;
+});
+const instanceBannerUrl = computed(() => {
+	return withBrandAssetVersion(instance.bannerUrl) ?? withBrandAssetVersion(instance.backgroundImageUrl) ?? DEFAULT_BRAND_BACKGROUND_URL;
+});
 
 const otherMenuItemIndicated = computed(() => {
 	for (const def in navbarItemDef) {
@@ -187,7 +213,9 @@ function more() {
 	justify-content: center;
 	width: 44px;
 	height: 44px;
+	padding: 0;
 	border-radius: 12px;
+	box-sizing: border-box;
 	overflow: clip;
 
 	&:hover, &:focus {
@@ -205,7 +233,11 @@ function more() {
 	width: 34px;
 	height: 34px;
 	border-radius: 8px;
-	object-fit: cover;
+	object-fit: contain;
+	object-position: center;
+	margin: auto;
+	flex: 0 0 auto;
+	box-sizing: border-box;
 }
 
 .bottom {

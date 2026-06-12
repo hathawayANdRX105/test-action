@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.top">
 			<div :class="$style.banner" :style="{ backgroundImage: `url(${ instanceBannerUrl })` }"></div>
 			<button v-tooltip.right="iconOnly ? instance.name ?? i18n.ts.instance : null" class="_button" :class="$style.instance" @click="openInstanceMenu">
-				<img :src="instance.sidebarLogoUrl && !iconOnly ? instance.sidebarLogoUrl : instance.iconUrl || '/favicon.ico'" alt="" :class="instance.sidebarLogoUrl && !iconOnly ? $style.wideInstanceIcon : $style.instanceIcon" style="viewTransitionName: navbar-serverIcon;"/>
+				<img :key="instanceLogoUrl" :src="instanceLogoUrl" alt="" :class="showWideInstanceLogo ? $style.wideInstanceIcon : $style.instanceIcon" decoding="async" draggable="false" style="viewTransitionName: navbar-serverIcon;"/>
 			</button>
 		</div>
 		<div :class="$style.middle">
@@ -114,7 +114,35 @@ if ($i != null) {
 	}
 }
 const filteredMenu = computed(() => prefer.r.menu.value.filter(item => item !== 'search'));
-const instanceBannerUrl = computed(() => instance.bannerUrl || instance.backgroundImageUrl || '/client-assets/universe-federation-bg.svg');
+
+const BRAND_ASSET_VERSION = 'uf3';
+const DEFAULT_BRAND_ICON_URL = `/client-assets/about-icon.png?v=${BRAND_ASSET_VERSION}`;
+const DEFAULT_BRAND_BACKGROUND_URL = `/client-assets/universe-federation-bg.webp?v=${BRAND_ASSET_VERSION}`;
+const BUILT_IN_BRAND_ASSETS = new Set([
+	'/client-assets/about-icon.png',
+	'/client-assets/universe-federation-bg.webp',
+	'/client-assets/universe-federation-bg.svg',
+]);
+
+function withBrandAssetVersion(url: string | null | undefined): string | null {
+	if (!url) return null;
+
+	const [path] = url.split('?');
+	if (BUILT_IN_BRAND_ASSETS.has(path)) {
+		return `${path}?v=${BRAND_ASSET_VERSION}`;
+	}
+
+	return url;
+}
+
+const showWideInstanceLogo = computed(() => Boolean(instance.sidebarLogoUrl && !iconOnly.value));
+const instanceLogoUrl = computed(() => {
+	if (showWideInstanceLogo.value) return withBrandAssetVersion(instance.sidebarLogoUrl) ?? DEFAULT_BRAND_ICON_URL;
+	return withBrandAssetVersion(instance.iconUrl) ?? DEFAULT_BRAND_ICON_URL;
+});
+const instanceBannerUrl = computed(() => {
+	return withBrandAssetVersion(instance.bannerUrl) ?? withBrandAssetVersion(instance.backgroundImageUrl) ?? DEFAULT_BRAND_BACKGROUND_URL;
+});
 
 const router = useRouter();
 
@@ -394,10 +422,14 @@ function menuEdit() {
 		position: sticky;
 		top: 0;
 		z-index: 1;
+		display: grid;
+		place-items: center;
+		min-height: 84px;
 		padding: 20px 0;
 		background: var(--nav-bg-transparent);
 		-webkit-backdrop-filter: var(--MI-blur, blur(8px));
 		backdrop-filter: var(--MI-blur, blur(8px));
+		box-sizing: border-box;
 	}
 
 	.banner {
@@ -414,14 +446,21 @@ function menuEdit() {
 
 	.instance {
 		position: relative;
-		display: block;
-		text-align: center;
-		width: 100%;
+		display: grid;
+		place-items: center;
+		width: 68px;
+		max-width: 100%;
+		min-height: 44px;
+		padding: 0;
+		margin: 0 auto;
+		box-sizing: border-box;
+		justify-self: center;
 
 		&:focus-visible {
 			outline: none;
 
-			> .instanceIcon {
+			> .instanceIcon,
+			> .wideInstanceIcon {
 				outline: 2px solid var(--MI_THEME-focus);
 				outline-offset: 2px;
 			}
@@ -429,19 +468,28 @@ function menuEdit() {
 	}
 
 	.instanceIcon {
-		display: inline-block;
+		display: block;
 		width: 38px;
-		aspect-ratio: 1;
+		height: 38px;
 		border-radius: 8px;
+		object-fit: contain;
+		object-position: center;
+		margin: auto;
+		box-sizing: border-box;
+		filter: drop-shadow(0 6px 14px color(from #000 srgb r g b / 0.22));
 	}
 
 	.wideInstanceIcon {
-		display: inline-block;
+		display: block;
 		min-width: 38px;
 		max-width: 100%;
 		max-height: 80px;
 		border-radius: 8px;
 		object-fit: contain;
+		object-position: center;
+		margin: auto;
+		box-sizing: border-box;
+		filter: drop-shadow(0 6px 14px color(from #000 srgb r g b / 0.22));
 	}
 
 	.bottom {
@@ -656,16 +704,25 @@ function menuEdit() {
 		position: sticky;
 		top: 0;
 		z-index: 1;
+		display: grid;
+		place-items: center;
+		min-height: 70px;
 		padding: 20px 0;
 		background: var(--nav-bg-transparent);
 		-webkit-backdrop-filter: var(--MI-blur, blur(8px));
 		backdrop-filter: var(--MI-blur, blur(8px));
+		box-sizing: border-box;
 	}
 
 	.instance {
-		display: flex;
-		justify-content: center;
-		width: 100%;
+		display: grid;
+		place-items: center;
+		width: 44px;
+		min-height: 34px;
+		padding: 0;
+		margin: 0 auto;
+		box-sizing: border-box;
+		justify-self: center;
 
 		&:focus-visible {
 			outline: none;
@@ -680,8 +737,12 @@ function menuEdit() {
 	.instanceIcon {
 		display: block;
 		width: 30px;
-		aspect-ratio: 1;
+		height: 30px;
 		border-radius: 8px;
+		object-fit: contain;
+		object-position: center;
+		margin: auto;
+		box-sizing: border-box;
 	}
 
 	.bottom {
