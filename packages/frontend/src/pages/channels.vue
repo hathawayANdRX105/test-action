@@ -6,6 +6,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
 	<div class="_spacer" style="--MI_SPACER-w: 1200px;">
+		<div v-if="tab === 'resource'">
+			<MkChannelBrowse/>
+		</div>
 		<div v-if="tab === 'search'" :class="$style.searchRoot">
 			<div class="_gaps">
 				<MkInput v-model="searchQuery" :large="true" :autofocus="true" type="search" @enter="search">
@@ -59,6 +62,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue';
 import MkChannelPreview from '@/components/MkChannelPreview.vue';
+import MkChannelBrowse from '@/components/MkChannelBrowse.vue';
 import MkChannelList from '@/components/MkChannelList.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import MkInput from '@/components/MkInput.vue';
@@ -77,7 +81,7 @@ const props = defineProps<{
 }>();
 
 const key = ref('');
-const tab = ref('featured');
+const tab = ref('resource');
 const searchQuery = ref('');
 const searchType = ref('nameAndDescription');
 const channelPagination = ref();
@@ -136,6 +140,10 @@ const headerActions = computed(() => [{
 }]);
 
 const headerTabs = computed(() => [{
+	key: 'resource',
+	title: i18n.ts._channel.resourceArea,
+	icon: 'ti ti-folders',
+}, {
 	key: 'search',
 	title: i18n.ts.search,
 	icon: 'ti ti-search',

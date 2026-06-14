@@ -4,43 +4,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div style="position: relative;">
-	<MkA :to="`/channels/${channel.id}`" class="eftoefju _panel" @click="updateLastReadedAt">
-		<div class="banner" :style="bannerStyle">
-			<div class="fade"></div>
-			<div class="name"><i class="ti ti-device-tv"></i> {{ channel.name }}</div>
-			<div v-if="channel.isSensitive" class="sensitiveIndicator">{{ i18n.ts.sensitive }}</div>
-			<div class="status">
-				<div>
-					<i class="ti ti-users ti-fw"></i>
-					<I18n :src="i18n.ts._channel.usersCount" tag="span" style="margin-left: 4px;">
-						<template #n>
-							<b>{{ channel.usersCount }}</b>
-						</template>
-					</I18n>
-				</div>
-				<div>
-					<i class="ti ti-pencil ti-fw"></i>
-					<I18n :src="i18n.ts._channel.notesCount" tag="span" style="margin-left: 4px;">
-						<template #n>
-							<b>{{ channel.notesCount }}</b>
-						</template>
-					</I18n>
-				</div>
+<div :class="$style.wrap">
+	<MkA :to="`/channels/${channel.id}`" :class="$style.card" class="_panel" :style="cardStyle" @click="updateLastReadedAt">
+		<div :class="$style.banner" :style="bannerStyle">
+			<div :class="$style.bannerFade"></div>
+			<div :class="$style.name"><i class="ti ti-device-tv"></i> <span>{{ channel.name }}</span></div>
+			<div v-if="channel.category" :class="$style.category"><i class="ti ti-folder"></i> {{ channel.category }}</div>
+			<div v-if="channel.isSensitive" :class="$style.sensitive">{{ i18n.ts.sensitive }}</div>
+			<div :class="$style.stats">
+				<span><i class="ti ti-users"></i> {{ number(channel.usersCount) }}</span>
+				<span><i class="ti ti-pencil"></i> {{ number(channel.notesCount) }}</span>
 			</div>
 		</div>
-		<article v-if="channel.description">
-			<p :title="channel.description">{{ channel.description.length > 85 ? channel.description.slice(0, 85) + '…' : channel.description }}</p>
+		<article :class="$style.body">
+			<p v-if="channel.description" :class="$style.desc" :title="channel.description">{{ channel.description.length > 90 ? channel.description.slice(0, 90) + '…' : channel.description }}</p>
+			<p v-else :class="[$style.desc, $style.descEmpty]">—</p>
 		</article>
-		<footer>
-			<span v-if="channel.lastNotedAt">
-				{{ i18n.ts.updatedAt }}: <MkTime :time="channel.lastNotedAt"/>
-			</span>
+		<footer :class="$style.footer">
+			<span v-if="channel.lastNotedAt"><i class="ti ti-clock"></i> <MkTime :time="channel.lastNotedAt"/></span>
+			<span v-else><i class="ti ti-clock"></i> -</span>
 		</footer>
 	</MkA>
 	<div
 		v-if="channel.lastNotedAt && (channel.isFavorited || channel.isFollowing) && (!lastReadedAt || Date.parse(channel.lastNotedAt) > lastReadedAt)"
-		class="indicator"
+		:class="$style.indicator"
 	></div>
 </div>
 </template>
@@ -49,6 +36,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
+import number from '@/filters/number.js';
 import { miLocalStorage } from '@/local-storage.js';
 
 const props = defineProps<{
@@ -69,24 +57,37 @@ const updateLastReadedAt = () => {
 	lastReadedAt.value = props.channel.lastNotedAt ? Date.parse(props.channel.lastNotedAt) : Date.now();
 };
 
+const cardStyle = computed(() => ({ '--ch-color': props.channel.color || 'var(--MI_THEME-accent)' }));
+
 const bannerStyle = computed(() => {
 	if (props.channel.bannerUrl) {
 		return { backgroundImage: `url(${props.channel.bannerUrl})` };
 	} else {
-		return { backgroundColor: '#4c5e6d' };
+		return { background: `linear-gradient(135deg, ${props.channel.color || '#4c5e6d'}, color-mix(in srgb, ${props.channel.color || '#4c5e6d'} 55%, #000))` };
 	}
 });
 </script>
 
-<style lang="scss" scoped>
-.eftoefju {
-	display: block;
+<style lang="scss" module>
+.wrap {
+	position: relative;
+	container-type: inline-size;
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
 	position: relative;
 	overflow: hidden;
 	width: 100%;
+	height: 100%;
+	border-radius: var(--MI-radius);
+	transition: transform 0.18s ease, box-shadow 0.18s ease;
 
 	&:hover {
 		text-decoration: none;
+		transform: translateY(-3px);
+		box-shadow: 0 8px 24px color(from var(--ch-color) srgb r g b / 0.22);
 	}
 
 	&:focus-within {
@@ -95,119 +96,140 @@ const bannerStyle = computed(() => {
 		&::after {
 			content: '';
 			position: absolute;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
+			inset: 0;
 			border-radius: inherit;
 			pointer-events: none;
 			box-shadow: inset 0 0 0 2px var(--MI_THEME-focus);
 		}
 	}
+}
 
-	> .banner {
-		position: relative;
-		width: 100%;
-		height: 200px;
-		background-position: center;
-		background-size: cover;
+.banner {
+	position: relative;
+	width: 100%;
+	height: 150px;
+	background-position: center;
+	background-size: cover;
+	flex-shrink: 0;
+}
 
-		> .fade {
-			position: absolute;
-			bottom: 0;
-			left: 0;
-			width: 100%;
-			height: 64px;
-			background: linear-gradient(0deg, var(--MI_THEME-panel), color(from var(--MI_THEME-panel) srgb r g b / 0));
-		}
+.bannerFade {
+	position: absolute;
+	inset: auto 0 0 0;
+	height: 72px;
+	background: linear-gradient(0deg, var(--MI_THEME-panel), color(from var(--MI_THEME-panel) srgb r g b / 0));
+}
 
-		> .name {
-			position: absolute;
-			top: 16px;
-			left: 16px;
-			max-width: calc(100% - 32px);
-			padding: 12px 16px;
-			box-sizing: border-box;
-			background: rgba(0, 0, 0, 0.7);
-			color: #fff;
-			font-size: 1.2em;
-		}
+.name {
+	position: absolute;
+	top: 12px;
+	left: 12px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: calc(100% - 24px);
+	padding: 7px 12px;
+	box-sizing: border-box;
+	background: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(6px);
+	border-radius: var(--MI-radius-sm);
+	color: #fff;
+	font-size: 1.05em;
+	font-weight: 700;
 
-		> .status {
-			position: absolute;
-			z-index: 1;
-			bottom: 16px;
-			right: 16px;
-			padding: 8px 12px;
-			font-size: 80%;
-			background: rgba(0, 0, 0, 0.7);
-			border-radius: var(--MI-radius-sm);
-			color: #fff;
-		}
-
-		> .sensitiveIndicator {
-			position: absolute;
-			z-index: 1;
-			bottom: 16px;
-			left: 16px;
-			background: rgba(0, 0, 0, 0.7);
-			color: var(--MI_THEME-warn);
-			border-radius: var(--MI-radius-sm);
-			font-weight: bold;
-			font-size: 1em;
-			padding: 4px 7px;
-		}
+	> span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
+}
 
-	> article {
-		padding: 16px;
+.category {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 50%;
+	padding: 4px 9px;
+	box-sizing: border-box;
+	background: color(from var(--ch-color) srgb r g b / 0.92);
+	color: #fff;
+	border-radius: var(--MI-radius-full);
+	font-size: 0.72em;
+	font-weight: 700;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 
-		> p {
-			margin: 0;
-			font-size: 1em;
-		}
+.sensitive {
+	position: absolute;
+	z-index: 1;
+	bottom: 12px;
+	left: 12px;
+	background: rgba(0, 0, 0, 0.7);
+	color: var(--MI_THEME-warn);
+	border-radius: var(--MI-radius-sm);
+	font-weight: bold;
+	font-size: 0.8em;
+	padding: 3px 7px;
+}
+
+.stats {
+	position: absolute;
+	z-index: 1;
+	bottom: 10px;
+	right: 12px;
+	display: flex;
+	gap: 10px;
+	padding: 5px 10px;
+	font-size: 0.78em;
+	background: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(6px);
+	border-radius: var(--MI-radius-full);
+	color: #fff;
+
+	> span {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
 	}
+}
 
-	> footer {
-		padding: 12px 16px;
-		border-top: solid 0.5px var(--MI_THEME-divider);
+.body {
+	flex: 1 1 auto;
+	padding: 12px 14px;
+	min-height: 0;
+}
 
-		> span {
-			opacity: 0.7;
-			font-size: 0.9em;
-		}
-	}
+.desc {
+	margin: 0;
+	font-size: 0.92em;
+	line-height: 1.5;
+	color: var(--MI_THEME-fg);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
 
-	@media (max-width: 550px) {
-		font-size: 0.9em;
+.descEmpty {
+	opacity: 0.4;
+}
 
-		> .banner {
-			height: 80px;
+.footer {
+	padding: 9px 14px;
+	border-top: solid 0.5px var(--MI_THEME-divider);
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.82em;
 
-			> .status {
-				display: none;
-			}
-		}
-
-		> article {
-			padding: 12px;
-		}
-
-		> footer {
-			display: none;
-		}
-	}
-
-	@media (max-width: 500px) {
-		font-size: 0.8em;
-
-		> .banner {
-			height: 70px;
-		}
-
-		> article {
-			padding: 8px;
-		}
+	> span {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
 	}
 }
 
@@ -219,9 +241,17 @@ const bannerStyle = computed(() => {
 	background-color: var(--MI_THEME-accent);
 	border: solid var(--MI_THEME-bg) 4px;
 	border-radius: var(--MI-radius-full);
-	width: 1.5rem;
-	height: 1.5rem;
+	width: 1.4rem;
+	height: 1.4rem;
 	aspect-ratio: 1 / 1;
 }
 
+/* 容器查询: 卡片窄时压缩(横滑行/窄网格/手机都适用) */
+@container (max-width: 300px) {
+	.banner { height: 104px; }
+	.stats { display: none; }
+	.name { font-size: 0.95em; padding: 5px 9px; }
+	.footer { display: none; }
+	.body { padding: 10px 12px; }
+}
 </style>

@@ -2291,6 +2291,14 @@ _serverDisconnectedBehavior:
   quiet: "控えめに警告"
 
 _channel:
+  resourceArea: "資料・学習"
+  browseSections: "セクション"
+  browseSplit: "分割"
+  allCategories: "すべて"
+  uncategorized: "未分類"
+  viewAll: "すべて見る"
+  category: "カテゴリ"
+  categoryCaption: "資料・学習エリアの大分類(例: AIGC、CS、チュートリアル、リソース)。空欄なら未分類。"
   create: "チャンネルを作成"
   edit: "チャンネルを編集"
   setBanner: "バナーを設定"

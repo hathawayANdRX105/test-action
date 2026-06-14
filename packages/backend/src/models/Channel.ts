@@ -103,4 +103,12 @@ export class MiChannel {
 		default: true,
 	})
 	public allowRenoteToExternal: boolean;
+
+	// 资源学习区の大类(自由文本)。null = 未分类。Emoji.category と同じ運用。
+	@Index()
+	@Column('varchar', {
+		length: 128,
+		nullable: true,
+	})
+	public category: string | null;
 }

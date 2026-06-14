@@ -79,6 +79,10 @@ export const packedChannelSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		category: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
 		isFollowing: {
 			type: 'boolean',
 			optional: true, nullable: false,

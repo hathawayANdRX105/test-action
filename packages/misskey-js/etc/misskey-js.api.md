@@ -1204,6 +1204,15 @@ export type Channels = {
 };
 
 // @public (undocumented)
+type ChannelsByCategoryRequest = operations['channels___by-category']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsByCategoryResponse = operations['channels___by-category']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsCategoriesResponse = operations['channels___categories']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type ChannelsCreateRequest = operations['channels___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2354,6 +2363,9 @@ declare namespace entities {
         BubbleGameRankingRequest,
         BubbleGameRankingResponse,
         BubbleGameRegisterRequest,
+        ChannelsByCategoryRequest,
+        ChannelsByCategoryResponse,
+        ChannelsCategoriesResponse,
         ChannelsCreateRequest,
         ChannelsCreateResponse,
         ChannelsFavoriteRequest,

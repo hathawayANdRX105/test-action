@@ -15,6 +15,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #label>{{ i18n.ts.description }}</template>
 			</MkTextarea>
 
+			<MkInput v-model="category">
+				<template #label>{{ i18n.ts._channel.category }}</template>
+				<template #caption>{{ i18n.ts._channel.categoryCaption }}</template>
+			</MkInput>
+			<div v-if="categorySuggestions.length > 0" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: -8px;">
+				<button v-for="c in categorySuggestions" :key="c" type="button" class="_button" style="padding: 3px 10px; border: 1px solid var(--MI_THEME-divider); border-radius: 999px; font-size: 0.85em;" @click="category = c">{{ c }}</button>
+			</div>
+
 			<MkColorInput v-model="color">
 				<template #label>{{ i18n.ts.color }}</template>
 			</MkColorInput>
@@ -99,7 +107,13 @@ const bannerId = ref<string | null>(null);
 const color = ref('#000');
 const isSensitive = ref(false);
 const allowRenoteToExternal = ref(true);
+const category = ref<string | null>(null);
+const categorySuggestions = ref<string[]>([]);
 const pinnedNotes = ref<{ id: Misskey.entities.Note['id'] }[]>([]);
+
+misskeyApi('channels/categories', {}).then(cats => {
+	categorySuggestions.value = cats.map(c => c.category).filter((c): c is string => c != null);
+});
 
 watch(() => bannerId.value, async () => {
 	if (bannerId.value == null) {
@@ -128,6 +142,7 @@ async function fetchChannel() {
 	}));
 	color.value = channel.value.color;
 	allowRenoteToExternal.value = channel.value.allowRenoteToExternal;
+	category.value = channel.value.category;
 }
 
 fetchChannel();
@@ -158,6 +173,7 @@ function save() {
 		color: color.value,
 		isSensitive: isSensitive.value,
 		allowRenoteToExternal: allowRenoteToExternal.value,
+		category: category.value,
 	};
 
 	if (props.channelId) {

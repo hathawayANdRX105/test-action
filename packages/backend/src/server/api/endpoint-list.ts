@@ -204,6 +204,8 @@ export * as 'bubble-game/ranking' from './endpoints/bubble-game/ranking.js';
 export * as 'bubble-game/register' from './endpoints/bubble-game/register.js';
 export * as 'channels/create' from './endpoints/channels/create.js';
 export * as 'channels/favorite' from './endpoints/channels/favorite.js';
+export * as 'channels/categories' from './endpoints/channels/categories.js';
+export * as 'channels/by-category' from './endpoints/channels/by-category.js';
 export * as 'channels/featured' from './endpoints/channels/featured.js';
 export * as 'channels/follow' from './endpoints/channels/follow.js';
 export * as 'channels/followed' from './endpoints/channels/followed.js';

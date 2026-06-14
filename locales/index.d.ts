@@ -8933,6 +8933,38 @@ export interface Locale extends ILocale {
     };
     "_channel": {
         /**
+         * 資料・学習
+         */
+        "resourceArea": string;
+        /**
+         * セクション
+         */
+        "browseSections": string;
+        /**
+         * 分割
+         */
+        "browseSplit": string;
+        /**
+         * すべて
+         */
+        "allCategories": string;
+        /**
+         * 未分類
+         */
+        "uncategorized": string;
+        /**
+         * すべて見る
+         */
+        "viewAll": string;
+        /**
+         * カテゴリ
+         */
+        "category": string;
+        /**
+         * 資料・学習エリアの大分類(例: AIGC、CS、チュートリアル、リソース)。空欄なら未分類。
+         */
+        "categoryCaption": string;
+        /**
          * チャンネルを作成
          */
         "create": string;
