@@ -530,6 +530,12 @@ type AdminRolesUsersRequest = operations['admin___roles___users']['requestBody']
 type AdminRolesUsersResponse = operations['admin___roles___users']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminSearchFingerprintsRequest = operations['admin___search-fingerprints']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminSearchFingerprintsResponse = operations['admin___search-fingerprints']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminSearchTrendsHideRequest = operations['admin___search-trends___hide']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2281,6 +2287,8 @@ declare namespace entities {
         AdminRolesUpdateDefaultPoliciesRequest,
         AdminRolesUsersRequest,
         AdminRolesUsersResponse,
+        AdminSearchFingerprintsRequest,
+        AdminSearchFingerprintsResponse,
         AdminSearchTrendsHideRequest,
         AdminSearchTrendsHideResponse,
         AdminSendEmailRequest,

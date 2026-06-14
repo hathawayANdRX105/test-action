@@ -143,13 +143,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #label>{{ i18n.ts.fingerprint }} ({{ fingerprints.length }})</template>
 					<div class="_gaps_s">
 						<div v-for="fp of fingerprints" :key="fp.fingerprint" :class="$style.fpRow">
-							<MkKeyValue :copy="fp.fingerprint" oneline>
-								<template #key><span class="_monospace">{{ fp.fingerprint }}</span></template>
-								<template #value><span class="_monospace">{{ fp.ip ?? '-' }}</span> · <MkTime :time="fp.lastSeenAt"/> · ×{{ fp.seenCount }}</template>
-							</MkKeyValue>
-							<div v-if="fp.components" :class="$style.fpComponents">
-								<div v-for="(val, key) in fp.components" :key="key" class="_monospace" :class="$style.fpComponent">
-									<b>{{ key }}:</b> {{ fpComponentText(val) }}
+							<div :class="$style.fpHead">
+								<span class="_monospace" :class="$style.fpHash">{{ fp.fingerprint }}</span>
+								<span :class="$style.fpMeta">{{ fp.ip ?? '-' }} · <MkTime :time="fp.lastSeenAt"/> · ×{{ fp.seenCount }}</span>
+								<button v-tooltip="i18n.ts.copy" class="_button" :class="$style.fpBtn" @click="copyToClipboard(fp.fingerprint)"><i class="ti ti-copy"></i></button>
+								<button v-tooltip="i18n.ts.search" class="_button" :class="$style.fpBtn" @click="(ev) => searchFingerprints({ fingerprint: fp.fingerprint }, ev)"><i class="ti ti-users"></i></button>
+							</div>
+							<div :class="$style.fpComponents">
+								<div v-for="c of flattenFpComponents(fp.components)" :key="c.key" :class="$style.fpComponent">
+									<span :class="$style.fpKey">{{ c.key }}</span>
+									<span class="_monospace" :class="$style.fpVal">{{ c.value }}</span>
+									<button v-tooltip="i18n.ts.copy" class="_button" :class="$style.fpBtn" @click="copyToClipboard(c.value)"><i class="ti ti-copy"></i></button>
+									<button v-tooltip="i18n.ts.search" class="_button" :class="$style.fpBtn" @click="(ev) => searchFingerprints({ componentKey: c.key, componentValue: c.value }, ev)"><i class="ti ti-users"></i></button>
 								</div>
 							</div>
 						</div>
@@ -582,10 +587,35 @@ const loggedInDates = computed(() => {
 	return Array.from(new Set(info.value.loggedInDates)).sort().map(date => new Date(date));
 });
 
-function fpComponentText(val: unknown): string {
-	if (val == null) return '-';
-	if (typeof val === 'object') return JSON.stringify(val);
-	return String(val);
+// 指纹分量を「各特徴を1行ずつ」に平坦化する。webgl などのネストは webgl.vendor のように展開。
+function flattenFpComponents(components: Record<string, unknown> | null | undefined): { key: string; value: string }[] {
+	if (components == null) return [];
+	const out: { key: string; value: string }[] = [];
+	for (const [k, v] of Object.entries(components)) {
+		if (v != null && typeof v === 'object' && !Array.isArray(v)) {
+			for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) {
+				out.push({ key: `${k}.${k2}`, value: String(v2) });
+			}
+		} else {
+			out.push({ key: k, value: Array.isArray(v) ? (v as unknown[]).join(', ') : String(v) });
+		}
+	}
+	return out;
+}
+
+// 指紋ハッシュ or 単一特徴で他ユーザーを反查し、結果をメニューで表示（クリックでそのユーザーの管理画面へ）。
+async function searchFingerprints(params: { fingerprint?: string; componentKey?: string; componentValue?: string }, ev: MouseEvent) {
+	const rows = await misskeyApi('admin/search-fingerprints', { ...params, limit: 100 }).catch(() => [] as Misskey.entities.AdminSearchFingerprintsResponse);
+	if (rows.length === 0) {
+		os.alert({ type: 'info', text: i18n.ts.nothing });
+		return;
+	}
+	const items = rows.map(r => ({
+		type: 'link' as const,
+		to: `/admin/user/${r.user.id}`,
+		text: `@${r.user.username}${r.user.host ? '@' + r.user.host : ''}  ·  ${r.ip ?? '-'}  ·  ×${r.seenCount}`,
+	}));
+	os.popupMenu(items, (ev.currentTarget ?? ev.target) as HTMLElement);
 }
 
 function createFetcher(withHint = true) {
@@ -1050,17 +1080,59 @@ definePage(() => ({
 	border-radius: var(--MI-radius-sm);
 }
 
+.fpHead {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.fpHash {
+	flex: 1;
+	min-width: 0;
+	word-break: break-all;
+	font-weight: 700;
+}
+
+.fpMeta {
+	flex: 0 0 auto;
+	font-size: 0.8em;
+	opacity: 0.7;
+	white-space: nowrap;
+}
+
+.fpBtn {
+	flex: 0 0 auto;
+	padding: 2px 6px;
+	opacity: 0.7;
+
+	&:hover { opacity: 1; }
+}
+
 .fpComponents {
 	margin-top: 6px;
 	padding-top: 6px;
 	border-top: solid 1px var(--MI_THEME-divider);
 	display: grid;
-	gap: 2px;
+	gap: 3px;
 }
 
 .fpComponent {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 	font-size: 0.82em;
-	opacity: 0.85;
+}
+
+.fpKey {
+	flex: 0 0 130px;
+	font-weight: 600;
+	opacity: 0.75;
+	word-break: break-all;
+}
+
+.fpVal {
+	flex: 1;
+	min-width: 0;
 	word-break: break-all;
 }
 

@@ -164,6 +164,8 @@ import type {
 	AdminRolesUpdateDefaultPoliciesRequest,
 	AdminRolesUsersRequest,
 	AdminRolesUsersResponse,
+	AdminSearchFingerprintsRequest,
+	AdminSearchFingerprintsResponse,
 	AdminSearchTrendsHideRequest,
 	AdminSearchTrendsHideResponse,
 	AdminSendEmailRequest,
@@ -901,6 +903,7 @@ export type Endpoints = {
 	'admin/roles/update': { req: AdminRolesUpdateRequest; res: EmptyResponse };
 	'admin/roles/update-default-policies': { req: AdminRolesUpdateDefaultPoliciesRequest; res: EmptyResponse };
 	'admin/roles/users': { req: AdminRolesUsersRequest; res: AdminRolesUsersResponse };
+	'admin/search-fingerprints': { req: AdminSearchFingerprintsRequest; res: AdminSearchFingerprintsResponse };
 	'admin/search-trends/hide': { req: AdminSearchTrendsHideRequest; res: AdminSearchTrendsHideResponse };
 	'admin/send-email': { req: AdminSendEmailRequest; res: EmptyResponse };
 	'admin/server-info': { req: EmptyRequest; res: AdminServerInfoResponse };

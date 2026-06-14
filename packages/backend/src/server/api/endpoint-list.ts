@@ -103,6 +103,7 @@ export * as 'admin/get-index-stats' from './endpoints/admin/get-index-stats.js';
 export * as 'admin/get-table-stats' from './endpoints/admin/get-table-stats.js';
 export * as 'admin/get-user-ips' from './endpoints/admin/get-user-ips.js';
 export * as 'admin/get-user-fingerprints' from './endpoints/admin/get-user-fingerprints.js';
+export * as 'admin/search-fingerprints' from './endpoints/admin/search-fingerprints.js';
 export * as 'admin/invite/create' from './endpoints/admin/invite/create.js';
 export * as 'admin/invite/list' from './endpoints/admin/invite/list.js';
 export * as 'admin/meta' from './endpoints/admin/meta.js';
