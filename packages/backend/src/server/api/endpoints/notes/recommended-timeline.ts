@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Brackets } from 'typeorm';
+import { Brackets, In } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import type { MiNote, NotesRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -361,13 +361,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// Per-request seed: varies the exploration shuffle between refreshes so
 				// the feed isn't identical each time (combined with offset for paging).
 				const requestSeed = (Math.floor(now / (1000 * 30)) + ps.offset) % 100000;
-				const [signals, authorFlood] = await Promise.all([
+				const [signals, authorFlood, overrides] = await Promise.all([
 					this.recommendationService.getUserSignals(me?.id ?? null, candidates, now, requestSeed),
 					this.getAuthorFloodScores(candidates),
+					this.recommendationService.getNoteOverrides(candidates.map(c => c.id)),
 				]);
 				const effectiveRankMode = category === 'trending' ? 'trending' : rankMode;
-				notes = this.diversify(this.rankCandidates(candidates, signals, authorFlood, category, sort, effectiveRankMode, now), ps.limit, now);
+				notes = this.diversify(this.rankCandidates(candidates, signals, authorFlood, category, sort, effectiveRankMode, now, overrides), ps.limit, now);
 			}
+
+			// 管理者がホーム推薦に固定したノートを最上部に注入する(ホーム・先頭ページのみ)
+			if (surface === 'home' && ps.offset === 0) {
+				notes = await this.prependPinnedNotes(notes, candidates);
+			}
+
 			// Record delivery per-user so the next request can de-duplicate (time-recovering).
 			this.recommendationService.recordDelivery(me?.id ?? null, notes.map(note => note.id), this.timeService.now);
 			return await this.noteEntityService.packMany(notes, me);
@@ -509,7 +516,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		return penalties;
 	}
 
-	private rankCandidates<T extends { id: string; userId: string; text: string | null; repliesCount?: number; renoteCount?: number; clippedCount?: number; reactions?: Record<string, number>; fileIds?: string[]; tags?: string[]; channelId?: string | null; channel?: { pinnedNoteIds?: string[]; name?: string | null } | null; user?: { id: string; followersCount?: number; avatarId?: string | null; description?: string | null; isBot?: boolean } | null }>(
+	private rankCandidates<T extends { id: string; userId: string; text: string | null; repliesCount?: number; renoteCount?: number; clippedCount?: number; reactions?: Record<string, number>; fileIds?: string[]; tags?: string[]; channelId?: string | null; channel?: { pinnedNoteIds?: string[]; name?: string | null } | null; user?: { id: string; followersCount?: number; avatarId?: string | null; isBot?: boolean } | null }>(
 		notes: T[],
 		signals: Awaited<ReturnType<RecommendationService['getUserSignals']>>,
 		authorFlood: Map<string, number>,
@@ -517,6 +524,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		sort: RecommendationSort,
 		rankMode: RecommendationRankMode,
 		now: number,
+		overrides?: Map<string, { pinned: boolean; scoreBoost: number }>,
 	): T[] {
 		return notes
 			.map((note, index) => {
@@ -593,7 +601,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					else if (accountAgeDays >= 7) authorTrust += 3;
 					authorTrust += Math.min(Number(author.followersCount ?? 0), 100) / 100 * 8;
 					if (author.avatarId != null) authorTrust += 2;
-					if ((author.description ?? '').trim().length > 0) authorTrust += 2;
 					if (author.isBot === true) authorTrust -= 6;
 				}
 				let score = hotnessScore * HOTNESS_WEIGHT / 42
@@ -614,6 +621,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (ageHours >= OLD_CONTENT_HOURS && !isPinnedInChannel) {
 					score = Math.min(score, OLD_CONTENT_MAX_SCORE);
 				}
+				// 管理者による手動スコア調整(閾値)を最後に加算する
+				const override = overrides?.get(note.id);
+				if (override != null) score += override.scoreBoost;
 				return {
 					note,
 					score,
@@ -717,5 +727,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		if (/https?:\/\/\S+/i.test(text) && /(返利|佣金|代理|招商|推广|引流|优惠码|折扣码|限时|福利|低价|秒杀|清仓|下单|购买|加微信|加群)/i.test(text) && !hasQualityContext) penalty += 36;
 		if (note.channel?.name != null && new RegExp(LOW_VALUE_CHANNEL_NAME_PATTERN, 'i').test(note.channel.name)) penalty += 42;
 		return penalty;
+	}
+
+	// 管理者がピン留めしたノートを最上部に並べる。候補(7日窓)外でも単独取得し、重複は除去する。
+	private async prependPinnedNotes(notes: MiNote[], candidates: MiNote[]): Promise<MiNote[]> {
+		const pinnedIds = await this.recommendationService.getPinnedNoteIds();
+		if (pinnedIds.length === 0) return notes;
+		const byId = new Map<string, MiNote>(candidates.map(c => [c.id, c]));
+		const missingIds = pinnedIds.filter(id => !byId.has(id));
+		if (missingIds.length > 0) {
+			const fetched = this.filterPackableCandidates(await this.notesRepository.find({
+				where: { id: In(missingIds), visibility: 'public' },
+				relations: { user: true, reply: { user: true }, renote: { user: true }, channel: true },
+			}));
+			for (const note of fetched) byId.set(note.id, note);
+		}
+		const ordered = pinnedIds.map(id => byId.get(id)).filter((note): note is MiNote => note != null);
+		const pinnedSet = new Set(ordered.map(note => note.id));
+		return [...ordered, ...notes.filter(note => !pinnedSet.has(note.id))];
 	}
 }

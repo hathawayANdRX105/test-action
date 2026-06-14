@@ -1134,6 +1134,39 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *read:admin:recommendation*
+     */
+    request<E extends 'admin/recommendation/pinned-list', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params?: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:admin:recommendation*
+     */
+    request<E extends 'admin/recommendation/show', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:recommendation*
+     */
+    request<E extends 'admin/recommendation/update', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:admin:reject-quotes*
      */
     request<E extends 'admin/reject-quotes', P extends Endpoints[E]['req']>(

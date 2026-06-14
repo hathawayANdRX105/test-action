@@ -5,8 +5,9 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import * as Redis from 'ioredis';
+import { In } from 'typeorm';
 import { DI } from '@/di-symbols.js';
-import type { ChannelFollowingsRepository, FollowingsRepository, MiNote, MutingsRepository, NotesRepository } from '@/models/_.js';
+import type { ChannelFollowingsRepository, FollowingsRepository, MiNote, MutingsRepository, NoteRecommendationsRepository, NotesRepository } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { normalizeForSearch } from '@/misc/normalize-for-search.js';
 import { TimeService } from '@/global/TimeService.js';
@@ -81,8 +82,64 @@ export class RecommendationService {
 		@Inject(DI.mutingsRepository)
 		private mutingsRepository: MutingsRepository,
 
+		@Inject(DI.noteRecommendationsRepository)
+		private noteRecommendationsRepository: NoteRecommendationsRepository,
+
 		private readonly timeService: TimeService,
 	) {
+	}
+
+	/** 候補ノートの管理者上書き(ピン留め・スコア調整)をまとめて取得 */
+	@bindThis
+	public async getNoteOverrides(noteIds: string[]): Promise<Map<string, { pinned: boolean; scoreBoost: number }>> {
+		const result = new Map<string, { pinned: boolean; scoreBoost: number }>();
+		if (noteIds.length === 0) return result;
+		const rows = await this.noteRecommendationsRepository.findBy({ noteId: In(noteIds) });
+		for (const row of rows) {
+			result.set(row.noteId, { pinned: row.pinned, scoreBoost: row.scoreBoost });
+		}
+		return result;
+	}
+
+	/** ホーム推薦の最上部に固定する投稿ID(新しくピン留めした順) */
+	@bindThis
+	public async getPinnedNoteIds(): Promise<string[]> {
+		const rows = await this.noteRecommendationsRepository.find({
+			select: { noteId: true, pinnedAt: true },
+			where: { pinned: true },
+			order: { pinnedAt: 'DESC' },
+			take: 100,
+		});
+		return rows.map(row => row.noteId);
+	}
+
+	/** 単一投稿の上書き設定を取得 */
+	@bindThis
+	public async getNoteOverride(noteId: string): Promise<{ pinned: boolean; scoreBoost: number } | null> {
+		const row = await this.noteRecommendationsRepository.findOneBy({ noteId });
+		return row == null ? null : { pinned: row.pinned, scoreBoost: row.scoreBoost };
+	}
+
+	/** 管理者による上書き設定の更新(行が無ければ作成、ピンもブーストも無ければ削除) */
+	@bindThis
+	public async setNoteOverride(noteId: string, params: { pinned?: boolean; scoreBoost?: number }, adminId: string): Promise<void> {
+		const existing = await this.noteRecommendationsRepository.findOneBy({ noteId });
+		const pinned = params.pinned ?? existing?.pinned ?? false;
+		const scoreBoost = params.scoreBoost ?? existing?.scoreBoost ?? 0;
+
+		// 設定が無効化(ピン無し・ブースト0)されたら行を削除して掃除する
+		if (!pinned && scoreBoost === 0) {
+			if (existing != null) await this.noteRecommendationsRepository.delete({ noteId });
+			return;
+		}
+
+		const now = new Date(this.timeService.now);
+		const pinnedAt = pinned ? (existing?.pinned ? existing.pinnedAt : now) : null;
+		if (existing == null) {
+			await this.noteRecommendationsRepository.insert({ noteId, pinned, pinnedAt, scoreBoost, updatedAt: now, updatedBy: adminId });
+		} else {
+			await this.noteRecommendationsRepository.update({ noteId }, { pinned, pinnedAt, scoreBoost, updatedAt: now, updatedBy: adminId });
+		}
 	}
 
 	@bindThis

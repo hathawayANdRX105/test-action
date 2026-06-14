@@ -6029,6 +6029,76 @@ export interface Locale extends ILocale {
             "none": string;
         };
     };
+    "_recommendation": {
+        /**
+         * おすすめ管理
+         */
+        "manage": string;
+        /**
+         * おすすめの最上部に固定
+         */
+        "pinToTop": string;
+        /**
+         * オンにすると、この投稿がおすすめの最上部に固定され全員が優先的に見られます。
+         */
+        "pinToTopCaption": string;
+        /**
+         * おすすめスコア調整
+         */
+        "scoreBoost": string;
+        /**
+         * 正で順位を上げ、負で下げます。アルゴリズムのスコアに直接加算されます(範囲 -300 ~ 300)。
+         */
+        "scoreBoostCaption": string;
+        /**
+         * おすすめ診断
+         */
+        "diagnostics": string;
+        /**
+         * 投稿者のアクティビティ
+         */
+        "authorActivity": string;
+        /**
+         * 投稿からの経過(時間)
+         */
+        "ageHours": string;
+        /**
+         * 露出回数
+         */
+        "exposure": string;
+        /**
+         * 総エンゲージメント
+         */
+        "engagement": string;
+        /**
+         * アカウント年齢(日)
+         */
+        "accountAgeDays": string;
+        /**
+         * フォロワー数
+         */
+        "followers": string;
+        /**
+         * 投稿数
+         */
+        "posts": string;
+        /**
+         * 信頼度スコア
+         */
+        "trustScore": string;
+        /**
+         * 低品質の疑い
+         */
+        "suspectedLowValue": string;
+        /**
+         * 広告/勧誘の疑い
+         */
+        "suspectedPromo": string;
+        /**
+         * 保存しました
+         */
+        "saved": string;
+    };
     "_emojiPalette": {
         /**
          * パレット

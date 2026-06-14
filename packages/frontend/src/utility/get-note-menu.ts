@@ -506,6 +506,17 @@ export function getNoteMenu(props: {
 			menuItems.push({ type: 'divider' });
 			if ($i.isModerator || $i.isAdmin) {
 				menuItems.push(getMandatoryCWMenu(appearNote));
+				menuItems.push({
+					icon: 'ti ti-sparkles',
+					text: i18n.ts._recommendation.manage,
+					action: () => {
+						const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkRecommendationDialog.vue')), {
+							noteId: appearNote.id,
+						}, {
+							closed: () => dispose(),
+						});
+					},
+				});
 			}
 			if (appearNote.userId === $i.id) {
 				menuItems.push({

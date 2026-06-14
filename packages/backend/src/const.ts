@@ -190,6 +190,8 @@ export const permissions = [
 	'write:admin:user-note',
 	'write:admin:roles',
 	'read:admin:roles',
+	'write:admin:recommendation',
+	'read:admin:recommendation',
 	'write:admin:relays',
 	'read:admin:relays',
 	'write:admin:invite-codes',
