@@ -266,7 +266,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private readonly timeService: TimeService,
 		private readonly userService: UserService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, ip, headers) => {
 			if (ps.text && ps.text.length > this.config.maxNoteLength) {
 				throw new ApiError(meta.errors.maxLength);
 			}
@@ -374,6 +374,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					apMentions: ps.noExtractMentions ? [] : undefined,
 					apHashtags: ps.noExtractHashtags ? [] : undefined,
 					apEmojis: ps.noExtractEmojis ? [] : undefined,
+					ip: ip ?? null,
+					fingerprint: ((): string | null => {
+						const fp = headers?.['x-client-fingerprint']?.trim();
+						return fp != null && fp.length > 0 && fp.length <= 64 ? fp : null;
+					})(),
 				});
 
 				this.userService.markUserActive(me, true);

@@ -949,6 +949,17 @@ declare module '../api.js' {
      * 
      * **Credential required**: *Yes* / **Permission**: *read:admin:user-ips*
      */
+    request<E extends 'admin/get-user-fingerprints', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:admin:user-ips*
+     */
     request<E extends 'admin/get-user-ips', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -4352,6 +4363,17 @@ declare module '../api.js' {
      * **Credential required**: *Yes*
      */
     request<E extends 'i/update-email', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:account*
+     */
+    request<E extends 'i/update-fingerprint', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,

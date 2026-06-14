@@ -726,6 +726,12 @@ export class NoteEntityService implements OnModuleInit {
 				processErrors: note.processErrors,
 			} : {}),
 
+			// 投稿者 IP / ブラウザ指紋はモデレーター/管理者のみに開示する（溯源用）。
+			...(iAmModerator ? {
+				ip: note.ip ?? null,
+				fingerprint: note.fingerprint ?? null,
+			} : {}),
+
 			reply: opts.recurseReply && note.replyId ? this.pack(note.reply ?? opts._hint_?.notes?.get(note.replyId) ?? note.replyId, me, {
 				detail: false,
 				skipHide: opts.skipHide,

@@ -75,6 +75,7 @@ import { MiSystemWebhook } from '@/models/SystemWebhook.js';
 import { MiUsedUsername } from '@/models/UsedUsername.js';
 import { MiUser } from '@/models/User.js';
 import { MiUserIp } from '@/models/UserIp.js';
+import { MiUserFingerprint } from '@/models/UserFingerprint.js';
 import { MiUserKeypair } from '@/models/UserKeypair.js';
 import { MiUserList } from '@/models/UserList.js';
 import { MiUserListFavorite } from '@/models/UserListFavorite.js';
@@ -213,6 +214,7 @@ export {
 	MiUsedUsername,
 	MiUser,
 	MiUserIp,
+	MiUserFingerprint,
 	MiUserKeypair,
 	MiUserList,
 	MiUserListFavorite,
@@ -304,6 +306,7 @@ export type SystemAccountsRepository = Repository<MiSystemAccount> & MiRepositor
 export type UsedUsernamesRepository = Repository<MiUsedUsername> & MiRepository<MiUsedUsername>;
 export type UsersRepository = Repository<MiUser> & MiRepository<MiUser>;
 export type UserIpsRepository = Repository<MiUserIp> & MiRepository<MiUserIp>;
+export type UserFingerprintsRepository = Repository<MiUserFingerprint> & MiRepository<MiUserFingerprint>;
 export type UserKeypairsRepository = Repository<MiUserKeypair> & MiRepository<MiUserKeypair>;
 export type UserListsRepository = Repository<MiUserList> & MiRepository<MiUserList>;
 export type UserListFavoritesRepository = Repository<MiUserListFavorite> & MiRepository<MiUserListFavorite>;

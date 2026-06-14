@@ -130,6 +130,8 @@ function generateDummyNote(override?: Partial<MiNote>): MiNote {
 		updatedAt: null,
 		processErrors: [],
 		mandatoryCW: null,
+		ip: null,
+		fingerprint: null,
 		...override,
 	};
 }

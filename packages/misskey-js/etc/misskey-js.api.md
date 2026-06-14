@@ -350,6 +350,12 @@ type AdminGetIndexStatsResponse = operations['admin___get-index-stats']['respons
 type AdminGetTableStatsResponse = operations['admin___get-table-stats']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminGetUserFingerprintsRequest = operations['admin___get-user-fingerprints']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminGetUserFingerprintsResponse = operations['admin___get-user-fingerprints']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminGetUserIpsRequest = operations['admin___get-user-ips']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2215,6 +2221,8 @@ declare namespace entities {
         AdminGenVapidKeysResponse,
         AdminGetIndexStatsResponse,
         AdminGetTableStatsResponse,
+        AdminGetUserFingerprintsRequest,
+        AdminGetUserFingerprintsResponse,
         AdminGetUserIpsRequest,
         AdminGetUserIpsResponse,
         AdminInviteCreateRequest,
@@ -2672,6 +2680,8 @@ declare namespace entities {
         IUpdateResponse,
         IUpdateEmailRequest,
         IUpdateEmailResponse,
+        IUpdateFingerprintRequest,
+        IUpdateFingerprintResponse,
         IWebhooksCreateRequest,
         IWebhooksCreateResponse,
         IWebhooksDeleteRequest,
@@ -3535,6 +3545,12 @@ type IUpdateEmailRequest = operations['i___update-email']['requestBody']['conten
 
 // @public (undocumented)
 type IUpdateEmailResponse = operations['i___update-email']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type IUpdateFingerprintRequest = operations['i___update-fingerprint']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type IUpdateFingerprintResponse = operations['i___update-fingerprint']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type IUpdateRequest = operations['i___update']['requestBody']['content']['application/json'];

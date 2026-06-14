@@ -71,6 +71,7 @@ import {
 	MiUsedUsername,
 	MiUser,
 	MiUserIp,
+	MiUserFingerprint,
 	MiUserKeypair,
 	MiUserList,
 	MiUserListFavorite,
@@ -270,6 +271,12 @@ const $userNotePiningsRepository: Provider = {
 const $userIpsRepository: Provider = {
 	provide: DI.userIpsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiUserIp).extend(miRepository as MiRepository<MiUserIp>),
+	inject: [DI.db],
+};
+
+const $userFingerprintsRepository: Provider = {
+	provide: DI.userFingerprintsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiUserFingerprint).extend(miRepository as MiRepository<MiUserFingerprint>),
 	inject: [DI.db],
 };
 
@@ -658,6 +665,7 @@ export const repositoryProviders: Provider[] = [
 		$userListMembershipsRepository,
 		$userNotePiningsRepository,
 		$userIpsRepository,
+		$userFingerprintsRepository,
 		$usedUsernamesRepository,
 		$followingsRepository,
 		$followRequestsRepository,

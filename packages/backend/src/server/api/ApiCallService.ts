@@ -13,7 +13,7 @@ import { getIpHash } from '@/misc/get-ip-hash.js';
 import type { MiLocalUser, MiUser } from '@/models/User.js';
 import type { MiAccessToken } from '@/models/AccessToken.js';
 import type Logger from '@/logger.js';
-import type { MiMeta, UserIpsRepository } from '@/models/_.js';
+import type { MiMeta, UserIpsRepository, UserFingerprintsRepository } from '@/models/_.js';
 import { createTemp } from '@/misc/create-temp.js';
 import { bindThis } from '@/decorators.js';
 import { RoleService } from '@/core/RoleService.js';
@@ -44,6 +44,7 @@ const accessDenied = {
 export class ApiCallService {
 	private readonly logger: Logger;
 	private readonly userIpHistories: ManagedMemoryKVCache<Set<string>>;
+	private readonly userFingerprintHistories: ManagedMemoryKVCache<Set<string>>;
 
 	constructor(
 		@Inject(DI.meta)
@@ -54,6 +55,9 @@ export class ApiCallService {
 
 		@Inject(DI.userIpsRepository)
 		private userIpsRepository: UserIpsRepository,
+
+		@Inject(DI.userFingerprintsRepository)
+		private userFingerprintsRepository: UserFingerprintsRepository,
 
 		@Inject(DI.apiAccessGrantsRepository)
 		private apiAccessGrantsRepository: ApiAccessGrantsRepository,
@@ -70,6 +74,7 @@ export class ApiCallService {
 	) {
 		this.logger = this.apiLoggerService.logger;
 		this.userIpHistories = cacheManagementService.createMemoryKVCache('userIpHistories', 1000 * 60 * 60); // 1 hour
+		this.userFingerprintHistories = cacheManagementService.createMemoryKVCache('userFingerprintHistories', 1000 * 60 * 60); // 1 hour
 	}
 
 	#sendApiError(reply: FastifyReply, err: ApiError): void {
@@ -185,6 +190,7 @@ export class ApiCallService {
 			if (user) {
 				// logIp records errors directly
 				this.logIp(request, user).catch(() => null);
+				this.logFingerprint(request, user).catch(() => null);
 			}
 		}).catch(err => {
 			this.#sendAuthenticationError(reply, err);
@@ -246,6 +252,7 @@ export class ApiCallService {
 			if (user) {
 				// logIp records errors directly
 				this.logIp(request, user).catch(() => null);
+				this.logFingerprint(request, user).catch(() => null);
 			}
 		}).catch(err => {
 			cleanup();
@@ -301,6 +308,38 @@ export class ApiCallService {
 				}).orIgnore(true).execute();
 			} catch (err) {
 				this.logger.warn(`Failed to save IP address ${ip} for user ${user.id}: ${renderInlineError(err)}`);
+			}
+		}
+	}
+
+	// クライアント送信のブラウザ指紋ハッシュをユーザー単位で記録（溯源用）。IPと同じく enableIpLogging で制御。
+	@bindThis
+	private async logFingerprint(request: FastifyRequest, user: MiLocalUser) {
+		if (!this.meta.enableIpLogging) return;
+		const raw = request.headers['x-client-fingerprint'];
+		const fingerprint = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+		if (fingerprint == null || fingerprint.length === 0 || fingerprint.length > 64) return;
+
+		let seen = this.userFingerprintHistories.get(user.id);
+		if (seen == null) {
+			seen = new Set<string>();
+			this.userFingerprintHistories.set(user.id, seen);
+		}
+
+		if (!seen.has(fingerprint)) {
+			seen.add(fingerprint);
+
+			try {
+				const now = this.timeService.date;
+				await this.userFingerprintsRepository.createQueryBuilder().insert().values({
+					createdAt: now,
+					lastSeenAt: now,
+					userId: user.id,
+					fingerprint: fingerprint,
+					ip: request.ip ?? null,
+				}).orIgnore(true).execute();
+			} catch (err) {
+				this.logger.warn(`Failed to save fingerprint ${fingerprint} for user ${user.id}: ${renderInlineError(err)}`);
 			}
 		}
 	}

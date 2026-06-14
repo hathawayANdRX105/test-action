@@ -7,6 +7,7 @@ import type * as Misskey from 'misskey-js';
 import { computed, reactive, ref } from 'vue';
 import { apiUrl } from '@@/js/config.js';
 import { $i } from '@/i.js';
+import { getClientFingerprint } from '@/utility/fingerprint.js';
 export const pendingApiRequestsCount = ref(0);
 
 type ApiProgressState = {
@@ -99,6 +100,12 @@ export function misskeyApi<
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
 		};
+
+		// ブラウザ指紋ハッシュを付与（管理者の溯源用、サーバー側で enableIpLogging 有効時のみ記録）。
+		const fingerprint = getClientFingerprint();
+		if (fingerprint != null) {
+			headers['X-Client-Fingerprint'] = fingerprint;
+		}
 
 		// Append a credential
 		const auth = token !== undefined

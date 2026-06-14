@@ -149,6 +149,8 @@ type Option = {
 	app?: MiApp | null;
 	processErrors?: string[] | null;
 	mandatoryCW?: string | null;
+	ip?: string | null;
+	fingerprint?: string | null;
 };
 
 export type PureRenoteOption = Option & { renote: MiNote } & ({ text?: null } | { cw?: null } | { reply?: null } | { poll?: null } | { files?: null | [] });
@@ -515,6 +517,9 @@ export class NoteCreateService implements OnApplicationShutdown {
 			userHost: user.host,
 			processErrors: data.processErrors,
 			mandatoryCW: data.mandatoryCW,
+			// 投稿者の IP / ブラウザ指紋（ローカル投稿のみ・管理者閲覧用）
+			ip: user.host == null ? (data.ip ?? null) : null,
+			fingerprint: user.host == null ? (data.fingerprint ?? null) : null,
 		});
 
 		if (data.uri != null) insert.uri = data.uri;

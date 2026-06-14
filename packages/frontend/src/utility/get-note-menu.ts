@@ -517,6 +517,17 @@ export function getNoteMenu(props: {
 						});
 					},
 				});
+				menuItems.push({
+					icon: 'ti ti-fingerprint',
+					text: `${i18n.ts.ip} / ${i18n.ts.fingerprint}`,
+					action: () => {
+						os.alert({
+							type: 'info',
+							title: `${i18n.ts.ip} / ${i18n.ts.fingerprint}`,
+							text: `IP: ${appearNote.ip ?? '-'}\n${i18n.ts.fingerprint}: ${appearNote.fingerprint ?? '-'}`,
+						});
+					},
+				});
 			}
 			if (appearNote.userId === $i.id) {
 				menuItems.push({

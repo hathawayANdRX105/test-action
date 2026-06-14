@@ -104,6 +104,8 @@ import type {
 	AdminGenVapidKeysResponse,
 	AdminGetIndexStatsResponse,
 	AdminGetTableStatsResponse,
+	AdminGetUserFingerprintsRequest,
+	AdminGetUserFingerprintsResponse,
 	AdminGetUserIpsRequest,
 	AdminGetUserIpsResponse,
 	AdminInviteCreateRequest,
@@ -561,6 +563,8 @@ import type {
 	IUpdateResponse,
 	IUpdateEmailRequest,
 	IUpdateEmailResponse,
+	IUpdateFingerprintRequest,
+	IUpdateFingerprintResponse,
 	IWebhooksCreateRequest,
 	IWebhooksCreateResponse,
 	IWebhooksDeleteRequest,
@@ -855,6 +859,7 @@ export type Endpoints = {
 	'admin/gen-vapid-keys': { req: EmptyRequest; res: AdminGenVapidKeysResponse };
 	'admin/get-index-stats': { req: EmptyRequest; res: AdminGetIndexStatsResponse };
 	'admin/get-table-stats': { req: EmptyRequest; res: AdminGetTableStatsResponse };
+	'admin/get-user-fingerprints': { req: AdminGetUserFingerprintsRequest; res: AdminGetUserFingerprintsResponse };
 	'admin/get-user-ips': { req: AdminGetUserIpsRequest; res: AdminGetUserIpsResponse };
 	'admin/invite/create': { req: AdminInviteCreateRequest; res: AdminInviteCreateResponse };
 	'admin/invite/list': { req: AdminInviteListRequest; res: AdminInviteListResponse };
@@ -1161,6 +1166,7 @@ export type Endpoints = {
 	'i/unpin': { req: IUnpinRequest; res: IUnpinResponse };
 	'i/update': { req: IUpdateRequest; res: IUpdateResponse };
 	'i/update-email': { req: IUpdateEmailRequest; res: IUpdateEmailResponse };
+	'i/update-fingerprint': { req: IUpdateFingerprintRequest; res: IUpdateFingerprintResponse };
 	'i/webhooks/create': { req: IWebhooksCreateRequest; res: IWebhooksCreateResponse };
 	'i/webhooks/delete': { req: IWebhooksDeleteRequest; res: EmptyResponse };
 	'i/webhooks/list': { req: EmptyRequest; res: IWebhooksListResponse };

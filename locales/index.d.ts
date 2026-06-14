@@ -2763,6 +2763,10 @@ export interface Locale extends ILocale {
      */
     "email": string;
     /**
+     * ブラウザ指紋
+     */
+    "fingerprint": string;
+    /**
      * メールアドレス
      */
     "emailAddress": string;

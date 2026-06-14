@@ -138,6 +138,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</MkFolder>
 
+				<MkFolder v-if="iAmAdmin && fingerprints && fingerprints.length > 0" :sticky="false">
+					<template #icon><i class="ph-fingerprint ph-bold ph-lg"></i></template>
+					<template #label>{{ i18n.ts.fingerprint }} ({{ fingerprints.length }})</template>
+					<div class="_gaps_s">
+						<div v-for="fp of fingerprints" :key="fp.fingerprint" :class="$style.fpRow">
+							<MkKeyValue :copy="fp.fingerprint" oneline>
+								<template #key><span class="_monospace">{{ fp.fingerprint }}</span></template>
+								<template #value><span class="_monospace">{{ fp.ip ?? '-' }}</span> · <MkTime :time="fp.lastSeenAt"/> · ×{{ fp.seenCount }}</template>
+							</MkKeyValue>
+							<div v-if="fp.components" :class="$style.fpComponents">
+								<div v-for="(val, key) in fp.components" :key="key" class="_monospace" :class="$style.fpComponent">
+									<b>{{ key }}:</b> {{ fpComponentText(val) }}
+								</div>
+							</div>
+						</div>
+					</div>
+				</MkFolder>
+
 				<MkFolder v-if="loggedInDates.length > 0" :sticky="false">
 					<template #icon><i class="ph-calendar-dots ph-bold ph-lg"></i></template>
 					<template #label>{{ i18n.ts.loginDates }}</template>
@@ -414,6 +432,7 @@ const user = ref<null | Misskey.entities.UserDetailed>();
 const init = ref<ReturnType<typeof createFetcher>>();
 const info = ref<Misskey.entities.AdminShowUserResponse | null>(null);
 const ips = ref<Misskey.entities.AdminGetUserIpsResponse | null>(null);
+const fingerprints = ref<Misskey.entities.AdminGetUserFingerprintsResponse | null>(null);
 const ap = ref<Misskey.entities.ApGetResponse | null>(null);
 const moderator = ref(false);
 const silenced = ref(false);
@@ -563,6 +582,12 @@ const loggedInDates = computed(() => {
 	return Array.from(new Set(info.value.loggedInDates)).sort().map(date => new Date(date));
 });
 
+function fpComponentText(val: unknown): string {
+	if (val == null) return '-';
+	if (typeof val === 'object') return JSON.stringify(val);
+	return String(val);
+}
+
 function createFetcher(withHint = true) {
 	return () => Promise.all([
 		(withHint && props.userHint) ? props.userHint : misskeyApi('users/show', {
@@ -579,12 +604,17 @@ function createFetcher(withHint = true) {
 		iAmAdmin
 			? (withHint && props.apHint) ? props.apHint : misskeyApi('ap/get', {
 				userId: props.userId,
+			}).catch(() => null) : null,
+		iAmAdmin
+			? misskeyApi('admin/get-user-fingerprints', {
+				userId: props.userId,
 			}).catch(() => null) : null],
-	).then(async ([_user, _info, _ips, _ap]) => {
+	).then(async ([_user, _info, _ips, _ap, _fingerprints]) => {
 		user.value = _user;
 		info.value = _info;
 		ips.value = _ips;
 		ap.value = _ap;
+		fingerprints.value = _fingerprints;
 		moderator.value = _info.isModerator;
 		silenced.value = _info.isSilenced;
 		approved.value = _info.approved;
@@ -1014,6 +1044,26 @@ definePage(() => ({
 </style>
 
 <style lang="scss" module>
+.fpRow {
+	padding: 8px 10px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: var(--MI-radius-sm);
+}
+
+.fpComponents {
+	margin-top: 6px;
+	padding-top: 6px;
+	border-top: solid 1px var(--MI_THEME-divider);
+	display: grid;
+	gap: 2px;
+}
+
+.fpComponent {
+	font-size: 0.82em;
+	opacity: 0.85;
+	word-break: break-all;
+}
+
 .ip {
 	display: flex;
 	word-break: break-all;

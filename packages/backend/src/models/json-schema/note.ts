@@ -312,5 +312,13 @@ export const packedNoteSchema = {
 			type: 'string',
 			optional: true, nullable: true,
 		},
+		ip: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		fingerprint: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
 	},
 } as const;

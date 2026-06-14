@@ -237,6 +237,18 @@ export class MiNote {
 	})
 	public mandatoryCW: string | null;
 
+	// 投稿者の IP（管理者のみ閲覧可、ローカル投稿のみ記録）
+	@Column('varchar', {
+		length: 128, nullable: true,
+	})
+	public ip: string | null;
+
+	// 投稿者のブラウザ指紋ハッシュ（管理者のみ閲覧可、ローカル投稿のみ記録）
+	@Column('varchar', {
+		length: 64, nullable: true,
+	})
+	public fingerprint: string | null;
+
 	//#region Denormalized fields
 	@Column('varchar', {
 		length: 128, nullable: true,
