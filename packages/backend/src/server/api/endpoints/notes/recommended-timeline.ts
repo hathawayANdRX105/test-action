@@ -31,7 +31,7 @@ const CANDIDATE_WINDOW = 1000 * 60 * 60 * 24 * 7;
 const FRESH_PRIORITY_HOURS = 48;
 const OLD_CONTENT_HOURS = 72;
 const OLD_CONTENT_MAX_SCORE = 58;
-const LOW_VALUE_TAGS = ['签到', '打卡', '水贴', 'key', 'Key'];
+const LOW_VALUE_TAGS = ['签到', '打卡', '水贴', 'key', 'Key', '广告', '推广', '返利', 'aff', '引流', '招商'];
 const QUALITY_TAGS = ['教程', 'ai', 'AI', '资源', '公告', 'Bug', 'bug', '问题', '讨论', '指南'];
 const LOW_VALUE_CHANNEL_NAME_PATTERN = '^(Key|白嫖|签到|打卡)$';
 const EXPLORE_SLOT_RATIO = 0.18;
@@ -509,7 +509,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		return penalties;
 	}
 
-	private rankCandidates<T extends { id: string; userId: string; text: string | null; repliesCount?: number; renoteCount?: number; clippedCount?: number; reactions?: Record<string, number>; fileIds?: string[]; tags?: string[]; channelId?: string | null; channel?: { pinnedNoteIds?: string[]; name?: string | null } | null }>(
+	private rankCandidates<T extends { id: string; userId: string; text: string | null; repliesCount?: number; renoteCount?: number; clippedCount?: number; reactions?: Record<string, number>; fileIds?: string[]; tags?: string[]; channelId?: string | null; channel?: { pinnedNoteIds?: string[]; name?: string | null } | null; user?: { id: string; followersCount?: number; avatarId?: string | null; description?: string | null; isBot?: boolean } | null }>(
 		notes: T[],
 		signals: Awaited<ReturnType<RecommendationService['getUserSignals']>>,
 		authorFlood: Map<string, number>,
@@ -582,6 +582,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// Author-level anti-flood: high-volume / low-engagement spam accounts.
 				const floodPenalty = authorFlood.get(note.userId) ?? 0;
 				const latestReplyBoost = sort === 'latestReply' ? recencyTieBreak * 8 : 0;
+				// 真実ユーザー加点: アカウント年齢・フォロワー・プロフィール充実度で信頼度を算出。
+				// 捨て垢/水軍(新規・無フォロワー・bot)を下げ、本物の活発なユーザーの投稿を優先する。
+				const author = note.user;
+				let authorTrust = 0;
+				if (author != null) {
+					const accountAgeDays = Math.max(0, (now - this.idService.parse(author.id).date.getTime()) / (1000 * 60 * 60 * 24));
+					if (accountAgeDays < 1) authorTrust -= 8;
+					else if (accountAgeDays >= 30) authorTrust += 6;
+					else if (accountAgeDays >= 7) authorTrust += 3;
+					authorTrust += Math.min(Number(author.followersCount ?? 0), 100) / 100 * 8;
+					if (author.avatarId != null) authorTrust += 2;
+					if ((author.description ?? '').trim().length > 0) authorTrust += 2;
+					if (author.isBot === true) authorTrust -= 6;
+				}
 				let score = hotnessScore * HOTNESS_WEIGHT / 42
 					+ coldStartBoost
 					+ qualityScore
@@ -591,6 +605,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					+ jitter
 					+ latestReplyBoost
 					+ recencyTieBreak
+					+ authorTrust
 					- dedupPenalty
 					- negativeScore
 					- lowValuePenalty
@@ -695,6 +710,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		if (/^https?:\/\/\S+$/i.test(text)) penalty += 26;
 		if (/https?:\/\/\S+/i.test(text) && compactText.length < 90 && !hasQualityContext) penalty += 18;
 		if (/https?:\/\/\S+/i.test(text) && /(强不强|偷着乐|点\s*star|点\s*start|买不了吃亏|买不了上当|推荐.*机场)/i.test(text)) penalty += 34;
+		// aff/引流/推广 広告: 联系方式引流・返利分销・aff联盟・带货变现など。教程など正当な文脈(hasQualityContext)は除外して誤爆を防ぐ
+		const promoPattern = /(加.{0,3}(微信|威信|vx|wx|q\s*群|qq\s*群|电报|飞机|tg|telegram))|(返利|佣金|返佣|分销|代理|招商|加盟|拉新|地推|带货|变现|副业|兼职|日入|月入|躺赚|薅羊毛|割韭菜)|(\baff\b|affiliate|联盟营销|推广链接|邀请链接|优惠码|折扣码)/i;
+		if (promoPattern.test(text) && !hasQualityContext) penalty += 42;
+		// 外链 + マーケ語 = 強い aff/引流
+		if (/https?:\/\/\S+/i.test(text) && /(返利|佣金|代理|招商|推广|引流|优惠码|折扣码|限时|福利|低价|秒杀|清仓|下单|购买|加微信|加群)/i.test(text) && !hasQualityContext) penalty += 36;
 		if (note.channel?.name != null && new RegExp(LOW_VALUE_CHANNEL_NAME_PATTERN, 'i').test(note.channel.name)) penalty += 42;
 		return penalty;
 	}
