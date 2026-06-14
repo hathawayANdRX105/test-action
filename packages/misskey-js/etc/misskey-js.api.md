@@ -635,6 +635,12 @@ type AdminUpdateProxyAccountResponse = operations['admin___update-proxy-account'
 type AdminUpdateUserNoteRequest = operations['admin___update-user-note']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type AdminUsersSearchRequest = operations['admin___users-search']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUsersSearchResponse = operations['admin___users-search']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AiChatRequest = operations['ai___chat']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2322,6 +2328,8 @@ declare namespace entities {
         AdminUpdateProxyAccountRequest,
         AdminUpdateProxyAccountResponse,
         AdminUpdateUserNoteRequest,
+        AdminUsersSearchRequest,
+        AdminUsersSearchResponse,
         AiChatRequest,
         AiConversationsCreateRequest,
         AiConversationsDeleteRequest,

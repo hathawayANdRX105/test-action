@@ -145,6 +145,7 @@ export * as 'admin/set-root' from './endpoints/admin/set-root.js';
 export * as 'admin/show-moderation-logs' from './endpoints/admin/show-moderation-logs.js';
 export * as 'admin/show-user' from './endpoints/admin/show-user.js';
 export * as 'admin/show-users' from './endpoints/admin/show-users.js';
+export * as 'admin/users-search' from './endpoints/admin/users-search.js';
 export * as 'admin/silence-user' from './endpoints/admin/silence-user.js';
 export * as 'admin/suspend-user' from './endpoints/admin/suspend-user.js';
 export * as 'admin/system-webhook/create' from './endpoints/admin/system-webhook/create.js';

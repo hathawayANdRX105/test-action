@@ -3359,6 +3359,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    '/admin/users-search': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * admin/users-search
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:show-user*
+         */
+        post: operations['admin___users-search'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     '/ai/chat': {
         parameters: {
             query?: never;
@@ -25678,6 +25700,114 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___users-search': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** @default 30 */
+                    limit?: number;
+                    /** @default 0 */
+                    offset?: number;
+                    /** @enum {string} */
+                    sort?: '+createdAt' | '-createdAt' | '+updatedAt' | '-updatedAt' | '+lastActiveDate' | '-lastActiveDate' | '+follower' | '-follower';
+                    /**
+                     * @default all
+                     * @enum {string}
+                     */
+                    state?: 'all' | 'alive' | 'available' | 'admin' | 'moderator' | 'adminOrModerator' | 'suspended' | 'approved';
+                    /**
+                     * @default local
+                     * @enum {string}
+                     */
+                    origin?: 'combined' | 'local' | 'remote';
+                    /** @default null */
+                    username?: string | null;
+                    /** @default null */
+                    hostname?: string | null;
+                    /** @default null */
+                    email?: string | null;
+                    /** @default null */
+                    ip?: string | null;
+                    /** @default null */
+                    fingerprint?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        user: components['schemas']['UserLite'];
+                        email: string | null;
+                        emailVerified: boolean;
+                        approved: boolean;
+                        suspended: boolean;
+                        /** Format: date-time */
+                        createdAt: string;
+                        lastIp: string | null;
+                        ipCount: number;
+                        fingerprintCount: number;
+                        signinCount: number;
+                    }[];
+                };
             };
             /** @description Client error */
             400: {

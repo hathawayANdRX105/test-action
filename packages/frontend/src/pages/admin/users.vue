@@ -39,16 +39,39 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #prefix>@</template>
 					<template #label>{{ i18n.ts.username }}</template>
 				</MkInput>
-				<MkInput v-model="searchHost" style="flex: 1;" type="text" :spellcheck="false" :disabled="pagination.params.origin === 'local'">
+				<MkInput v-model="searchHost" style="flex: 1;" type="text" :spellcheck="false" :disabled="origin === 'local'">
 					<template #prefix>@</template>
 					<template #label>{{ i18n.ts.host }}</template>
+				</MkInput>
+			</div>
+			<div :class="$style.inputs">
+				<MkInput v-model="searchEmail" style="flex: 1;" type="search" :spellcheck="false" debounce>
+					<template #prefix><i class="ti ti-mail"></i></template>
+					<template #label>{{ i18n.ts.email }}</template>
+				</MkInput>
+				<MkInput v-model="searchIp" style="flex: 1;" type="search" :spellcheck="false" debounce>
+					<template #prefix><i class="ti ti-network"></i></template>
+					<template #label>{{ i18n.ts.ip }}</template>
+				</MkInput>
+				<MkInput v-model="searchFingerprint" style="flex: 1;" type="search" :spellcheck="false" debounce>
+					<template #prefix><i class="ti ti-fingerprint"></i></template>
+					<template #label>{{ i18n.ts.fingerprint }}</template>
 				</MkInput>
 			</div>
 
 			<MkPagination v-slot="{items}" ref="paginationComponent" :pagination="pagination" :displayLimit="50">
 				<div :class="$style.users">
-					<MkA v-for="user in items" :key="user.id" v-tooltip.mfm="`Last posted: ${dateString(user.updatedAt)}`" :class="$style.user" :to="`/admin/user/${user.id}`">
-						<MkUserCardMini :user="user"/>
+					<MkA v-for="row in items" :key="row.user.id" :class="$style.row" :to="`/admin/user/${row.user.id}`">
+						<MkUserCardMini :user="row.user"/>
+						<div :class="$style.meta">
+							<span v-if="row.suspended" :class="[$style.badge, $style.badgeDanger]">{{ i18n.ts.suspend }}</span>
+							<span v-if="!row.approved" :class="[$style.badge, $style.badgeWarn]">{{ i18n.ts.notApproved }}</span>
+							<span :class="$style.metaItem"><i class="ti ti-mail"></i> {{ row.email ?? '-' }}</span>
+							<span :class="$style.metaItem"><i class="ti ti-network"></i> {{ row.lastIp ?? '-' }}<template v-if="row.ipCount > 1"> ({{ row.ipCount }})</template></span>
+							<span :class="$style.metaItem"><i class="ti ti-fingerprint"></i> {{ row.fingerprintCount }}</span>
+							<span :class="$style.metaItem"><i class="ti ti-login"></i> {{ row.signinCount }}</span>
+							<span :class="$style.metaItem"><i class="ti ti-calendar"></i> {{ dateString(row.createdAt) }}</span>
+						</div>
 					</MkA>
 				</div>
 			</MkPagination>
@@ -77,6 +100,9 @@ type SearchQuery = {
 	origin?: string;
 	username?: string;
 	hostname?: string;
+	email?: string;
+	ip?: string;
+	fingerprint?: string;
 };
 
 const paginationComponent = useTemplateRef('paginationComponent');
@@ -87,15 +113,21 @@ const state = ref(storedQuery.state ?? 'all');
 const origin = ref(storedQuery.origin ?? 'local');
 const searchUsername = ref(storedQuery.username ?? '');
 const searchHost = ref(storedQuery.hostname ?? '');
+const searchEmail = ref(storedQuery.email ?? '');
+const searchIp = ref(storedQuery.ip ?? '');
+const searchFingerprint = ref(storedQuery.fingerprint ?? '');
 const pagination = {
-	endpoint: 'admin/show-users' as const,
-	limit: 10,
+	endpoint: 'admin/users-search' as const,
+	limit: 30,
 	params: computed(() => ({
 		sort: sort.value,
 		state: state.value,
 		origin: origin.value,
-		username: searchUsername.value,
-		hostname: searchHost.value,
+		username: searchUsername.value || null,
+		hostname: searchHost.value || null,
+		email: searchEmail.value || null,
+		ip: searchIp.value || null,
+		fingerprint: searchFingerprint.value || null,
 	})),
 	offsetMode: true,
 };
@@ -136,6 +168,9 @@ function resetQuery() {
 	origin.value = 'local';
 	searchUsername.value = '';
 	searchHost.value = '';
+	searchEmail.value = '';
+	searchIp.value = '';
+	searchFingerprint.value = '';
 }
 
 const headerActions = computed(() => [{
@@ -163,6 +198,9 @@ watchEffect(() => {
 		origin: origin.value,
 		username: searchUsername.value,
 		hostname: searchHost.value,
+		email: searchEmail.value,
+		ip: searchIp.value,
+		fingerprint: searchFingerprint.value,
 	}));
 });
 
@@ -180,12 +218,59 @@ definePage(() => ({
 }
 
 .users {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-	grid-gap: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
 
-	> .user:hover {
+.row {
+	display: block;
+	padding: 10px 12px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: var(--MI-radius-sm);
+	background: var(--MI_THEME-panel);
+
+	&:hover {
 		text-decoration: none;
+		border-color: var(--MI_THEME-accent);
 	}
+}
+
+.meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 14px;
+	margin-top: 8px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.metaItem {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+	word-break: break-all;
+
+	> i {
+		opacity: 0.7;
+	}
+}
+
+.badge {
+	padding: 1px 8px;
+	border-radius: var(--MI-radius-full);
+	font-size: 0.9em;
+	font-weight: 700;
+	color: #fff;
+}
+
+.badgeDanger {
+	background: var(--MI_THEME-error);
+}
+
+.badgeWarn {
+	background: var(--MI_THEME-warn);
 }
 </style>

@@ -199,6 +199,8 @@ import type {
 	AdminUpdateProxyAccountRequest,
 	AdminUpdateProxyAccountResponse,
 	AdminUpdateUserNoteRequest,
+	AdminUsersSearchRequest,
+	AdminUsersSearchResponse,
 	AiChatRequest,
 	AiConversationsCreateRequest,
 	AiConversationsDeleteRequest,
@@ -928,6 +930,7 @@ export type Endpoints = {
 	'admin/update-meta': { req: AdminUpdateMetaRequest; res: EmptyResponse };
 	'admin/update-proxy-account': { req: AdminUpdateProxyAccountRequest; res: AdminUpdateProxyAccountResponse };
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
+	'admin/users-search': { req: AdminUsersSearchRequest; res: AdminUsersSearchResponse };
 	'ai/chat': { req: AiChatRequest; res: EmptyResponse };
 	'ai/conversations/create': { req: AiConversationsCreateRequest; res: EmptyResponse };
 	'ai/conversations/delete': { req: AiConversationsDeleteRequest; res: EmptyResponse };
