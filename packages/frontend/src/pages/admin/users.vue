@@ -65,6 +65,38 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkInput>
 			</div>
 
+			<MkFolder :sticky="false">
+				<template #icon><i class="ti ti-users-group"></i></template>
+				<template #label>{{ i18n.ts.bulkAccountDetection }}</template>
+				<div class="_gaps_s">
+					<div :class="$style.inputs">
+						<MkSelect v-model="clusterBy" style="flex: 1;">
+							<template #label>{{ i18n.ts.groupDimension }}</template>
+							<option value="fingerprint">{{ i18n.ts.fingerprint }}</option>
+							<option value="ip">IP</option>
+						</MkSelect>
+						<MkInput v-model="clusterMin" type="number" :min="2" style="flex: 1;">
+							<template #label>{{ i18n.ts.minSharedAccounts }}</template>
+						</MkInput>
+						<MkButton primary :wait="clustersLoading" @click="loadClusters"><i class="ti ti-search"></i> {{ i18n.ts.search }}</MkButton>
+					</div>
+					<MkLoading v-if="clustersLoading"/>
+					<div v-else-if="clustersLoaded && clusters.length === 0" :class="$style.empty">{{ i18n.ts.nothing }}</div>
+					<div v-else class="_gaps_s">
+						<div v-for="c of clusters" :key="c.key" :class="$style.cluster">
+							<div :class="$style.clusterHead">
+								<span :class="$style.clusterCount">{{ c.userCount }}</span>
+								<button v-tooltip="i18n.ts.search" class="_button _monospace" :class="$style.clusterKey" @click="applyClusterFilter(c.key)">{{ c.key }}</button>
+							</div>
+							<div v-if="c.components" :class="$style.clusterComp">{{ clusterCompSummary(c.components) }}</div>
+							<div :class="$style.clusterUsers">
+								<MkA v-for="u of c.users" :key="u.id" :to="`/admin/user/${u.id}`" :class="$style.chip">@{{ u.username }}</MkA>
+							</div>
+						</div>
+					</div>
+				</div>
+			</MkFolder>
+
 			<MkPagination v-slot="{items}" ref="paginationComponent" :pagination="pagination" :displayLimit="50">
 				<div :class="$style.tableWrap">
 					<div :class="$style.table">
@@ -110,11 +142,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, useTemplateRef, ref, watchEffect } from 'vue';
 import { defaultMemoryStorage } from '@/memory-storage';
+import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkPagination from '@/components/MkPagination.vue';
+import MkFolder from '@/components/MkFolder.vue';
+import MkLoading from '@/components/global/MkLoading.vue';
 import * as os from '@/os.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { lookupUser } from '@/utility/admin-lookup.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -157,6 +193,53 @@ const pagination = {
 	})),
 	offsetMode: true,
 };
+
+// ===== 批量账号检测（聚类） =====
+const clusterBy = ref<'fingerprint' | 'ip'>('fingerprint');
+const clusterMin = ref<number | string>(2);
+const clusters = ref<Misskey.entities.AdminFingerprintClustersResponse>([]);
+const clustersLoading = ref(false);
+const clustersLoaded = ref(false);
+
+async function loadClusters() {
+	clustersLoading.value = true;
+	try {
+		clusters.value = await misskeyApi('admin/fingerprint-clusters', {
+			by: clusterBy.value,
+			minAccounts: Math.max(2, Number(clusterMin.value) || 2),
+			limit: 50,
+		});
+		clustersLoaded.value = true;
+	} catch {
+		clusters.value = [];
+		clustersLoaded.value = true;
+	} finally {
+		clustersLoading.value = false;
+	}
+}
+
+function clusterCompSummary(components: Record<string, unknown> | null): string {
+	if (components == null) return '';
+	const parts: string[] = [];
+	const webgl = components.webgl as { vendor?: string; renderer?: string } | undefined;
+	if (webgl?.renderer) parts.push(`webgl: ${webgl.renderer}`);
+	if (components.screen) parts.push(`screen: ${String(components.screen)}`);
+	if (components.platform) parts.push(`${String(components.platform)}`);
+	if (components.timezone) parts.push(`${String(components.timezone)}`);
+	if (components.fonts) parts.push(`fonts: ${String(components.fonts)}`);
+	return parts.join('  ·  ');
+}
+
+function applyClusterFilter(key: string) {
+	// 把聚类键填进主筛选，下面的用户表会重新按该指纹/IP 过滤
+	if (clusterBy.value === 'ip') {
+		searchIp.value = key;
+		searchFingerprint.value = '';
+	} else {
+		searchFingerprint.value = key;
+		searchIp.value = '';
+	}
+}
 
 function searchUser() {
 	os.selectUser({ includeSelf: true }).then(user => {
@@ -343,5 +426,68 @@ $cols: minmax(180px, 2fr) minmax(150px, 2fr) 56px 56px 56px 64px 56px 110px 110p
 
 .badgeWarn {
 	background: var(--MI_THEME-warn);
+}
+
+.empty {
+	padding: 16px;
+	text-align: center;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.cluster {
+	padding: 10px 12px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: var(--MI-radius-sm);
+}
+
+.clusterHead {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.clusterCount {
+	flex: 0 0 auto;
+	min-width: 28px;
+	padding: 2px 8px;
+	border-radius: var(--MI-radius-full);
+	background: var(--MI_THEME-error);
+	color: #fff;
+	font-weight: 700;
+	text-align: center;
+}
+
+.clusterKey {
+	flex: 1;
+	min-width: 0;
+	text-align: left;
+	word-break: break-all;
+	color: var(--MI_THEME-accent);
+}
+
+.clusterComp {
+	margin-top: 6px;
+	font-size: 0.8em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	word-break: break-all;
+}
+
+.clusterUsers {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.chip {
+	padding: 2px 10px;
+	border-radius: var(--MI-radius-full);
+	background: var(--MI_THEME-buttonBg);
+	font-size: 0.85em;
+
+	&:hover {
+		text-decoration: none;
+		background: var(--MI_THEME-buttonHoverBg);
+	}
 }
 </style>

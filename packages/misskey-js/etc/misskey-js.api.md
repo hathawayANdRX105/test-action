@@ -338,6 +338,12 @@ type AdminFederationRemoveAllFollowingRequest = operations['admin___federation__
 type AdminFederationUpdateInstanceRequest = operations['admin___federation___update-instance']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type AdminFingerprintClustersRequest = operations['admin___fingerprint-clusters']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminFingerprintClustersResponse = operations['admin___fingerprint-clusters']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminForwardAbuseUserReportRequest = operations['admin___forward-abuse-user-report']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2229,6 +2235,8 @@ declare namespace entities {
         AdminFederationRefreshRemoteInstanceMetadataRequest,
         AdminFederationRemoveAllFollowingRequest,
         AdminFederationUpdateInstanceRequest,
+        AdminFingerprintClustersRequest,
+        AdminFingerprintClustersResponse,
         AdminForwardAbuseUserReportRequest,
         AdminGenVapidKeysResponse,
         AdminGetIndexStatsResponse,

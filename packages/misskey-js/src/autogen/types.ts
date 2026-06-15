@@ -1790,6 +1790,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    '/admin/fingerprint-clusters': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * admin/fingerprint-clusters
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:user-ips*
+         */
+        post: operations['admin___fingerprint-clusters'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     '/admin/forward-abuse-user-report': {
         parameters: {
             query?: never;
@@ -19854,6 +19876,92 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___fingerprint-clusters': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    /**
+                     * @default fingerprint
+                     * @enum {string}
+                     */
+                    by?: 'fingerprint' | 'ip';
+                    /** @default 2 */
+                    minAccounts?: number;
+                    /** @default 50 */
+                    limit?: number;
+                    /** @default 0 */
+                    offset?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        key: string;
+                        userCount: number;
+                        components: Record<string, never> | null;
+                        users: components['schemas']['UserLite'][];
+                    }[];
+                };
             };
             /** @description Client error */
             400: {

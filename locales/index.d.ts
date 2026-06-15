@@ -2775,6 +2775,18 @@ export interface Locale extends ILocale {
      */
     "loginHistory": string;
     /**
+     * 一括アカウント検出（指紋 / IP 共有）
+     */
+    "bulkAccountDetection": string;
+    /**
+     * 最小共有アカウント数
+     */
+    "minSharedAccounts": string;
+    /**
+     * グループ化
+     */
+    "groupDimension": string;
+    /**
      * IP 記録はまだありません。設定 → セキュリティで「IP ログ」を有効にすると記録が始まります（以降のアクセスのみ）。
      */
     "noIpRecords": string;

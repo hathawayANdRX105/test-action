@@ -903,6 +903,17 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *read:admin:user-ips*
+     */
+    request<E extends 'admin/fingerprint-clusters', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:admin:resolve-abuse-user-report*
      */
     request<E extends 'admin/forward-abuse-user-report', P extends Endpoints[E]['req']>(

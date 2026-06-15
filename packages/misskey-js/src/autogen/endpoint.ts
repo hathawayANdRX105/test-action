@@ -100,6 +100,8 @@ import type {
 	AdminFederationRefreshRemoteInstanceMetadataRequest,
 	AdminFederationRemoveAllFollowingRequest,
 	AdminFederationUpdateInstanceRequest,
+	AdminFingerprintClustersRequest,
+	AdminFingerprintClustersResponse,
 	AdminForwardAbuseUserReportRequest,
 	AdminGenVapidKeysResponse,
 	AdminGetIndexStatsResponse,
@@ -859,6 +861,7 @@ export type Endpoints = {
 	'admin/federation/refresh-remote-instance-metadata': { req: AdminFederationRefreshRemoteInstanceMetadataRequest; res: EmptyResponse };
 	'admin/federation/remove-all-following': { req: AdminFederationRemoveAllFollowingRequest; res: EmptyResponse };
 	'admin/federation/update-instance': { req: AdminFederationUpdateInstanceRequest; res: EmptyResponse };
+	'admin/fingerprint-clusters': { req: AdminFingerprintClustersRequest; res: AdminFingerprintClustersResponse };
 	'admin/forward-abuse-user-report': { req: AdminForwardAbuseUserReportRequest; res: EmptyResponse };
 	'admin/gen-vapid-keys': { req: EmptyRequest; res: AdminGenVapidKeysResponse };
 	'admin/get-index-stats': { req: EmptyRequest; res: AdminGetIndexStatsResponse };
