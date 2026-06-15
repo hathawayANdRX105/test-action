@@ -18,6 +18,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.list">
 		<MkLoading v-if="initializing"/>
 		<template v-else>
+			<template v-if="invitations.length > 0">
+				<div :class="$style.sectionTitle">
+					<i class="ti ti-mail-forward"></i>
+					<span>{{ i18n.ts._chat.invitations }} ({{ invitations.length }})</span>
+				</div>
+				<div v-for="iv in invitations" :key="`inv:${iv.id}`" :class="[$style.item, $style.inviteItem]">
+					<XRoomAvatar :room="iv.room" :class="$style.itemAvatar"/>
+					<div :class="$style.itemBody">
+						<div :class="$style.itemHeader">
+							<span :class="$style.itemName">{{ iv.room.name }}</span>
+						</div>
+						<div :class="$style.inviteActions">
+							<MkButton primary rounded small @click="acceptInvitation(iv)"><i class="ti ti-plus"></i> {{ i18n.ts._chat.join }}</MkButton>
+							<MkButton rounded small @click="ignoreInvitation(iv)">{{ i18n.ts._chat.ignore }}</MkButton>
+						</div>
+					</div>
+				</div>
+			</template>
+
 			<div :class="$style.sectionTitle">
 				<i class="ti ti-users-group"></i>
 				<span>{{ i18n.ts._chat.groupChats }}</span>
@@ -89,6 +108,7 @@ import { ensureSignin } from '@/i.js';
 import { useRouter } from '@/router.js';
 import * as os from '@/os.js';
 import MkLoading from '@/components/global/MkLoading.vue';
+import MkButton from '@/components/MkButton.vue';
 
 const $i = ensureSignin();
 const router = useRouter();
@@ -127,6 +147,8 @@ const initializing = ref(true);
 const fetching = ref(false);
 const roomEntries = ref<RoomEntry[]>([]);
 const userEntries = ref<UserEntry[]>([]);
+// 收到的房间邀请（新布局会跳过聊天首页，故在侧边栏顶部直接显示，可一键加入/忽略）。
+const invitations = ref<Misskey.entities.ChatRoomInvitation[]>([]);
 
 // 参加中/作成済みルーム（メッセージが無いルームの補完用）。変化が少ないためポーリングごとには取得しない。
 const knownRooms = ref<Map<string, Misskey.entities.ChatRoom>>(new Map());
@@ -223,7 +245,7 @@ async function fetchAll() {
 
 	try {
 		if (!roomListLoaded) await fetchRoomList();
-		await fetchConversations();
+		await Promise.all([fetchConversations(), fetchInvitations()]);
 	} finally {
 		fetching.value = false;
 	}
@@ -235,10 +257,31 @@ async function pollConversations() {
 	fetching.value = true;
 
 	try {
-		await fetchConversations();
+		await Promise.all([fetchConversations(), fetchInvitations()]);
 	} finally {
 		fetching.value = false;
 	}
+}
+
+async function fetchInvitations() {
+	try {
+		invitations.value = await misskeyApi('chat/rooms/invitations/inbox');
+	} catch {
+		// 邀请获取失败不影响会话列表
+	}
+}
+
+async function acceptInvitation(invitation: Misskey.entities.ChatRoomInvitation) {
+	await misskeyApi('chat/rooms/join', { roomId: invitation.room.id });
+	invitations.value = invitations.value.filter(i => i.id !== invitation.id);
+	roomListLoaded = false;
+	await fetchAll();
+	router.push(`/chat/room/${invitation.room.id}`);
+}
+
+async function ignoreInvitation(invitation: Misskey.entities.ChatRoomInvitation) {
+	await misskeyApi('chat/rooms/invitations/ignore', { roomId: invitation.room.id });
+	invitations.value = invitations.value.filter(i => i.id !== invitation.id);
 }
 
 function previewText(message: Misskey.entities.ChatMessage) {
@@ -422,6 +465,21 @@ onMounted(() => {
 	padding: 8px;
 	color: color(from var(--MI_THEME-fg) srgb r g b / 0.55);
 	font-size: 0.85em;
+}
+
+.inviteItem {
+	cursor: default;
+
+	&:hover {
+		background: none;
+	}
+}
+
+.inviteActions {
+	display: flex;
+	gap: 8px;
+	margin-top: 6px;
+	flex-wrap: wrap;
 }
 
 .item {
