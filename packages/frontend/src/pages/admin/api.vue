@@ -38,6 +38,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<template #label>新应用需要审核</template>
 								<template #caption>开放使用模式下也可要求管理员审批应用。</template>
 							</MkSwitch>
+							<MkSwitch v-model="settings.allowDeveloperTokens">
+								<template #label>允许个人开发者令牌</template>
+								<template #caption>关闭后普通用户无法再创建个人 API 令牌，且现有个人令牌停止生效（管理员/root 不受限）。用于封堵第三方"API 中转"收割账号令牌。</template>
+							</MkSwitch>
 						</div>
 
 						<div :class="$style.grid">
@@ -112,6 +116,48 @@ SPDX-License-Identifier: AGPL-3.0-only
 												<strong>保留未知权限</strong>
 												<code>{{ scope }}</code>
 												<small>后端返回的兼容 scope，保存时会继续保留；点击可从公共权限中移除。</small>
+											</span>
+										</button>
+									</div>
+								</section>
+							</div>
+						</section>
+
+						<section :class="$style.permissionPanel" aria-labelledby="api-noapproval-permissions-title">
+							<div :class="$style.permissionHeader">
+								<div>
+									<div id="api-noapproval-permissions-title" :class="$style.permissionTitle">免申请权限范围</div>
+									<div :class="$style.permissionCaption">仅在「申请使用」模式下生效：已选 {{ selectedNoApprovalCount }} 项。当用户创建令牌/应用所请求的权限<strong>全部</strong>落在此范围内时，无需管理员审批即可使用；包含写入/敏感/admin 权限时仍需审批。</div>
+								</div>
+							</div>
+
+							<div :class="$style.permissionGroups">
+								<section v-for="group in publicPermissionGroups" :key="'na-' + group.key" :class="$style.permissionGroup">
+									<div :class="$style.permissionGroupHeader">
+										<div :class="$style.permissionGroupTitle">
+											<i :class="group.icon"></i>
+											<strong>{{ group.title }}</strong>
+										</div>
+										<div class="_buttons">
+											<MkButton rounded small @click="selectNoApprovalGroup(group)">全选</MkButton>
+											<MkButton rounded small @click="clearNoApprovalGroup(group)">清空</MkButton>
+										</div>
+									</div>
+									<div :class="$style.permissionOptions">
+										<button
+											v-for="permission in group.permissions"
+											:key="'na-' + permission.scope"
+											type="button"
+											class="_button"
+											:class="[$style.permissionOption, { [$style.permissionOptionActive]: isNoApprovalSelected(permission.scope) }]"
+											:aria-pressed="isNoApprovalSelected(permission.scope)"
+											@click="toggleNoApproval(permission.scope)"
+										>
+											<span :class="$style.permissionCheck"><i :class="isNoApprovalSelected(permission.scope) ? 'ti ti-check' : 'ti ti-plus'"></i></span>
+											<span :class="$style.permissionBody">
+												<strong>{{ permission.label }}</strong>
+												<code>{{ permission.scope }}</code>
+												<small>{{ permission.description }}</small>
 											</span>
 										</button>
 									</div>
@@ -242,6 +288,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkButton rounded primary @click="applyAppFilters()"><i class="ti ti-search"></i> 查询</MkButton>
 								<MkButton rounded :disabled="!appFilterActive" @click="clearAppFilters()"><i class="ti ti-x"></i> 清空</MkButton>
 								<MkButton rounded :wait="appsState.loading" @click="loadApps()"><i class="ti ti-refresh"></i> 刷新</MkButton>
+								<MkButton rounded danger @click="cleanOwnerlessApps()"><i class="ti ti-trash"></i> 一键清理无主应用</MkButton>
 							</div>
 						</div>
 
@@ -322,6 +369,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkButton rounded primary @click="applyTokenFilters()"><i class="ti ti-search"></i> 查询</MkButton>
 								<MkButton rounded :disabled="!tokenFilterActive" @click="clearTokenFilters()"><i class="ti ti-x"></i> 清空</MkButton>
 								<MkButton rounded :wait="tokensState.loading" @click="loadTokens()"><i class="ti ti-refresh"></i> 刷新</MkButton>
+								<MkButton rounded danger :disabled="!tokenFilterActive" @click="bulkRevokeFilteredTokens()"><i class="ti ti-ban"></i> 批量撤销筛选结果</MkButton>
 							</div>
 						</div>
 
@@ -340,7 +388,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 									<div :class="$style.meta">持有人：<span class="_monospace">{{ userDisplayName(token.user) }}</span> · <span class="_monospace">{{ userAcctLabel(token.user) }}</span> · 用户 ID：<span class="_monospace">{{ token.user?.id ?? '未知' }}</span></div>
 									<div :class="$style.meta">Token ID：<span class="_monospace">{{ token.id }}</span></div>
-									<div :class="$style.meta" v-if="token.description">说明：{{ token.description }}</div>
+									<div v-if="token.description" :class="$style.meta">说明：{{ token.description }}</div>
 									<div :class="$style.meta">权限：{{ (token.permission ?? []).join(', ') || '无' }}</div>
 									<div :class="$style.tokenMetaGrid">
 										<span>创建：{{ token.createdAt }}</span>
@@ -351,6 +399,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 								</div>
 								<div class="_buttons">
+									<MkButton rounded @click="editTokenPermission(token)"><i class="ti ti-pencil"></i> 编辑权限</MkButton>
 									<MkButton v-if="token.status !== 'suspended' && token.status !== 'revoked'" rounded danger :wait="suspendingTokenId === token.id" @click="suspendToken(token.id)">暂停</MkButton>
 									<MkButton v-if="token.status !== 'revoked'" rounded danger :wait="revokingTokenId === token.id" @click="revokeToken(token.id)">撤销</MkButton>
 								</div>
@@ -404,6 +453,8 @@ type ApiSettings = {
 	oidcEnabled: boolean;
 	requireAppApproval: boolean;
 	publicPermissions: string[];
+	noApprovalPermissions: string[];
+	allowDeveloperTokens: boolean;
 	defaultTokenRateLimit: number;
 	writeTokenRateLimit: number;
 };
@@ -658,6 +709,8 @@ async function reloadAdminData() {
 	settings.value = {
 		...settingsResult,
 		publicPermissions: normalizePublicPermissionSelection(settingsResult.publicPermissions),
+		noApprovalPermissions: normalizePublicPermissionSelection(settingsResult.noApprovalPermissions ?? []),
+		allowDeveloperTokens: settingsResult.allowDeveloperTokens ?? true,
 	};
 	summary.value = summaryResult;
 }
@@ -669,8 +722,10 @@ async function saveSettings() {
 		settings.value = await misskeyApi<ApiSettings>('admin/api/settings/update', {
 			...settings.value,
 			publicPermissions: normalizePublicPermissionSelection(settings.value.publicPermissions),
+			noApprovalPermissions: normalizePublicPermissionSelection(settings.value.noApprovalPermissions),
 		});
 		settings.value.publicPermissions = normalizePublicPermissionSelection(settings.value.publicPermissions);
+		settings.value.noApprovalPermissions = normalizePublicPermissionSelection(settings.value.noApprovalPermissions ?? []);
 		os.toast('API 设置已保存');
 		await reload();
 	} finally {
@@ -722,6 +777,38 @@ function restoreDefaultPublicPermissions() {
 	setPublicPermissions(recommendedPublicPermissions);
 }
 
+// ===== 免申请权限白名单（与公共权限面板共用 catalog，但绑定到 noApprovalPermissions）=====
+const selectedNoApprovalCount = computed(() => settings.value?.noApprovalPermissions.length ?? 0);
+
+function setNoApprovalPermissions(scopes: string[]) {
+	if (!settings.value) return;
+	settings.value.noApprovalPermissions = normalizePublicPermissionSelection(scopes);
+}
+
+function isNoApprovalSelected(scope: string): boolean {
+	return settings.value?.noApprovalPermissions.includes(scope) ?? false;
+}
+
+function toggleNoApproval(scope: string) {
+	if (!settings.value || isAdminScope(scope)) return;
+	if (isNoApprovalSelected(scope)) {
+		setNoApprovalPermissions(settings.value.noApprovalPermissions.filter(p => p !== scope));
+	} else {
+		setNoApprovalPermissions([...settings.value.noApprovalPermissions, scope]);
+	}
+}
+
+function selectNoApprovalGroup(group: PermissionGroup) {
+	if (!settings.value) return;
+	setNoApprovalPermissions([...settings.value.noApprovalPermissions, ...group.permissions.map(p => p.scope)]);
+}
+
+function clearNoApprovalGroup(group: PermissionGroup) {
+	if (!settings.value) return;
+	const groupScopes = new Set(group.permissions.map(p => p.scope));
+	setNoApprovalPermissions(settings.value.noApprovalPermissions.filter(scope => !groupScopes.has(scope)));
+}
+
 async function reviewAccess(id: string, action: 'approve' | 'reject' | 'suspend') {
 	const key = actionKey(id, action);
 	if (reviewingAccess.value) return;
@@ -752,6 +839,53 @@ async function reviewApp(appId: string, action: 'approve' | 'reject' | 'suspend'
 	} finally {
 		reviewingApp.value = null;
 	}
+}
+
+async function bulkRevokeFilteredTokens() {
+	const name = tokensState.query.trim() || undefined;
+	const userId = tokensState.userId.trim() || undefined;
+	if (name == null && userId == null) {
+		os.alert({ type: 'warning', text: '请先用上方「名称 / 用户ID」筛选后，再批量撤销当前结果。' });
+		return;
+	}
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: `确认撤销所有匹配（名称含「${name ?? '*'}」/ 用户「${userId ?? '*'}」）的开发者令牌？此操作不可逆。`,
+	});
+	if (canceled) return;
+	const res = await os.apiWithDialog('admin/api/tokens/revoke-bulk', { name, userId });
+	os.toast(`已撤销 ${res.revoked} 个令牌`);
+	await loadTokens();
+}
+
+async function editTokenPermission(token: ApiToken) {
+	const { canceled, result } = await os.inputText({
+		title: '编辑令牌权限',
+		text: '用英文逗号分隔多个 scope（如 read:account, write:notes）。admin scope 会被忽略；留空表示无权限。',
+		default: token.permission.join(', '),
+	});
+	if (canceled || result == null) return;
+	const permission = result.split(',').map(s => s.trim()).filter(s => s.length > 0);
+	await os.apiWithDialog('admin/api/tokens/update', { tokenId: token.id, permission });
+	os.toast('已更新令牌权限');
+	await loadTokens();
+}
+
+async function cleanOwnerlessApps() {
+	const listed = await misskeyApi('admin/api/apps/list', { ownerless: true, withTotal: true, limit: 1 });
+	const total = Array.isArray(listed) ? listed.length : (listed.total ?? 0);
+	if (total === 0) {
+		os.alert({ type: 'info', text: '没有无主应用。' });
+		return;
+	}
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: `检测到 ${total} 个「无主（owner 已删除）」应用，确认全部删除并撤销其令牌？此操作不可逆。`,
+	});
+	if (canceled) return;
+	const res = await os.apiWithDialog('admin/api/apps/delete-bulk', { ownerless: true });
+	os.toast(`已清理 ${res.deleted} 个无主应用`);
+	await loadApps();
 }
 
 async function deleteApp(appId: string) {

@@ -41,6 +41,8 @@ import type {
 	AdminApiAccessRequestsSuspendRequest,
 	AdminApiAppsApproveRequest,
 	AdminApiAppsDeleteRequest,
+	AdminApiAppsDeleteBulkRequest,
+	AdminApiAppsDeleteBulkResponse,
 	AdminApiAppsListRequest,
 	AdminApiAppsRejectRequest,
 	AdminApiAppsShowRequest,
@@ -50,7 +52,10 @@ import type {
 	AdminApiSettingsUpdateRequest,
 	AdminApiTokensListRequest,
 	AdminApiTokensRevokeRequest,
+	AdminApiTokensRevokeBulkRequest,
+	AdminApiTokensRevokeBulkResponse,
 	AdminApiTokensSuspendRequest,
+	AdminApiTokensUpdateRequest,
 	AdminApproveUserRequest,
 	AdminAvatarDecorationsCreateRequest,
 	AdminAvatarDecorationsCreateResponse,
@@ -811,6 +816,7 @@ export type Endpoints = {
 	'admin/api/access-requests/suspend': { req: AdminApiAccessRequestsSuspendRequest; res: EmptyResponse };
 	'admin/api/apps/approve': { req: AdminApiAppsApproveRequest; res: EmptyResponse };
 	'admin/api/apps/delete': { req: AdminApiAppsDeleteRequest; res: EmptyResponse };
+	'admin/api/apps/delete-bulk': { req: AdminApiAppsDeleteBulkRequest; res: AdminApiAppsDeleteBulkResponse };
 	'admin/api/apps/list': { req: AdminApiAppsListRequest; res: EmptyResponse };
 	'admin/api/apps/reject': { req: AdminApiAppsRejectRequest; res: EmptyResponse };
 	'admin/api/apps/show': { req: AdminApiAppsShowRequest; res: EmptyResponse };
@@ -821,7 +827,9 @@ export type Endpoints = {
 	'admin/api/settings/update': { req: AdminApiSettingsUpdateRequest; res: EmptyResponse };
 	'admin/api/tokens/list': { req: AdminApiTokensListRequest; res: EmptyResponse };
 	'admin/api/tokens/revoke': { req: AdminApiTokensRevokeRequest; res: EmptyResponse };
+	'admin/api/tokens/revoke-bulk': { req: AdminApiTokensRevokeBulkRequest; res: AdminApiTokensRevokeBulkResponse };
 	'admin/api/tokens/suspend': { req: AdminApiTokensSuspendRequest; res: EmptyResponse };
+	'admin/api/tokens/update': { req: AdminApiTokensUpdateRequest; res: EmptyResponse };
 	'admin/api/usage/summary': { req: EmptyRequest; res: EmptyResponse };
 	'admin/approve-user': { req: AdminApproveUserRequest; res: EmptyResponse };
 	'admin/avatar-decorations/create': { req: AdminAvatarDecorationsCreateRequest; res: AdminAvatarDecorationsCreateResponse };

@@ -352,6 +352,17 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:api*
+     */
+    request<E extends 'admin/api/apps/delete-bulk', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *read:admin:api*
      */
     request<E extends 'admin/api/apps/list', P extends Endpoints[E]['req']>(
@@ -464,7 +475,29 @@ declare module '../api.js' {
      * 
      * **Credential required**: *Yes* / **Permission**: *write:admin:api*
      */
+    request<E extends 'admin/api/tokens/revoke-bulk', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:api*
+     */
     request<E extends 'admin/api/tokens/suspend', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:api*
+     */
+    request<E extends 'admin/api/tokens/update', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,

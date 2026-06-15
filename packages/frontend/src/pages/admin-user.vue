@@ -187,6 +187,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</MkFolder>
 
+				<MkFolder v-if="iAmModerator && (userApiTokens.length > 0 || userApiApps.length > 0)" :sticky="false">
+					<template #icon><i class="ph-key ph-bold ph-lg"></i></template>
+					<template #label>API 令牌 / 应用 ({{ userApiTokens.length + userApiApps.length }})</template>
+					<div class="_gaps_s">
+						<div v-for="t of userApiTokens" :key="t.id" :class="$style.fpRow">
+							<div :class="$style.fpHead">
+								<i class="ti ti-key"></i>
+								<span :class="$style.fpHash">{{ t.name || t.id }}</span>
+								<span :class="$style.fpMeta">{{ t.status }}</span>
+								<MkButton v-if="t.status !== 'revoked'" rounded danger :class="$style.fpBtn" @click="revokeUserToken(t.id)">{{ i18n.ts.delete }}</MkButton>
+							</div>
+							<div :class="$style.fpComponents"><div class="_monospace" :class="$style.fpComponent">{{ (t.permission ?? []).join(', ') || '—' }}</div></div>
+						</div>
+						<div v-for="a of userApiApps" :key="a.id" :class="$style.fpRow">
+							<div :class="$style.fpHead">
+								<i class="ti ti-apps"></i>
+								<span :class="$style.fpHash">{{ a.name }}</span>
+								<span :class="$style.fpMeta">{{ a.status }}</span>
+							</div>
+							<div :class="$style.fpComponents"><div class="_monospace" :class="$style.fpComponent">{{ (a.permission ?? []).join(', ') || '—' }}</div></div>
+						</div>
+					</div>
+				</MkFolder>
+
 				<MkFolder v-if="info.movedTo || info.alsoKnownAs" :sticky="false">
 					<template #icon><i class="ph-airplane ph-bold ph-lg"></i></template>
 					<template #label>{{ i18n.ts.accountMigration }}</template>
@@ -455,6 +479,10 @@ const init = ref<ReturnType<typeof createFetcher>>();
 const info = ref<Misskey.entities.AdminShowUserResponse | null>(null);
 const ips = ref<Misskey.entities.AdminGetUserIpsResponse | null>(null);
 const fingerprints = ref<Misskey.entities.AdminGetUserFingerprintsResponse | null>(null);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const userApiTokens = ref<any[]>([]);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const userApiApps = ref<any[]>([]);
 const ap = ref<Misskey.entities.ApGetResponse | null>(null);
 const moderator = ref(false);
 const silenced = ref(false);
@@ -951,8 +979,29 @@ async function restartDeletion() {
 	});
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function asList(res: any): any[] {
+	return Array.isArray(res) ? res : (res?.items ?? []);
+}
+
+async function loadUserApi() {
+	if (!iAmModerator) return;
+	const [tokens, apps] = await Promise.all([
+		misskeyApi('admin/api/tokens/list', { userId: props.userId, status: null, limit: 100 }).catch(() => []),
+		misskeyApi('admin/api/apps/list', { userId: props.userId, limit: 100 }).catch(() => []),
+	]);
+	userApiTokens.value = asList(tokens);
+	userApiApps.value = asList(apps);
+}
+
+async function revokeUserToken(tokenId: string) {
+	await os.apiWithDialog('admin/api/tokens/revoke', { tokenId });
+	await loadUserApi();
+}
+
 watch(() => props.userId, () => {
 	init.value = createFetcher();
+	loadUserApi();
 }, {
 	immediate: true,
 });

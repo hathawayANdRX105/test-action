@@ -158,6 +158,12 @@ type AdminApiAccessRequestsSuspendRequest = operations['admin___api___access-req
 type AdminApiAppsApproveRequest = operations['admin___api___apps___approve']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type AdminApiAppsDeleteBulkRequest = operations['admin___api___apps___delete-bulk']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminApiAppsDeleteBulkResponse = operations['admin___api___apps___delete-bulk']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminApiAppsDeleteRequest = operations['admin___api___apps___delete']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -185,10 +191,19 @@ type AdminApiSettingsUpdateRequest = operations['admin___api___settings___update
 type AdminApiTokensListRequest = operations['admin___api___tokens___list']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type AdminApiTokensRevokeBulkRequest = operations['admin___api___tokens___revoke-bulk']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminApiTokensRevokeBulkResponse = operations['admin___api___tokens___revoke-bulk']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminApiTokensRevokeRequest = operations['admin___api___tokens___revoke']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AdminApiTokensSuspendRequest = operations['admin___api___tokens___suspend']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminApiTokensUpdateRequest = operations['admin___api___tokens___update']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AdminApproveUserRequest = operations['admin___approve-user']['requestBody']['content']['application/json'];
@@ -2176,6 +2191,8 @@ declare namespace entities {
         AdminApiAccessRequestsSuspendRequest,
         AdminApiAppsApproveRequest,
         AdminApiAppsDeleteRequest,
+        AdminApiAppsDeleteBulkRequest,
+        AdminApiAppsDeleteBulkResponse,
         AdminApiAppsListRequest,
         AdminApiAppsRejectRequest,
         AdminApiAppsShowRequest,
@@ -2185,7 +2202,10 @@ declare namespace entities {
         AdminApiSettingsUpdateRequest,
         AdminApiTokensListRequest,
         AdminApiTokensRevokeRequest,
+        AdminApiTokensRevokeBulkRequest,
+        AdminApiTokensRevokeBulkResponse,
         AdminApiTokensSuspendRequest,
+        AdminApiTokensUpdateRequest,
         AdminApproveUserRequest,
         AdminAvatarDecorationsCreateRequest,
         AdminAvatarDecorationsCreateResponse,

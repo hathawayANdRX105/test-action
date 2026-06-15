@@ -689,6 +689,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    '/admin/api/apps/delete-bulk': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * admin/api/apps/delete-bulk
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:api*
+         */
+        post: operations['admin___api___apps___delete-bulk'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     '/admin/api/apps/list': {
         parameters: {
             query?: never;
@@ -909,6 +931,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    '/admin/api/tokens/revoke-bulk': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * admin/api/tokens/revoke-bulk
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:api*
+         */
+        post: operations['admin___api___tokens___revoke-bulk'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     '/admin/api/tokens/suspend': {
         parameters: {
             query?: never;
@@ -925,6 +969,28 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:admin:api*
          */
         post: operations['admin___api___tokens___suspend'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    '/admin/api/tokens/update': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * admin/api/tokens/update
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:api*
+         */
+        post: operations['admin___api___tokens___update'];
         delete?: never;
         options?: never;
         head?: never;
@@ -16148,6 +16214,81 @@ export interface operations {
             };
         };
     };
+    'admin___api___apps___delete-bulk': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    appIds?: string[];
+                    /** @default false */
+                    ownerless?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        deleted: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     admin___api___apps___list: {
         parameters: {
             query?: never;
@@ -16163,6 +16304,8 @@ export interface operations {
                     query?: string | null;
                     /** Format: misskey:id */
                     userId?: string | null;
+                    /** @default false */
+                    ownerless?: boolean;
                     /** @default false */
                     withTotal?: boolean;
                     /** @default 50 */
@@ -16665,6 +16808,8 @@ export interface operations {
                     oidcEnabled?: boolean;
                     requireAppApproval?: boolean;
                     publicPermissions?: string[];
+                    noApprovalPermissions?: string[];
+                    allowDeveloperTokens?: boolean;
                     defaultTokenRateLimit?: number;
                     writeTokenRateLimit?: number;
                 };
@@ -16874,6 +17019,84 @@ export interface operations {
             };
         };
     };
+    'admin___api___tokens___revoke-bulk': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    tokenIds?: string[];
+                    name?: string;
+                    /** Format: misskey:id */
+                    userId?: string;
+                    /** @default true */
+                    onlyDeveloperTokens?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        revoked: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     admin___api___tokens___suspend: {
         parameters: {
             query?: never;
@@ -16886,6 +17109,81 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     tokenId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    admin___api___tokens___update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    tokenId: string;
+                    permission?: string[];
+                    /** @enum {string|null} */
+                    rank?: 'user' | 'mod' | 'admin' | null;
+                    rateLimitPerMinute?: number | null;
+                    name?: string | null;
                 };
             };
         };
