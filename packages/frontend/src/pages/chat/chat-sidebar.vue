@@ -19,11 +19,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkLoading v-if="initializing"/>
 		<template v-else>
 			<template v-if="invitations.length > 0">
-				<div :class="$style.sectionTitle">
+				<button class="_button" :class="[$style.sectionTitle, $style.sectionToggle]" @click="toggleInvitations">
 					<i class="ti ti-mail-forward"></i>
 					<span>{{ i18n.ts._chat.invitations }} ({{ invitations.length }})</span>
-				</div>
-				<div v-for="iv in invitations" :key="`inv:${iv.id}`" :class="[$style.item, $style.inviteItem]">
+					<i class="ti ti-chevron-down" :class="[$style.sectionChevron, { [$style.sectionChevronOpen]: invitationsOpen }]"></i>
+				</button>
+				<div v-for="iv in invitations" v-show="invitationsOpen" :key="`inv:${iv.id}`" :class="[$style.item, $style.inviteItem]">
 					<XRoomAvatar :room="iv.room" :class="$style.itemAvatar"/>
 					<div :class="$style.itemBody">
 						<div :class="$style.itemHeader">
@@ -149,6 +150,13 @@ const roomEntries = ref<RoomEntry[]>([]);
 const userEntries = ref<UserEntry[]>([]);
 // 收到的房间邀请（新布局会跳过聊天首页，故在侧边栏顶部直接显示，可一键加入/忽略）。
 const invitations = ref<Misskey.entities.ChatRoomInvitation[]>([]);
+// 邀请太多时可折叠收起（记住上次的展开/收起状态）。
+const invitationsOpen = ref(window.localStorage.getItem('chatInvitationsCollapsed') !== '1');
+
+function toggleInvitations() {
+	invitationsOpen.value = !invitationsOpen.value;
+	window.localStorage.setItem('chatInvitationsCollapsed', invitationsOpen.value ? '0' : '1');
+}
 
 // 参加中/作成済みルーム（メッセージが無いルームの補完用）。変化が少ないためポーリングごとには取得しない。
 const knownRooms = ref<Map<string, Misskey.entities.ChatRoom>>(new Map());
@@ -459,6 +467,28 @@ onMounted(() => {
 	color: color(from var(--MI_THEME-fg) srgb r g b / 0.6);
 	font-size: 0.82em;
 	font-weight: 700;
+}
+
+.sectionToggle {
+	width: 100%;
+	text-align: left;
+	border-radius: 8px;
+
+	&:hover {
+		color: var(--MI_THEME-fg);
+		background: color(from var(--MI_THEME-fg) srgb r g b / 0.05);
+	}
+}
+
+.sectionChevron {
+	margin-left: auto;
+	font-size: 1.1em;
+	transition: transform 0.2s ease;
+	transform: rotate(-90deg);
+}
+
+.sectionChevronOpen {
+	transform: rotate(0deg);
 }
 
 .empty {
