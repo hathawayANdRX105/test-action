@@ -1666,15 +1666,23 @@ async function scrollToLatestAfterLayout(options?: { flushReadReceipt?: boolean;
 	try {
 		let stableFrames = 0;
 		let previousMaxScrollTop = -1;
+		// 切换房间后,重新挂载的时间线容器可能需要超过10帧才会拿到高度。
+		// 因此「容器未就绪(clientHeight<=0)」的帧不计入稳定预算,改为单独的总帧上限,
+		// 保证容器一旦有高度就一定会滚到底部(修复换群聊后停在最上面的问题)。
+		let readyFrames = 0;
+		let totalFrames = 0;
+		const MAX_READY_FRAMES = 10;
+		const MAX_TOTAL_FRAMES = 40;
 
-		for (let i = 0; i < 10; i++) {
+		while (readyFrames < MAX_READY_FRAMES && totalFrames < MAX_TOTAL_FRAMES) {
+			totalFrames++;
 			await nextTick();
 			await waitAnimationFrame();
 
 			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
-			if (scrollContainer == null) continue;
-			if (scrollContainer.clientHeight <= 0) continue;
+			if (scrollContainer == null || scrollContainer.clientHeight <= 0) continue;
 
+			readyFrames++;
 			const { maxScrollTop } = getChatScrollMetrics(scrollContainer);
 			scrollToLatest('instant');
 
@@ -2317,10 +2325,12 @@ async function inviteUser() {
 	if (room.value == null) return;
 
 	const invitee = await os.selectUser({ includeSelf: false, localOnly: true });
-	os.apiWithDialog('chat/rooms/invitations/create', {
+	await os.apiWithDialog('chat/rooms/invitations/create', {
 		roomId: room.value.id,
 		userId: invitee.id,
 	});
+	// 邀请成功后刷新成员页的「已发送邀请」列表，否则刚邀请的人看不到。
+	membersRefreshKey.value++;
 }
 
 async function leaveRoom() {

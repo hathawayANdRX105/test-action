@@ -90,8 +90,10 @@ definePage(() => ({
 	title: i18n.ts.chat,
 	icon: 'ti ti-messages',
 	needWideArea: true,
-	// 会話を選んでいないリスト画面でのみウィジェットを表示し、具体的なチャットに入ったら幅を本文に全振りする
-	keepWidgets: props.userId == null && props.roomId == null,
+	// チャットは二ペインで完結する全幅レイアウト。グローバルのウィジェット枠(旧レイアウト)は一切描画しない。
+	// （PC幅で「リスト→ウィジェット枠→先頭ルーム」と多段で描画していた無駄をなくし、ウィジェット枠の出入りに
+	//  伴うレイアウトのガタつき＝ルーム切替時に最下部へスクロールできない問題も解消する）
+	keepWidgets: false,
 }));
 </script>
 

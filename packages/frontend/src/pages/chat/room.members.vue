@@ -10,7 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.summaryTitle">{{ i18n.ts._chat.members }}</div>
 			<div :class="$style.summarySub">{{ room.memberCount }} / {{ room.memberLimit }}</div>
 		</div>
-		<MkButton v-if="isOwner" primary rounded @click="emit('inviteUser')"><i class="ti ti-plus"></i> {{ i18n.ts._chat.inviteUser }}</MkButton>
+		<MkButton v-if="canManage" primary rounded @click="emit('inviteUser')"><i class="ti ti-plus"></i> {{ i18n.ts._chat.inviteUser }}</MkButton>
 	</div>
 
 	<div :class="$style.section">
@@ -50,7 +50,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkButton v-if="membersCanFetchMore" rounded :wait="membersMoreFetching" :class="$style.moreButton" @click="fetchMoreMembers">{{ i18n.ts.loadMore }}</MkButton>
 	</div>
 
-	<div v-if="isOwner" :class="$style.section">
+	<div v-if="canManage" :class="$style.section">
 		<div :class="$style.sectionTitle">
 			<i class="ti ti-mail-forward"></i>
 			<span>{{ i18n.ts._chat.sentInvitations }}</span>
@@ -99,6 +99,11 @@ const emit = defineEmits<{
 
 const isOwner = computed(() => {
 	return props.room.ownerId === $i.id;
+});
+
+// 房主或管理员/审核员都可邀请并查看邀请列表（room.canManage 已含 owner/moderator）。
+const canManage = computed(() => {
+	return (props.room.canManage ?? false) || isOwner.value;
 });
 
 // user が解決できない(削除/凍結など)メンバーは表示しない。ページングは元のmembershipsを使う
@@ -263,7 +268,7 @@ async function fetchMoreMembers() {
 }
 
 async function initInvitations() {
-	if (!isOwner.value) {
+	if (!canManage.value) {
 		invitationsRequestId++;
 		invitations.value = [];
 		invitationsCanFetchMore.value = false;
@@ -335,6 +340,7 @@ watch(() => props.room.id, async () => {
 
 watch(() => props.refreshKey, () => {
 	initMembers();
+	initInvitations();
 });
 
 onBeforeUnmount(() => {
