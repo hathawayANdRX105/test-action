@@ -126,22 +126,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</MkFolder>
 
-				<MkFolder v-if="iAmAdmin && ips && ips.length > 0" :sticky="false">
+				<MkFolder v-if="iAmModerator && info" :sticky="false" :defaultOpen="true">
 					<template #icon><i class="ph-network ph-bold ph-lg"></i></template>
-					<template #label>{{ i18n.ts.ip }}</template>
+					<template #label>{{ i18n.ts.ip }} ({{ ips?.length ?? 0 }})</template>
 					<MkInfo>{{ i18n.ts.ipTip }}</MkInfo>
-					<div v-for="record of ips" :key="record.ip" class="_monospace">
-						<MkKeyValue :copy="record.ip">
-							<template #key><MkTime :time="record.createdAt" mode="detail"/></template>
-							<template #value>{{ record.ip }}</template>
-						</MkKeyValue>
-					</div>
+					<template v-if="ips && ips.length > 0">
+						<div v-for="record of ips" :key="record.ip" class="_monospace">
+							<MkKeyValue :copy="record.ip">
+								<template #key><MkTime :time="record.createdAt" mode="detail"/></template>
+								<template #value>{{ record.ip }}</template>
+							</MkKeyValue>
+						</div>
+					</template>
+					<MkInfo v-else warn>{{ i18n.ts.noIpRecords }}</MkInfo>
 				</MkFolder>
 
-				<MkFolder v-if="iAmAdmin && fingerprints && fingerprints.length > 0" :sticky="false">
+				<MkFolder v-if="iAmModerator && info" :sticky="false" :defaultOpen="true">
 					<template #icon><i class="ph-fingerprint ph-bold ph-lg"></i></template>
-					<template #label>{{ i18n.ts.fingerprint }} ({{ fingerprints.length }})</template>
-					<div class="_gaps_s">
+					<template #label>{{ i18n.ts.fingerprint }} ({{ fingerprints?.length ?? 0 }})</template>
+					<MkInfo v-if="!fingerprints || fingerprints.length === 0" warn>{{ i18n.ts.noFingerprintRecords }}</MkInfo>
+					<div v-else class="_gaps_s">
 						<div v-for="fp of fingerprints" :key="fp.fingerprint" :class="$style.fpRow">
 							<div :class="$style.fpHead">
 								<span class="_monospace" :class="$style.fpHash">{{ fp.fingerprint }}</span>
@@ -167,6 +171,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 					<div v-for="date of loggedInDates" :key="date.getTime()" class="_monospace">
 						<MkTime :time="date" mode="detail" dateOnly/>
+					</div>
+				</MkFolder>
+
+				<MkFolder v-if="iAmModerator && recentSignins.length > 0" :sticky="false">
+					<template #icon><i class="ph-sign-in ph-bold ph-lg"></i></template>
+					<template #label>{{ i18n.ts.loginHistory }} ({{ recentSignins.length }})</template>
+					<div class="_gaps_s">
+						<div v-for="s of recentSignins" :key="s.id" :class="$style.signinRow">
+							<i v-if="s.success" class="ti ti-check" :class="$style.signinOk"></i>
+							<i v-else class="ti ti-x" :class="$style.signinFail"></i>
+							<span class="_monospace" :class="$style.fpVal">{{ s.ip }}</span>
+							<span :class="$style.fpMeta"><MkTime :time="s.createdAt" mode="detail"/></span>
+						</div>
 					</div>
 				</MkFolder>
 
@@ -587,6 +604,12 @@ const loggedInDates = computed(() => {
 	return Array.from(new Set(info.value.loggedInDates)).sort().map(date => new Date(date));
 });
 
+// 登录日志（带 IP），最新在前，最多 50 条。
+const recentSignins = computed(() => {
+	if (!info.value?.signins) return [];
+	return [...info.value.signins].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, 50);
+});
+
 // 指纹分量を「各特徴を1行ずつ」に平坦化する。webgl などのネストは webgl.vendor のように展開。
 function flattenFpComponents(components: Record<string, unknown> | null | undefined): { key: string; value: string }[] {
 	if (components == null) return [];
@@ -626,7 +649,7 @@ function createFetcher(withHint = true) {
 		(withHint && props.infoHint) ? props.infoHint : misskeyApi('admin/show-user', {
 			userId: props.userId,
 		}).catch(() => null),
-		iAmAdmin
+		iAmModerator
 			? (withHint && props.ipsHint) ? props.ipsHint : misskeyApi('admin/get-user-ips', {
 				userId: props.userId,
 			}).catch(() => null)
@@ -635,7 +658,7 @@ function createFetcher(withHint = true) {
 			? (withHint && props.apHint) ? props.apHint : misskeyApi('ap/get', {
 				userId: props.userId,
 			}).catch(() => null) : null,
-		iAmAdmin
+		iAmModerator
 			? misskeyApi('admin/get-user-fingerprints', {
 				userId: props.userId,
 			}).catch(() => null) : null],
@@ -1134,6 +1157,23 @@ definePage(() => ({
 	flex: 1;
 	min-width: 0;
 	word-break: break-all;
+}
+
+.signinRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.9em;
+}
+
+.signinOk {
+	color: var(--MI_THEME-success);
+	flex: 0 0 auto;
+}
+
+.signinFail {
+	color: var(--MI_THEME-error);
+	flex: 0 0 auto;
 }
 
 .ip {

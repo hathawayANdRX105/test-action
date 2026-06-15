@@ -153,7 +153,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const [profiles, ipCounts, lastIps, fpCounts, signinCounts, packed] = await Promise.all([
 				this.userProfilesRepository.findBy({ userId: In(ids) }),
 				this.userIpsRepository.createQueryBuilder('x').select('x.userId', 'userId').addSelect('COUNT(*)', 'cnt').where('x.userId IN (:...ids)', { ids }).groupBy('x.userId').getRawMany<{ userId: string; cnt: string }>(),
-				this.userIpsRepository.createQueryBuilder('x').select('DISTINCT ON (x."userId") x."userId"', 'userId').addSelect('x.ip', 'ip').where('x.userId IN (:...ids)', { ids }).orderBy('x."userId"').addOrderBy('x.id', 'DESC').getRawMany<{ userId: string; ip: string }>(),
+				this.userIpsRepository.query('SELECT DISTINCT ON ("userId") "userId", "ip" FROM "user_ip" WHERE "userId" = ANY($1) ORDER BY "userId", "id" DESC', [ids]) as Promise<{ userId: string; ip: string }[]>,
 				this.userFingerprintsRepository.createQueryBuilder('x').select('x.userId', 'userId').addSelect('COUNT(*)', 'cnt').where('x.userId IN (:...ids)', { ids }).groupBy('x.userId').getRawMany<{ userId: string; cnt: string }>(),
 				this.signinsRepository.createQueryBuilder('x').select('x.userId', 'userId').addSelect('COUNT(*)', 'cnt').where('x.userId IN (:...ids)', { ids }).groupBy('x.userId').getRawMany<{ userId: string; cnt: string }>(),
 				this.userEntityService.packMany(users, me, { schema: 'UserLite' }),

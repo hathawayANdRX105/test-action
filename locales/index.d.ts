@@ -2771,6 +2771,18 @@ export interface Locale extends ILocale {
      */
     "fingerprintComponentsUnavailable": string;
     /**
+     * ログイン履歴
+     */
+    "loginHistory": string;
+    /**
+     * IP 記録はまだありません。設定 → セキュリティで「IP ログ」を有効にすると記録が始まります（以降のアクセスのみ）。
+     */
+    "noIpRecords": string;
+    /**
+     * 指紋はまだ記録されていません。ユーザーが次に Web クライアントを開いたときに登録されます。
+     */
+    "noFingerprintRecords": string;
+    /**
      * メールアドレス
      */
     "emailAddress": string;
