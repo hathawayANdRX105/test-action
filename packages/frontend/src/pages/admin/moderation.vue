@@ -462,7 +462,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		const cleaned = signupEmailRules.value
 			.map(r => ({ domain: r.domain.trim().toLowerCase(), localPartRegex: r.localPartRegex.trim() }))
 			.filter(r => r.domain.length > 0);
+		// 同时保存「开关」+「规则」,避免出现「规则存了但开关没开 → 不生效」。
 		os.apiWithDialog('admin/update-meta', {
+			signupEmailRestriction: signupEmailRestriction.value,
 			signupEmailRules: cleaned,
 		}).then(() => {
 			signupEmailRules.value = cleaned;
