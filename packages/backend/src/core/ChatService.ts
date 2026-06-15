@@ -651,6 +651,52 @@ export class ChatService {
 		return total;
 	}
 
+	// 房间关键词禁言记录(Redis 列表,封顶200条,30天过期)。供房主/管理员查看正在禁言/历史并可清空。
+	@bindThis
+	private roomMuteLogKey(roomId: MiChatRoom['id']): string {
+		return `chat:room:${roomId}:muteLog:v1`;
+	}
+
+	@bindThis
+	public async appendRoomMuteLog(roomId: MiChatRoom['id'], userId: MiUser['id'], keyword: string, mutedUntil: Date | null): Promise<void> {
+		const key = this.roomMuteLogKey(roomId);
+		const entry = JSON.stringify({
+			u: userId,
+			k: keyword,
+			until: mutedUntil != null ? mutedUntil.toISOString() : null,
+			at: this.timeService.now,
+		});
+		await this.redisClient.lpush(key, entry);
+		await this.redisClient.ltrim(key, 0, 199);
+		await this.redisClient.expire(key, 60 * 60 * 24 * 30);
+	}
+
+	@bindThis
+	public async getRoomMuteLog(roomId: MiChatRoom['id'], meId: MiUser['id'], limit = 100): Promise<{ user: Packed<'UserLite'> | null; keyword: string; mutedUntil: string | null; createdAt: string; }[]> {
+		const raw = await this.redisClient.lrange(this.roomMuteLogKey(roomId), 0, limit - 1);
+		const entries = raw
+			.map(r => { try { return JSON.parse(r) as { u: string; k: string; until: string | null; at: number; }; } catch { return null; } })
+			.filter((x): x is { u: string; k: string; until: string | null; at: number; } => x != null);
+		if (entries.length === 0) return [];
+
+		const userIds = [...new Set(entries.map(e => e.u))];
+		const users = await this.usersRepository.findBy({ id: In(userIds) });
+		const packed = await this.userEntityService.packMany(users, { id: meId });
+		const userMap = new Map(packed.map(u => [u.id, u]));
+
+		return entries.map(e => ({
+			user: userMap.get(e.u) ?? null,
+			keyword: e.k,
+			mutedUntil: e.until,
+			createdAt: new Date(e.at).toISOString(),
+		}));
+	}
+
+	@bindThis
+	public async clearRoomMuteLog(roomId: MiChatRoom['id']): Promise<void> {
+		await this.redisClient.del(this.roomMuteLogKey(roomId));
+	}
+
 	@bindThis
 	public async getChatAvailability(userId: MiUser['id']): Promise<{ read: boolean; write: boolean; }> {
 		// 紧急模式：除站点管理员外，全员禁读禁写（覆盖所有走 checkChatAvailability 的读/写端点）。
@@ -878,8 +924,9 @@ export class ChatService {
 				const matchedKeyword = this.matchBannedKeyword(toRoom.bannedKeywords, params.text);
 				if (matchedKeyword != null) {
 					const sec = toRoom.keywordMuteSeconds;
+					let mutedUntil: Date | null = null;
 					if (sec !== 0) {
-						const mutedUntil = sec < 0 ? CHAT_ROOM_PERMANENT_MUTE : new Date(this.timeService.now + sec * 1000);
+						mutedUntil = sec < 0 ? CHAT_ROOM_PERMANENT_MUTE : new Date(this.timeService.now + sec * 1000);
 						await this.chatRoomMembershipsRepository.update(membership.id, { mutedUntil });
 						this.globalEventService.publishChatRoomStream(toRoom.id, 'memberMuted', {
 							roomId: toRoom.id,
@@ -887,6 +934,8 @@ export class ChatService {
 							mutedUntil: mutedUntil.toISOString(),
 						});
 					}
+					// 记录关键词禁言事件(供房主/管理员查看「正在禁言/历史」并可清空)。
+					await this.appendRoomMuteLog(toRoom.id, fromUser.id, matchedKeyword, mutedUntil);
 					const error = new Error('blocked by keyword');
 					(error as Error & { keyword?: string }).keyword = matchedKeyword;
 					throw error;

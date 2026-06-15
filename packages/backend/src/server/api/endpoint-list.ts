@@ -524,6 +524,8 @@ export * as 'chat/rooms/delete' from './endpoints/chat/rooms/delete.js';
 export * as 'chat/rooms/join' from './endpoints/chat/rooms/join.js';
 export * as 'chat/rooms/leave' from './endpoints/chat/rooms/leave.js';
 export * as 'chat/rooms/mute' from './endpoints/chat/rooms/mute.js';
+export * as 'chat/rooms/mute-log' from './endpoints/chat/rooms/mute-log.js';
+export * as 'chat/rooms/clear-mute-log' from './endpoints/chat/rooms/clear-mute-log.js';
 export * as 'chat/rooms/show' from './endpoints/chat/rooms/show.js';
 export * as 'chat/rooms/owned' from './endpoints/chat/rooms/owned.js';
 export * as 'chat/rooms/joining' from './endpoints/chat/rooms/joining.js';

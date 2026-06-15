@@ -67,6 +67,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<MkButton v-if="invitationsCanFetchMore" rounded :wait="invitationsMoreFetching" :class="$style.moreButton" @click="fetchMoreInvitations">{{ i18n.ts.loadMore }}</MkButton>
 	</div>
+
+	<div v-if="canManage" :class="$style.section">
+		<div :class="$style.sectionTitle">
+			<i class="ti ti-microphone-off"></i>
+			<span>{{ i18n.ts.chatMuteLog }}</span>
+			<button v-if="muteLog.length > 0" class="_button" :class="$style.clearLogButton" @click="clearMuteLog">{{ i18n.ts.chatClearMuteLog }}</button>
+		</div>
+
+		<MkLoading v-if="muteLogFetching && muteLog.length === 0"/>
+		<div v-else-if="muteLog.length === 0" :class="$style.empty">{{ i18n.ts.chatNoMuteLog }}</div>
+		<div v-else :class="$style.userList">
+			<div v-for="(log, i) in muteLog" :key="i" :class="$style.muteLogRow">
+				<MkA v-if="log.user" :class="[$style.userLink, $style.memberRowLink]" :to="`${userPage(log.user)}`">
+					<MkUserCardMini :user="log.user" :withChart="false"/>
+				</MkA>
+				<div :class="$style.muteLogMeta">
+					<span v-if="isStillMuted(log.mutedUntil)" :class="$style.mutedBadge"><i class="ti ti-microphone-off"></i> {{ i18n.ts.chatStillMuted }}</span>
+					<span>{{ i18n.tsx.chatMutedByKeyword({ keyword: log.keyword }) }}</span>
+					<span :class="$style.muteLogTime">{{ dateString(log.createdAt) }}</span>
+				</div>
+			</div>
+		</div>
+	</div>
 </div>
 </template>
 
@@ -322,25 +345,57 @@ async function fetchMoreInvitations() {
 	}
 }
 
+// 关键词禁言记录（正在禁言 + 历史），管理者可清空。
+const muteLog = ref<{ user: Misskey.entities.UserLite | null; keyword: string; mutedUntil: string | null; createdAt: string; }[]>([]);
+const muteLogFetching = ref(false);
+
+function isStillMuted(mutedUntil: string | null): boolean {
+	if (mutedUntil == null) return false;
+	return new Date(mutedUntil).getTime() > Date.now();
+}
+
+async function fetchMuteLog() {
+	if (!canManage.value) { muteLog.value = []; return; }
+	muteLogFetching.value = true;
+	try {
+		muteLog.value = (await misskeyApi('chat/rooms/mute-log', { roomId: props.room.id })) as typeof muteLog.value;
+	} catch {
+		// 忽略
+	} finally {
+		if (!disposed) muteLogFetching.value = false;
+	}
+}
+
+async function clearMuteLog() {
+	const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts.chatMuteLogClearConfirm });
+	if (canceled) return;
+	await os.apiWithDialog('chat/rooms/clear-mute-log', { roomId: props.room.id });
+	muteLog.value = [];
+}
+
 onMounted(async () => {
 	await Promise.all([
 		initMembers(),
 		initInvitations(),
+		fetchMuteLog(),
 	]);
 });
 
 watch(() => props.room.id, async () => {
 	memberships.value = [];
 	invitations.value = [];
+	muteLog.value = [];
 	await Promise.all([
 		initMembers(),
 		initInvitations(),
+		fetchMuteLog(),
 	]);
 });
 
 watch(() => props.refreshKey, () => {
 	initMembers();
 	initInvitations();
+	fetchMuteLog();
 });
 
 onBeforeUnmount(() => {
@@ -394,6 +449,42 @@ onBeforeUnmount(() => {
 	color: color(from var(--MI_THEME-fg) srgb r g b / 0.72);
 	font-size: 0.9em;
 	font-weight: 700;
+}
+
+.clearLogButton {
+	margin-left: auto;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-error);
+	border: solid 1px color(from var(--MI_THEME-error) srgb r g b / 0.5);
+
+	&:hover {
+		background: color(from var(--MI_THEME-error) srgb r g b / 0.1);
+	}
+}
+
+.muteLogRow {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px 10px;
+	border-radius: var(--MI-radius-sm);
+	background: color(from var(--MI_THEME-fg) srgb r g b / 0.03);
+}
+
+.muteLogMeta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.muteLogTime {
+	margin-left: auto;
+	opacity: 0.8;
 }
 
 .userList {
