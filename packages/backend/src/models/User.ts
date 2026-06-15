@@ -407,6 +407,14 @@ export class MiUser {
 	})
 	public attributionDomains: string[];
 
+	// 管理員が個別ユーザーに与えるドライブ容量上限(MB)の上書き。null=ロール/デフォルトに従う。
+	// 実効容量は max(ロール由来の容量, この値) として扱う。
+	@Column('integer', {
+		nullable: true,
+		default: null,
+	})
+	public driveCapacityOverrideMb: number | null;
+
 	@OneToOne('user_profile', (profile: MiUserProfile) => profile.user)
 	public userProfile: MiUserProfile | null;
 

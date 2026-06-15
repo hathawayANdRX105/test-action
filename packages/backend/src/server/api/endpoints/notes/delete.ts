@@ -5,7 +5,7 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { UsersRepository } from '@/models/_.js';
+import type { ChannelsRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteDeleteService } from '@/core/NoteDeleteService.js';
 import { trackPromise } from '@/misc/promise-tracker.js';
@@ -58,6 +58,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 
+		@Inject(DI.channelsRepository)
+		private channelsRepository: ChannelsRepository,
+
 		private getterService: GetterService,
 		private roleService: RoleService,
 		private noteDeleteService: NoteDeleteService,
@@ -70,7 +73,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw err;
 			});
 
-			if (!await this.roleService.isModerator(me) && (note.userId !== me.id)) {
+			// 投稿者・モデレーターに加えて、その投稿が属するチャンネルのオーナーも削除できる
+			// （频道主が自分のチャンネル内の広告/スパム投稿を削除できるようにするため）。
+			const isModerator = await this.roleService.isModerator(me);
+			const isAuthor = note.userId === me.id;
+			let isChannelOwner = false;
+			if (!isModerator && !isAuthor && note.channelId != null) {
+				const channel = await this.channelsRepository.findOneBy({ id: note.channelId });
+				isChannelOwner = channel != null && channel.userId === me.id;
+			}
+
+			if (!isModerator && !isAuthor && !isChannelOwner) {
 				throw new ApiError(meta.errors.accessDenied);
 			}
 

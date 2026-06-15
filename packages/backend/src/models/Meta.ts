@@ -687,6 +687,24 @@ export class MiMeta {
 	})
 	public chatRoomDefaultMemberLimit: number;
 
+	// 紧急模式：开启后除站点管理员外，任何人都不能收发/查看任何聊天消息。
+	@Column('boolean', {
+		default: false,
+	})
+	public chatEmergencyMode: boolean;
+
+	// 统一聊天保持期（天）。>0 时，早于该时长的聊天消息不可查看并会被自动清理。0=不限制。
+	@Column('integer', {
+		default: 0,
+	})
+	public chatMessageRetentionDays: number;
+
+	// 全站聊天违禁关键词：命中的消息在所有群聊/私聊中都会被拦截（并可一键清理历史）。
+	@Column('varchar', {
+		length: 256, array: true, default: '{}',
+	})
+	public chatBannedKeywords: string[];
+
 	@Column('boolean', {
 		default: false,
 	})

@@ -502,7 +502,9 @@ export function getNoteMenu(props: {
 			});
 		}
 
-		if (appearNote.userId === $i.id || $i.isModerator || $i.isAdmin) {
+		// 频道主可以删除自己频道内的帖子（清理广告/垃圾）。
+		const iAmChannelOwner = appearNote.channel != null && appearNote.channel.userId === $i.id;
+		if (appearNote.userId === $i.id || $i.isModerator || $i.isAdmin || iAmChannelOwner) {
 			menuItems.push({ type: 'divider' });
 			if ($i.isModerator || $i.isAdmin) {
 				menuItems.push(getMandatoryCWMenu(appearNote));

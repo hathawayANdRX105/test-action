@@ -163,6 +163,7 @@ export const moderationLogTypes = [
 	'removeRelay',
 	'updateProxyAccountDescription',
 	'setRoot',
+	'chatPurgeByKeyword',
 ] as const;
 
 export type ModerationLogPayloads = {
@@ -553,6 +554,10 @@ export type ModerationLogPayloads = {
 			userId: string;
 			userUsername: string;
 		};
+	},
+	chatPurgeByKeyword: {
+		keywords: string[];
+		deleted: number;
 	},
 };
 

@@ -18,7 +18,19 @@ import { apiAccessErrors, getApiPublicPermissions, hasUnsafeOAuthRedirectUri, is
 export const meta = {
 	tags: ['app'],
 
+	// requireCredential を true にすると kind(scope) が必須になり、かつトークン経由の作成まで塞いでしまう。
+	// ここでは false のまま、ハンドラ冒頭で me==null（＝匿名）を弾くことで「必ず作成者(オーナー)に紐づく」ことを保証する。
+	// （匿名作成を許すと owner=null の "中転/収割" アプリが量産されるため）
 	requireCredential: false,
+
+	errors: {
+		credentialRequired: {
+			message: 'Credential required to create an app.',
+			code: 'CREDENTIAL_REQUIRED',
+			id: '1384574d-a912-4b81-8601-c7b1c4085df1',
+			httpStatusCode: 401,
+		},
+	},
 
 	res: {
 		type: 'object',
@@ -60,6 +72,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private idService: IdService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			// 匿名でのアプリ作成を禁止（owner=null の中転/収割アプリ量産を根本から防ぐ）。
+			if (me == null) {
+				throw new ApiError(meta.errors.credentialRequired);
+			}
+
 			if (this.instanceMeta.apiAccessMode === 'closed') {
 				throw new ApiError(apiAccessErrors.apiClosed);
 			}
@@ -98,7 +115,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// Create account
 			const app = await this.appsRepository.insertOne({
 				id: this.idService.gen(),
-				userId: me ? me.id : null,
+				userId: me.id,
 				name: ps.name,
 				description: ps.description,
 				permission,

@@ -34,6 +34,34 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkFolder>
 
 			<MkFolder :defaultOpen="true">
+				<template #icon><i class="ph-warning-octagon ph-bold ph-lg"></i></template>
+				<template #label>{{ i18n.ts._adminChatSettings.emergencyControls }}</template>
+
+				<div class="_gaps_m">
+					<MkSwitch v-model="emergencyMode">
+						<template #label>{{ i18n.ts._adminChatSettings.emergencyMode }}</template>
+						<template #caption>{{ i18n.ts._adminChatSettings.emergencyModeCaption }}</template>
+					</MkSwitch>
+					<MkInfo v-if="emergencyMode" warn>{{ i18n.ts._adminChatSettings.emergencyModeActive }}</MkInfo>
+
+					<MkInput v-model="retentionDays" type="number" :min="0" :max="3650">
+						<template #label>{{ i18n.ts._adminChatSettings.messageRetentionDays }}</template>
+						<template #caption>{{ i18n.ts._adminChatSettings.messageRetentionCaption }}</template>
+					</MkInput>
+
+					<MkTextarea v-model="bannedKeywords">
+						<template #label>{{ i18n.ts._adminChatSettings.bannedKeywords }}</template>
+						<template #caption>{{ i18n.ts._adminChatSettings.bannedKeywordsCaption }}</template>
+					</MkTextarea>
+
+					<div class="_buttons">
+						<MkButton primary rounded :wait="savingEmergency" @click="saveEmergency"><i class="ph-check ph-bold ph-lg"></i> {{ i18n.ts.save }}</MkButton>
+						<MkButton rounded danger :wait="purging" @click="purgeKeywords"><i class="ph-trash ph-bold ph-lg"></i> {{ i18n.ts._adminChatSettings.purgeKeywordHistory }}</MkButton>
+					</div>
+				</div>
+			</MkFolder>
+
+			<MkFolder :defaultOpen="true">
 				<template #icon><i class="ph-list-magnifying-glass ph-bold ph-lg"></i></template>
 				<template #label>{{ i18n.ts._adminChatSettings.rooms }}</template>
 
@@ -183,6 +211,8 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
 import MkSelect from '@/components/MkSelect.vue';
+import MkSwitch from '@/components/MkSwitch.vue';
+import MkTextarea from '@/components/MkTextarea.vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
@@ -234,6 +264,51 @@ const serverForm = useForm({
 });
 
 const serverFormCanSave = computed(() => isValidLimit(Number(serverForm.state.chatRoomDefaultMemberLimit)));
+
+// 紧急控制：紧急模式 / 统一保持期 / 全站关键词
+const emergencyMode = ref<boolean>(meta?.chatEmergencyMode ?? false);
+const retentionDays = ref<number | string>(meta?.chatMessageRetentionDays ?? 0);
+const bannedKeywords = ref<string>((meta?.chatBannedKeywords ?? []).join('\n'));
+const savingEmergency = ref(false);
+const purging = ref(false);
+
+function parseKeywords(): string[] {
+	return Array.from(new Set(bannedKeywords.value.split('\n').map(k => k.trim()).filter(k => k.length > 0))).slice(0, 200);
+}
+
+async function saveEmergency() {
+	savingEmergency.value = true;
+	try {
+		await os.apiWithDialog('admin/update-meta', {
+			chatEmergencyMode: emergencyMode.value,
+			chatMessageRetentionDays: Math.max(0, Math.min(3650, Math.floor(Number(retentionDays.value) || 0))),
+			chatBannedKeywords: parseKeywords(),
+		});
+		await fetchInstance(true);
+	} finally {
+		savingEmergency.value = false;
+	}
+}
+
+async function purgeKeywords() {
+	const kws = parseKeywords();
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.ts._adminChatSettings.purgeKeywordConfirm,
+	});
+	if (canceled) return;
+	purging.value = true;
+	try {
+		const res = await os.apiWithDialog('admin/chat/purge-keyword', kws.length > 0 ? { keywords: kws } : {});
+		await os.alert({
+			type: 'success',
+			text: i18n.tsx._adminChatSettings.purgeKeywordDone({ n: (res as { deleted: number }).deleted }),
+		});
+	} finally {
+		purging.value = false;
+	}
+}
+
 const roomInfo = ref<AdminChatRoomInfo | null>(null);
 const roomLimitOverride = ref<string | number>('');
 const roomJoinMode = ref<ChatRoomJoinMode>('inviteOnly');

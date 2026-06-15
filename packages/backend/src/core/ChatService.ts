@@ -17,7 +17,7 @@ import { CHAT_MESSAGE_MENTION_CACHE_TTL, ChatEntityService, chatMessageMentionCa
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
 import { PushNotificationService } from '@/core/PushNotificationService.js';
 import { bindThis } from '@/decorators.js';
-import type { ChatApprovalsRepository, ChatMessagesRepository, ChatRoomBanningsRepository, ChatRoomInvitationsRepository, ChatRoomMembershipsRepository, ChatRoomUserMutingsRepository, ChatRoomsRepository, DriveFilesRepository, MiChatMessage, MiChatRoom, MiChatRoomBanning, MiChatRoomMembership, MiChatRoomUserMuting, MiDriveFile, MiUser, MutingsRepository, UsersRepository } from '@/models/_.js';
+import type { ChatApprovalsRepository, ChatMessagesRepository, ChatRoomBanningsRepository, ChatRoomInvitationsRepository, ChatRoomMembershipsRepository, ChatRoomUserMutingsRepository, ChatRoomsRepository, DriveFilesRepository, MetasRepository, MiChatMessage, MiChatRoom, MiChatRoomBanning, MiChatRoomMembership, MiChatRoomUserMuting, MiDriveFile, MiUser, MutingsRepository, UsersRepository } from '@/models/_.js';
 import { UserBlockingService } from '@/core/UserBlockingService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { RoleService } from '@/core/RoleService.js';
@@ -141,6 +141,9 @@ export class ChatService {
 
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
+
+		@Inject(DI.metasRepository)
+		private metasRepository: MetasRepository,
 
 		@Inject(DI.chatMessagesRepository)
 		private chatMessagesRepository: ChatMessagesRepository,
@@ -555,8 +558,110 @@ export class ChatService {
 		return targetUserIds.filter(userId => memberUserIds.has(userId));
 	}
 
+	// meta 热更新在本实例失效，紧急控制类设置需即时生效 → 5s TTL 直读 DB 取新鲜 meta。
+	private chatControlMetaCache: { at: number; meta: MiMeta } | null = null;
+
+	@bindThis
+	public async getChatControlMeta(): Promise<MiMeta> {
+		const now = this.timeService.now;
+		if (this.chatControlMetaCache != null && (now - this.chatControlMetaCache.at) < 5000) {
+			return this.chatControlMetaCache.meta;
+		}
+		const fresh = await this.metasRepository.findOneByOrFail({ id: this.meta.id }).catch(() => this.meta);
+		this.chatControlMetaCache = { at: now, meta: fresh };
+		return fresh;
+	}
+
+	// 统一保持期 → 早于该时间点的消息一律不可查看（用时间生成的 id 作为下界）。0/未设置返回 null。
+	@bindThis
+	public async getChatRetentionCutoffId(): Promise<string | null> {
+		const meta = await this.getChatControlMeta();
+		const days = meta.chatMessageRetentionDays ?? 0;
+		if (!days || days <= 0) return null;
+		return this.idService.gen(this.timeService.now - (days * 24 * 60 * 60 * 1000));
+	}
+
+	// 全站违禁关键词：命中即拒绝（站点管理员豁免）。在所有群聊/私聊的发消息路径上调用。
+	@bindThis
+	private async assertNotGloballyBannedKeyword(fromUserId: MiUser['id'], text: string | null | undefined): Promise<void> {
+		const meta = await this.getChatControlMeta();
+		const keywords = meta.chatBannedKeywords;
+		if (keywords == null || keywords.length === 0) return;
+		const matched = this.matchBannedKeyword(keywords, text);
+		if (matched == null) return;
+		if (await this.roleService.isModerator({ id: fromUserId })) return;
+		const error = new Error('blocked by keyword');
+		(error as Error & { keyword?: string }).keyword = matched;
+		throw error;
+	}
+
+	// 统一保持期清理：跨全部群聊 + 私聊，批量删除早于 cutoffId 的消息，并失效受影响房间缓存。
+	@bindThis
+	public async pruneAllMessagesOlderThan(cutoffId: MiChatMessage['id'], limit = CHAT_ROOM_RETENTION_BATCH_SIZE): Promise<number> {
+		const targets = await this.chatMessagesRepository
+			.createQueryBuilder('message')
+			.select('message.id', 'id')
+			.addSelect('message.toRoomId', 'toRoomId')
+			.where('message.id < :cutoffId', { cutoffId })
+			.orderBy('message.id', 'ASC')
+			.limit(limit)
+			.getRawMany<{ id: MiChatMessage['id']; toRoomId: MiChatRoom['id'] | null; }>();
+
+		if (targets.length === 0) return 0;
+
+		const deleteResult = await this.chatMessagesRepository.delete(targets.map(t => t.id));
+		const deleted = deleteResult.affected ?? targets.length;
+
+		const roomIds = Array.from(new Set(targets.map(t => t.toRoomId).filter((x): x is MiChatRoom['id'] => x != null)));
+		for (const roomId of roomIds) {
+			await this.removePackedRoomTimelineCacheBefore(roomId, cutoffId);
+			this.globalEventService.publishChatRoomStream(roomId, 'pruned', { cutoffId });
+		}
+		return deleted;
+	}
+
+	// 关键词历史清理：删除所有群聊/私聊中文本命中关键词的消息（批量）。
+	@bindThis
+	public async purgeMessagesByKeywords(keywords: string[], batch = CHAT_ROOM_RETENTION_BATCH_SIZE): Promise<number> {
+		const cleaned = Array.from(new Set(keywords.map(k => k.trim().toLowerCase()).filter(k => k.length > 0)));
+		if (cleaned.length === 0) return 0;
+
+		let total = 0;
+		for (;;) {
+			const qb = this.chatMessagesRepository.createQueryBuilder('message')
+				.select('message.id', 'id')
+				.addSelect('message.toRoomId', 'toRoomId')
+				.where('message.text IS NOT NULL');
+			const ors = cleaned.map((_, i) => `lower(message.text) LIKE :kw${i}`);
+			qb.andWhere(`(${ors.join(' OR ')})`);
+			cleaned.forEach((kw, i) => qb.setParameter(`kw${i}`, `%${kw.replace(/[%_\\]/g, m => '\\' + m)}%`));
+			const targets = await qb.orderBy('message.id', 'ASC').limit(batch).getRawMany<{ id: MiChatMessage['id']; toRoomId: MiChatRoom['id'] | null; }>();
+			if (targets.length === 0) break;
+
+			await this.chatMessagesRepository.delete(targets.map(t => t.id));
+			total += targets.length;
+
+			const roomIds = Array.from(new Set(targets.map(t => t.toRoomId).filter((x): x is MiChatRoom['id'] => x != null)));
+			for (const roomId of roomIds) {
+				await this.clearPackedRoomTimelineCache(roomId);
+				this.globalEventService.publishChatRoomStream(roomId, 'pruned', { cutoffId: targets[targets.length - 1].id });
+			}
+			if (targets.length < batch) break;
+		}
+		return total;
+	}
+
 	@bindThis
 	public async getChatAvailability(userId: MiUser['id']): Promise<{ read: boolean; write: boolean; }> {
+		// 紧急模式：除站点管理员外，全员禁读禁写（覆盖所有走 checkChatAvailability 的读/写端点）。
+		const controlMeta = await this.getChatControlMeta();
+		if (controlMeta.chatEmergencyMode) {
+			const iAmModerator = await this.roleService.isModerator({ id: userId });
+			if (!iAmModerator) {
+				return { read: false, write: false };
+			}
+		}
+
 		const policies = await this.roleService.getUserPolicies(userId);
 
 		switch (policies.chatAvailability) {
@@ -600,6 +705,9 @@ export class ChatService {
 		if (fromUser.id === toUser.id) {
 			throw new Error('yourself');
 		}
+
+		// 全站违禁关键词（私聊也拦截）
+		await this.assertNotGloballyBannedKeyword(fromUser.id, params.text);
 
 		const approvals = await this.chatApprovalsRepository.createQueryBuilder('approval')
 			.where(new Brackets(qb => { // 自分が相手を許可しているか
@@ -730,6 +838,9 @@ export class ChatService {
 		reply?: ChatMessageReference | null;
 		quote?: ChatMessageReference | null;
 	}): Promise<Packed<'ChatMessageLiteForRoom'>> {
+		// 全站违禁关键词（所有群聊统一拦截，先于房间级判定）
+		await this.assertNotGloballyBannedKeyword(fromUser.id, params.text);
+
 		const membershipsCount = await this.getRoomMembersCountForMessageFanout(toRoom.id);
 
 		// オーナーは常にメンバーかつ制限を受けない。
@@ -1315,6 +1426,10 @@ export class ChatService {
 			.setParameter('meId', meId)
 			.setParameter('otherId', otherId);
 
+		// 统一保持期：早于截止点的私聊消息不可查看
+		const retentionCutoff = await this.getChatRetentionCutoffId();
+		if (retentionCutoff != null) query.andWhere('message.id > :retentionCutoff', { retentionCutoff });
+
 		const messages = await query.take(limit).getMany();
 
 		return messages;
@@ -1334,6 +1449,10 @@ export class ChatService {
 			.leftJoinAndSelect('quote.fromUser', 'quoteFromUser');
 
 		this.applyRoomUserMutingFilterIfNeeded(query, meId, 'message');
+
+		// 统一保持期：早于截止点的群聊消息不可查看
+		const retentionCutoff = await this.getChatRetentionCutoffId();
+		if (retentionCutoff != null) query.andWhere('message.id > :retentionCutoff', { retentionCutoff });
 
 		const messages = await query.take(limit).getMany();
 

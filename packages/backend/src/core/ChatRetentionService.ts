@@ -82,6 +82,18 @@ export class ChatRetentionService implements OnApplicationBootstrap, BeforeAppli
 				const cutoffId = this.idService.gen(cutoffTime);
 				await this.chatService.pruneRoomMessages(room, cutoffId, CHAT_ROOM_RETENTION_BATCH_SIZE);
 			}
+
+			// 统一保持期（管理后台 chat-settings 的全站设置）：跨全部群聊 + 私聊清理早于截止点的消息。
+			const globalCutoffId = await this.chatService.getChatRetentionCutoffId();
+			if (globalCutoffId != null) {
+				let pruned = 0;
+				for (;;) {
+					const n = await this.chatService.pruneAllMessagesOlderThan(globalCutoffId, CHAT_ROOM_RETENTION_BATCH_SIZE);
+					pruned += n;
+					if (n < CHAT_ROOM_RETENTION_BATCH_SIZE) break;
+				}
+				if (pruned > 0) this.logger.info(`global chat retention pruned ${pruned} messages`);
+			}
 		} finally {
 			await unlock();
 			this.running = false;

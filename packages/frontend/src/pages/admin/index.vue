@@ -127,6 +127,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		to: '/admin/users',
 		active: currentPage.value?.route.name === 'users',
 	}, {
+		icon: 'ti ti-cloud',
+		text: i18n.ts.driveManageTitle,
+		to: '/admin/drive',
+		active: currentPage.value?.route.name === 'drive',
+	}, {
 		icon: 'ti ti-user-plus',
 		text: i18n.ts.invite,
 		to: '/admin/invites',

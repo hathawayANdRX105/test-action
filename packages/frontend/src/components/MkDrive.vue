@@ -40,6 +40,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button class="_button" :class="$style.navMenu" @click="showMenu"><i class="ti ti-dots"></i></button>
 			</div>
 		</nav>
+		<div v-if="select == null && !manageMode" :class="$style.toolbar">
+			<div :class="$style.typeChips">
+				<button class="_button" :class="[$style.chip, { [$style.chipActive]: typeFilter === '' }]" @click="setTypeFilter('')">{{ i18n.ts.all }}</button>
+				<button class="_button" :class="[$style.chip, { [$style.chipActive]: typeFilter === 'image/*' }]" @click="setTypeFilter('image/*')"><i class="ti ti-photo"></i> {{ i18n.ts.image }}</button>
+				<button class="_button" :class="[$style.chip, { [$style.chipActive]: typeFilter === 'video/*' }]" @click="setTypeFilter('video/*')"><i class="ti ti-video"></i> {{ i18n.ts.video }}</button>
+				<button class="_button" :class="[$style.chip, { [$style.chipActive]: typeFilter === 'audio/*' }]" @click="setTypeFilter('audio/*')"><i class="ti ti-music"></i> {{ i18n.ts.audio }}</button>
+			</div>
+			<MkButton rounded small @click="enterManageMode"><i class="ti ti-checkbox"></i> {{ i18n.ts.driveSelectMode }}</MkButton>
+		</div>
+		<div v-if="manageMode" :class="$style.manageBar">
+			<span :class="$style.manageCount">{{ i18n.tsx.driveSelectedCount({ n: selectedFiles.length + selectedFolders.length }) }}</span>
+			<div :class="$style.manageButtons">
+				<MkButton rounded small @click="selectAllLoaded"><i class="ti ti-checkbox"></i> {{ i18n.ts.selectAll }}</MkButton>
+				<MkButton rounded small @click="clearSelection">{{ i18n.ts.deselectAll }}</MkButton>
+				<MkButton rounded small :disabled="(selectedFiles.length + selectedFolders.length) === 0" @click="batchMove"><i class="ti ti-folder-symlink"></i> {{ i18n.ts.move }}</MkButton>
+				<MkButton rounded small danger :disabled="(selectedFiles.length + selectedFolders.length) === 0" @click="batchDelete"><i class="ti ti-trash"></i> {{ i18n.ts.delete }} ({{ selectedFiles.length + selectedFolders.length }})</MkButton>
+				<MkButton rounded small @click="exitManageMode">{{ i18n.ts.cancel }}</MkButton>
+			</div>
+		</div>
 	</template>
 
 	<div
@@ -60,7 +79,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					v-anim="i"
 					:class="$style.folder"
 					:folder="f"
-					:selectMode="select === 'folder'"
+					:selectMode="select === 'folder' || manageMode"
 					:isSelected="selectedFolders.some(x => x.id === f.id)"
 					@chosen="chooseFolder"
 					@unchose="unchoseFolder"
@@ -83,7 +102,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:class="$style.file"
 					:file="file"
 					:folder="folder"
-					:selectMode="select === 'file'"
+					:selectMode="select === 'file' || manageMode"
 					:isSelected="selectedFiles.some(x => x.id === file.id)"
 					@chosen="chooseFile"
 					@dragstart="isDragSource = true"
@@ -155,6 +174,10 @@ const moreFolders = ref(false);
 const hierarchyFolders = ref<Misskey.entities.DriveFolder[]>([]);
 const selectedFiles = ref<Misskey.entities.DriveFile[]>([]);
 const selectedFolders = ref<Misskey.entities.DriveFolder[]>([]);
+// 批量管理模式（多选 + 批量删除/移动）。与「选择对话框」模式(select/multiple)独立。
+const manageMode = ref(false);
+// 文件类型筛选（分类）。'' = 全部；'image/*' / 'video/*' / 'audio/*'。
+const typeFilter = ref('');
 const uploadings = uploads;
 const connection = useStream().useChannel('drive');
 
@@ -401,6 +424,10 @@ function upload(file: File, folderToUpload?: Misskey.entities.DriveFolder | null
 
 function chooseFile(file: Misskey.entities.DriveFile) {
 	const isAlreadySelected = selectedFiles.value.some(f => f.id === file.id);
+	if (manageMode.value) {
+		selectedFiles.value = isAlreadySelected ? selectedFiles.value.filter(f => f.id !== file.id) : [...selectedFiles.value, file];
+		return;
+	}
 	if (props.multiple) {
 		if (isAlreadySelected) {
 			selectedFiles.value = selectedFiles.value.filter(f => f.id !== file.id);
@@ -420,6 +447,10 @@ function chooseFile(file: Misskey.entities.DriveFile) {
 
 function chooseFolder(folderToChoose: Misskey.entities.DriveFolder) {
 	const isAlreadySelected = selectedFolders.value.some(f => f.id === folderToChoose.id);
+	if (manageMode.value) {
+		selectedFolders.value = isAlreadySelected ? selectedFolders.value.filter(f => f.id !== folderToChoose.id) : [...selectedFolders.value, folderToChoose];
+		return;
+	}
 	if (props.multiple) {
 		if (isAlreadySelected) {
 			selectedFolders.value = selectedFolders.value.filter(f => f.id !== folderToChoose.id);
@@ -565,7 +596,7 @@ async function fetch() {
 
 	const filesPromise = misskeyApi('drive/files', {
 		folderId: folder.value ? folder.value.id : null,
-		type: props.type,
+		type: typeFilter.value !== '' ? typeFilter.value : props.type,
 		limit: filesMax + 1,
 		searchQuery: searchQuery.value.toString().trim(),
 		sort: sortModeSelect.value,
@@ -616,7 +647,7 @@ function fetchMoreFiles() {
 	// ファイル一覧取得
 	misskeyApi('drive/files', {
 		folderId: folder.value ? folder.value.id : null,
-		type: props.type,
+		type: typeFilter.value !== '' ? typeFilter.value : props.type,
 		untilId: files.value.at(-1)?.id,
 		limit: max + 1,
 		searchQuery: searchQuery.value.toString().trim(),
@@ -631,6 +662,105 @@ function fetchMoreFiles() {
 		for (const x of files) appendFile(x);
 		fetching.value = false;
 	});
+}
+
+function setTypeFilter(t: string) {
+	if (typeFilter.value === t) return;
+	typeFilter.value = t;
+	fetch();
+}
+
+function enterManageMode() {
+	manageMode.value = true;
+	clearSelection();
+}
+
+function selectAllLoaded() {
+	selectedFiles.value = [...files.value];
+	selectedFolders.value = [...folders.value];
+}
+
+function clearSelection() {
+	selectedFiles.value = [];
+	selectedFolders.value = [];
+}
+
+function exitManageMode() {
+	manageMode.value = false;
+	clearSelection();
+}
+
+async function batchDelete() {
+	const targetFiles = [...selectedFiles.value];
+	const targetFolders = [...selectedFolders.value];
+	const total = targetFiles.length + targetFolders.length;
+	if (total === 0) return;
+
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.tsx.driveDeleteSelectedConfirm({ n: total }),
+	});
+	if (canceled) return;
+
+	let failed = 0;
+	for (const file of targetFiles) {
+		try {
+			await misskeyApi('drive/files/delete', { fileId: file.id });
+			removeFile(file.id);
+		} catch {
+			failed++;
+		}
+	}
+	for (const f of targetFolders) {
+		try {
+			await misskeyApi('drive/folders/delete', { folderId: f.id });
+			removeFolder(f.id);
+		} catch {
+			failed++;
+		}
+	}
+	clearSelection();
+
+	if (failed > 0) {
+		os.alert({ type: 'warning', title: i18n.ts.unableToDelete, text: `${failed} / ${total}` });
+	} else {
+		os.success();
+	}
+}
+
+async function batchMove() {
+	const targetFiles = [...selectedFiles.value];
+	const targetFolders = [...selectedFolders.value];
+	if (targetFiles.length + targetFolders.length === 0) return;
+
+	const picked = await os.selectDriveFolder(false).catch(() => [] as Misskey.entities.DriveFolder[]);
+	const target = picked[0];
+	if (!target) return;
+
+	let failed = 0;
+	for (const file of targetFiles) {
+		try {
+			await misskeyApi('drive/files/update', { fileId: file.id, folderId: target.id });
+			removeFile(file.id);
+		} catch {
+			failed++;
+		}
+	}
+	for (const f of targetFolders) {
+		if (f.id === target.id) continue;
+		try {
+			await misskeyApi('drive/folders/update', { folderId: f.id, parentId: target.id });
+			removeFolder(f.id);
+		} catch {
+			failed++;
+		}
+	}
+	clearSelection();
+	if (failed > 0) {
+		os.alert({ type: 'warning', text: `${failed}` });
+	} else {
+		os.success();
+	}
 }
 
 function getMenu() {
@@ -818,6 +948,68 @@ onBeforeUnmount(() => {
 	display: flex;
 	margin-left: auto;
 	align-items: center;
+}
+
+.manageBar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+	flex-wrap: wrap;
+	padding: 8px 12px;
+	background: var(--MI_THEME-panelHighlight, var(--MI_THEME-panel));
+	border-bottom: solid 0.5px var(--MI_THEME-divider);
+}
+
+.manageCount {
+	font-weight: 700;
+	font-size: 0.9em;
+}
+
+.manageButtons {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+	flex-wrap: wrap;
+	padding: 8px 12px;
+	border-bottom: solid 0.5px var(--MI_THEME-divider);
+}
+
+.typeChips {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 12px;
+	border-radius: 999px;
+	font-size: 0.85em;
+	border: solid 1px var(--MI_THEME-divider);
+	color: var(--MI_THEME-fg);
+
+	&:hover {
+		background: var(--MI_THEME-buttonHoverBg);
+	}
+
+	&.chipActive {
+		background: var(--MI_THEME-accentedBg);
+		border-color: transparent;
+		color: var(--MI_THEME-accent);
+		font-weight: 700;
+	}
 }
 
 .navMenu > *:not(:last-child) {

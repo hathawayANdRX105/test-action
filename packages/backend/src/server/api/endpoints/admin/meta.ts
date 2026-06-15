@@ -424,6 +424,22 @@ export const meta = {
 				minimum: 1,
 				maximum: 10000,
 			},
+			chatEmergencyMode: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			chatMessageRetentionDays: {
+				type: 'integer',
+				optional: false, nullable: false,
+			},
+			chatBannedKeywords: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+			},
 			enableAi: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -825,6 +841,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				enableServerMachineStats: instance.enableServerMachineStats,
 				enableAchievements: instance.enableAchievements,
 				chatRoomDefaultMemberLimit: instance.chatRoomDefaultMemberLimit,
+				chatEmergencyMode: instance.chatEmergencyMode,
+				chatMessageRetentionDays: instance.chatMessageRetentionDays,
+				chatBannedKeywords: instance.chatBannedKeywords,
 				enableAi: instance.enableAi,
 				showAiInNavbar: instance.showAiInNavbar,
 				aiDefaultProviderId: instance.aiDefaultProviderId,

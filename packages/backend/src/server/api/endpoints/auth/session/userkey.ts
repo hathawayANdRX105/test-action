@@ -8,7 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { AccessTokensRepository, ApiAccessGrantsRepository, AppsRepository, AuthSessionsRepository } from '@/models/_.js';
 import type { MiMeta } from '@/models/Meta.js';
 import { DI } from '@/di-symbols.js';
-import { apiAccessErrors, isDeveloperApiAccessApproved } from '@/server/api/api-access-utils.js';
+import { apiAccessErrors, isApprovalRequiredForScopes, isDeveloperApiAccessApproved } from '@/server/api/api-access-utils.js';
 import { packOidcUserinfo } from '@/server/oauth/OAuth2ProviderService.js';
 import type { Config } from '@/config.js';
 import { ApiError } from '../../../error.js';
@@ -119,9 +119,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (app.status !== 'approved') {
 				throw new ApiError(apiAccessErrors.apiAppUnavailable);
 			}
-			const developerApproved = await isDeveloperApiAccessApproved(this.instanceMeta, this.apiAccessGrantsRepository, app.userId);
-			if (!developerApproved) {
-				throw new ApiError(apiAccessErrors.apiApprovalRequired);
+			// 免申請：アプリの要求スコープが免申請ホワイトリストに収まるなら（=read:profile/read:account だけの
+			// "快捷方式"ログイン等）、開発者審批は不要。generate.ts / accept.ts と判定を揃える。
+			if (isApprovalRequiredForScopes(this.instanceMeta.apiAccessMode, this.instanceMeta.apiNoApprovalPermissions, app.permission)) {
+				const developerApproved = await isDeveloperApiAccessApproved(this.instanceMeta, this.apiAccessGrantsRepository, app.userId);
+				if (!developerApproved) {
+					throw new ApiError(apiAccessErrors.apiApprovalRequired);
+				}
 			}
 
 			// Fetch token

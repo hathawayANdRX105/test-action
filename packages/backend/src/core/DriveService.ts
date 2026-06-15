@@ -538,7 +538,9 @@ export class DriveService {
 			const isLocal = isLocalUser(user);
 
 			const policies = await this.roleService.getUserPolicies(user.id);
-			const driveCapacity = 1024 * 1024 * policies.driveCapacityMb;
+			// 管理者が個別に上書きした容量があれば、ロール由来の容量より大きい方を採用する。
+			const overrideMb = (user as { driveCapacityOverrideMb?: number | null }).driveCapacityOverrideMb ?? 0;
+			const driveCapacity = 1024 * 1024 * Math.max(policies.driveCapacityMb, overrideMb);
 			const maxFileSize = 1024 * 1024 * policies.maxFileSizeMb;
 			this.registerLogger.debug('drive capacity override applied');
 			this.registerLogger.debug(`overrideCap: ${driveCapacity}bytes, usage: ${usage}bytes, u+s: ${usage + info.size}bytes`);

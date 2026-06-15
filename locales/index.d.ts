@@ -5552,6 +5552,50 @@ export interface Locale extends ILocale {
          * チャットルームを開く
          */
         "openChatRoom": string;
+        /**
+         * 緊急コントロール
+         */
+        "emergencyControls": string;
+        /**
+         * 緊急モード
+         */
+        "emergencyMode": string;
+        /**
+         * 有効にすると、管理者以外は一切のチャットメッセージの送信・閲覧・取得ができなくなります（ルーム・DM両方）。
+         */
+        "emergencyModeCaption": string;
+        /**
+         * 緊急モードが有効です：管理者以外、すべてのチャットがロックされています。
+         */
+        "emergencyModeActive": string;
+        /**
+         * 統一メッセージ保持期間（日）
+         */
+        "messageRetentionDays": string;
+        /**
+         * この日数より古いチャットメッセージは閲覧できなくなり、全チャットで自動的に削除されます。0=無期限。
+         */
+        "messageRetentionCaption": string;
+        /**
+         * 全体の禁止キーワード
+         */
+        "bannedKeywords": string;
+        /**
+         * 1行に1キーワード。いずれかを含むメッセージは全ルーム・DMでブロックされます（管理者は除外）。
+         */
+        "bannedKeywordsCaption": string;
+        /**
+         * これらのキーワードを含む既存メッセージを削除
+         */
+        "purgeKeywordHistory": string;
+        /**
+         * 禁止キーワードを含む既存のチャットメッセージ（全ルーム・DM）をすべて削除しますか？元に戻せません。
+         */
+        "purgeKeywordConfirm": string;
+        /**
+         * {n}件のメッセージを削除しました。
+         */
+        "purgeKeywordDone": ParameterizedString<"n">;
     };
     /**
      * 旧設定情報を移行

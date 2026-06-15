@@ -69,6 +69,7 @@ export * as 'admin/avatar-decorations/create' from './endpoints/admin/avatar-dec
 export * as 'admin/avatar-decorations/delete' from './endpoints/admin/avatar-decorations/delete.js';
 export * as 'admin/avatar-decorations/list' from './endpoints/admin/avatar-decorations/list.js';
 export * as 'admin/avatar-decorations/update' from './endpoints/admin/avatar-decorations/update.js';
+export * as 'admin/chat/purge-keyword' from './endpoints/admin/chat/purge-keyword.js';
 export * as 'admin/chat/rooms/list' from './endpoints/admin/chat/rooms/list.js';
 export * as 'admin/chat/rooms/messages' from './endpoints/admin/chat/rooms/messages.js';
 export * as 'admin/chat/rooms/show' from './endpoints/admin/chat/rooms/show.js';
@@ -85,6 +86,8 @@ export * as 'admin/drive/clean-remote-files' from './endpoints/admin/drive/clean
 export * as 'admin/drive/cleanup' from './endpoints/admin/drive/cleanup.js';
 export * as 'admin/drive/files' from './endpoints/admin/drive/files.js';
 export * as 'admin/drive/show-file' from './endpoints/admin/drive/show-file.js';
+export * as 'admin/drive/user-capacity' from './endpoints/admin/drive/user-capacity.js';
+export * as 'admin/drive/set-user-capacity' from './endpoints/admin/drive/set-user-capacity.js';
 export * as 'admin/emoji/add' from './endpoints/admin/emoji/add.js';
 export * as 'admin/emoji/add-aliases-bulk' from './endpoints/admin/emoji/add-aliases-bulk.js';
 export * as 'admin/emoji/copy' from './endpoints/admin/emoji/copy.js';

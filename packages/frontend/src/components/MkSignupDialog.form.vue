@@ -135,7 +135,11 @@ const emailAllowedHint = computed(() => {
 	if (!instance.signupEmailRestriction) return null;
 	const domains = instance.signupEmailAllowedDomains ?? [];
 	if (domains.length === 0) return null;
-	return i18n.tsx.signupEmailAllowedHint({ domains: domains.join('、') });
+	// 文案 key 若在已部署的 locale 中缺失（前端先于 locales 部署时会发生），
+	// 不能让它抛错把整个注册表单 render 搞崩 → 邮箱框消失。降级为不显示提示。
+	const fn = i18n.tsx.signupEmailAllowedHint;
+	if (typeof fn !== 'function') return null;
+	return fn({ domains: domains.join('、') });
 });
 const passwordStrength = ref<'' | 'low' | 'medium' | 'high'>('');
 const passwordRetypeState = ref<null | 'match' | 'not-match'>(null);

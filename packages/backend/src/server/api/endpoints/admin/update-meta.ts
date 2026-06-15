@@ -164,6 +164,9 @@ export const paramDef = {
 		enableServerMachineStats: { type: 'boolean' },
 		enableAchievements: { type: 'boolean' },
 		chatRoomDefaultMemberLimit: { type: 'integer', minimum: MIN_CHAT_ROOM_MEMBER_LIMIT, maximum: MAX_CHAT_ROOM_MEMBER_LIMIT },
+		chatEmergencyMode: { type: 'boolean' },
+		chatMessageRetentionDays: { type: 'integer', minimum: 0, maximum: 3650 },
+		chatBannedKeywords: { type: 'array', items: { type: 'string' } },
 		enableAi: { type: 'boolean' },
 		showAiInNavbar: { type: 'boolean' },
 		aiDefaultProviderId: { type: 'string', format: 'misskey:id', nullable: true },
@@ -721,6 +724,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.chatRoomDefaultMemberLimit !== undefined) {
 				set.chatRoomDefaultMemberLimit = ps.chatRoomDefaultMemberLimit;
+			}
+
+			if (ps.chatEmergencyMode !== undefined) {
+				set.chatEmergencyMode = ps.chatEmergencyMode;
+			}
+
+			if (ps.chatMessageRetentionDays !== undefined) {
+				set.chatMessageRetentionDays = ps.chatMessageRetentionDays;
+			}
+
+			if (ps.chatBannedKeywords !== undefined) {
+				set.chatBannedKeywords = Array.from(new Set(
+					ps.chatBannedKeywords.map(k => k.trim()).filter(k => k.length > 0 && k.length <= 256),
+				)).slice(0, 200);
 			}
 
 			if (ps.enableAi !== undefined) {

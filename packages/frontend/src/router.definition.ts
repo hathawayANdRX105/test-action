@@ -421,6 +421,10 @@ export const ROUTE_DEF = [{
 		name: 'overview',
 		component: page(() => import('@/pages/admin/overview.vue')),
 	}, {
+		path: '/drive',
+		name: 'drive',
+		component: page(() => import('@/pages/admin/drive.vue')),
+	}, {
 		path: '/users',
 		name: 'users',
 		component: page(() => import('@/pages/admin/users.vue')),
