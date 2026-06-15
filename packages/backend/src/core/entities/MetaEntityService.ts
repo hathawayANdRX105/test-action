@@ -174,6 +174,8 @@ export class MetaEntityService {
 			disableRegistration: instance.disableRegistration,
 			emailRequiredForSignup: instance.emailRequiredForSignup,
 			approvalRequiredForSignup: instance.approvalRequiredForSignup,
+			signupEmailRestriction: instance.signupEmailRestriction,
+			signupEmailAllowedDomains: (instance.signupEmailRules ?? []).map(r => r.domain),
 			enableHcaptcha: instance.enableHcaptcha,
 			hcaptchaSiteKey: instance.hcaptchaSiteKey,
 			enableMcaptcha: instance.enableMcaptcha,

@@ -97,6 +97,15 @@ export const packedMetaLiteSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		signupEmailRestriction: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		signupEmailAllowedDomains: {
+			type: 'array',
+			optional: false, nullable: false,
+			items: { type: 'string', optional: false, nullable: false },
+		},
 		enableHcaptcha: {
 			type: 'boolean',
 			optional: false, nullable: false,

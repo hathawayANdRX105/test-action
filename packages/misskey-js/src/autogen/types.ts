@@ -13459,6 +13459,8 @@ export type components = {
             disableRegistration: boolean;
             emailRequiredForSignup: boolean;
             approvalRequiredForSignup: boolean;
+            signupEmailRestriction: boolean;
+            signupEmailAllowedDomains: string[];
             enableHcaptcha: boolean;
             hcaptchaSiteKey: string | null;
             enableMcaptcha: boolean;

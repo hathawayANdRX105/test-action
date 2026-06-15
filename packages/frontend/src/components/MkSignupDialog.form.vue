@@ -39,10 +39,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span v-else-if="emailState === 'unavailable:format'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts._emailUnavailable.format }}</span>
 					<span v-else-if="emailState === 'unavailable:disposable'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts._emailUnavailable.disposable }}</span>
 					<span v-else-if="emailState === 'unavailable:banned'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts._emailUnavailable.banned }}</span>
+					<span v-else-if="emailState === 'unavailable:notAllowed'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts._emailUnavailable.notAllowed }}<template v-if="emailAllowedHint"> — {{ emailAllowedHint }}</template></span>
 					<span v-else-if="emailState === 'unavailable:mx'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts._emailUnavailable.mx }}</span>
 					<span v-else-if="emailState === 'unavailable:smtp'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts._emailUnavailable.smtp }}</span>
 					<span v-else-if="emailState === 'unavailable'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.unavailable }}</span>
 					<span v-else-if="emailState === 'error'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.error }}</span>
+					<span v-else-if="emailAllowedHint" style="color: var(--MI_THEME-fgTransparentWeak)"><i class="ti ti-info-circle ti-fw"></i> {{ emailAllowedHint }}</span>
 				</template>
 			</MkInput>
 			<MkInput v-model="password" type="password" autocomplete="new-password" required data-cy-signup-password @update:modelValue="onChangePassword">
@@ -126,7 +128,15 @@ const invitationCode = ref<string>('');
 const reason = ref<string>('');
 const email = ref('');
 const usernameState = ref<null | 'wait' | 'ok' | 'unavailable' | 'error' | 'invalid-format' | 'min-range' | 'max-range'>(null);
-const emailState = ref<null | 'wait' | 'ok' | 'unavailable:used' | 'unavailable:format' | 'unavailable:disposable' | 'unavailable:banned' | 'unavailable:mx' | 'unavailable:smtp' | 'unavailable' | 'error'>(null);
+const emailState = ref<null | 'wait' | 'ok' | 'unavailable:used' | 'unavailable:format' | 'unavailable:disposable' | 'unavailable:banned' | 'unavailable:notAllowed' | 'unavailable:mx' | 'unavailable:smtp' | 'unavailable' | 'error'>(null);
+
+// 注册邮箱白名单开启时，根据管理员配置动态提示「支持哪些邮箱」。
+const emailAllowedHint = computed(() => {
+	if (!instance.signupEmailRestriction) return null;
+	const domains = instance.signupEmailAllowedDomains ?? [];
+	if (domains.length === 0) return null;
+	return i18n.tsx.signupEmailAllowedHint({ domains: domains.join('、') });
+});
 const passwordStrength = ref<'' | 'low' | 'medium' | 'high'>('');
 const passwordRetypeState = ref<null | 'match' | 'not-match'>(null);
 const submitting = ref<boolean>(false);
@@ -232,7 +242,7 @@ function onChangeEmail(): void {
 			result.reason === 'format' ? 'unavailable:format' :
 			result.reason === 'disposable' ? 'unavailable:disposable' :
 			result.reason === 'banned' ? 'unavailable:banned' :
-			result.reason === 'notAllowed' ? 'unavailable:banned' :
+			result.reason === 'notAllowed' ? 'unavailable:notAllowed' :
 			result.reason === 'mx' ? 'unavailable:mx' :
 			result.reason === 'smtp' ? 'unavailable:smtp' :
 			'unavailable';

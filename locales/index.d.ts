@@ -2815,6 +2815,10 @@ export interface Locale extends ILocale {
      */
     "domain": string;
     /**
+     * 以下のメールのみ利用可能：{domains}
+     */
+    "signupEmailAllowedHint": ParameterizedString<"domains">;
+    /**
      * IP 記録はまだありません。設定 → セキュリティで「IP ログ」を有効にすると記録が始まります（以降のアクセスのみ）。
      */
     "noIpRecords": string;
@@ -8664,6 +8668,10 @@ export interface Locale extends ILocale {
          * This email address is banned
          */
         "banned": string;
+        /**
+         * このメールアドレスは要件を満たしていません
+         */
+        "notAllowed": string;
     };
     "_ffVisibility": {
         /**

@@ -364,12 +364,22 @@ function onSigninApiError(err?: any): void {
 			});
 			break;
 		}
-		default: {
-			console.error(err);
+		case '4e30e80c-e338-45a0-8c8f-44455efa3b76': {
 			os.alert({
 				type: 'error',
 				title: i18n.ts.loginFailed,
-				text: JSON.stringify(err),
+				text: i18n.ts.signinFailed,
+			});
+			break;
+		}
+		default: {
+			console.error(err);
+			// 兜底：不再直接抛出英文 JSON，给出本地化提示；附带错误码方便排查。
+			const detail = err?.message ?? err?.code ?? err?.id ?? null;
+			os.alert({
+				type: 'error',
+				title: i18n.ts.loginFailed,
+				text: i18n.ts.signinFailed + (detail ? `\n\n(${detail})` : ''),
 			});
 		}
 	}

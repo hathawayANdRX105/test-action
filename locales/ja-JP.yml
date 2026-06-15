@@ -699,6 +699,7 @@ localPartRegex: "ローカル部の正規表現(@より前)"
 emailAllowed: "許可"
 emailNotAllowed: "不許可"
 domain: "ドメイン"
+signupEmailAllowedHint: "以下のメールのみ利用可能：{domains}"
 noIpRecords: "IP 記録はまだありません。設定 → セキュリティで「IP ログ」を有効にすると記録が始まります（以降のアクセスのみ）。"
 noFingerprintRecords: "指紋はまだ記録されていません。ユーザーが次に Web クライアントを開いたときに登録されます。"
 emailAddress: "メールアドレス"
@@ -2205,6 +2206,7 @@ _emailUnavailable:
   mx: "正しいメールサーバーではありません"
   smtp: "メールサーバーが応答しません"
   banned: "このメールアドレスでは登録できません"
+  notAllowed: "このメールアドレスは要件を満たしていません"
 
 _ffVisibility:
   public: "公開"
