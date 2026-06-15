@@ -9,12 +9,13 @@ import juice from 'juice';
 import { load as cheerio } from 'cheerio/slim';
 import { nanoid } from 'nanoid';
 import { Inject, Injectable } from '@nestjs/common';
+import { Not, IsNull } from 'typeorm';
 import { validate as validateEmail } from 'deep-email-validator';
 import { UtilityService } from '@/core/UtilityService.js';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
 import type Logger from '@/logger.js';
-import type { MiMeta, MiUserProfile, UserProfilesRepository } from '@/models/_.js';
+import type { MiMeta, MiUserProfile, UserProfilesRepository, MetasRepository } from '@/models/_.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { bindThis } from '@/decorators.js';
@@ -34,6 +35,9 @@ export class EmailService {
 
 		@Inject(DI.userProfilesRepository)
 		private userProfilesRepository: UserProfilesRepository,
+
+		@Inject(DI.metasRepository)
+		private metasRepository: MetasRepository,
 
 		private loggerService: LoggerService,
 		private utilityService: UtilityService,
@@ -254,10 +258,20 @@ export class EmailService {
 		}
 
 		// 管理者が設定した「注册邮箱白名单+正则」制限。
-		if (this.meta.signupEmailRestriction && Array.isArray(this.meta.signupEmailRules) && this.meta.signupEmailRules.length > 0) {
+		// 注意: この環境では admin/update-meta 後のメモリ上 meta が即時反映されないため、
+		// この規則だけは DB から最新値を直接読む(設定変更が再起動なしで即効く)。
+		const freshMeta = await this.metasRepository.findOne({
+			where: { id: Not(IsNull()) },
+			order: { id: 'DESC' },
+			select: { id: true, signupEmailRestriction: true, signupEmailRules: true },
+		}).catch(() => null);
+		const signupEmailRestriction = freshMeta?.signupEmailRestriction ?? this.meta.signupEmailRestriction;
+		const signupEmailRules = freshMeta?.signupEmailRules ?? this.meta.signupEmailRules;
+
+		if (signupEmailRestriction && Array.isArray(signupEmailRules) && signupEmailRules.length > 0) {
 			const localPart = emailAddress.slice(0, emailAddress.lastIndexOf('@'));
 			const domain = emailDomain.toLowerCase();
-			const rule = this.meta.signupEmailRules.find(r => typeof r?.domain === 'string' && r.domain.toLowerCase() === domain);
+			const rule = signupEmailRules.find(r => typeof r?.domain === 'string' && r.domain.toLowerCase() === domain);
 
 			if (rule == null) {
 				// 白名单外の域名は不可
