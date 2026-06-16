@@ -183,26 +183,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<FormSection>
 					<template #label><i class="ti ti-book"></i> <SearchLabel>接入文档与示例</SearchLabel></template>
 					<div class="_gaps_m">
-						<div :class="$style.docsGrid">
-							<div :class="$style.docCard">
-								<strong>快捷登录 OAuth/OIDC</strong>
-								<code>GET /oauth/authorize?client_id=...&response_type=code&scope=read:profile&code_challenge=...</code>
-								<span>推荐使用最小 <code>read:profile</code> 权限，用户资料只从 <code>/oauth/userinfo</code> 获取。</span>
-							</div>
-							<div :class="$style.docCard">
-								<strong>发帖 API</strong>
-								<code>POST /api/notes/create</code>
-								<span>Token 需要 <code>write:notes</code> 权限。</span>
-							</div>
-							<div :class="$style.docCard">
-								<strong>删帖 API</strong>
-								<code>POST /api/notes/delete</code>
-								<span>只能删除自己有权限删除的帖子。</span>
-							</div>
-							<div :class="$style.docCard">
-								<strong>上传附件</strong>
-								<code>POST /api/drive/files/create</code>
-								<span>Token 需要 <code>write:drive</code> 权限。</span>
+						<div :class="$style.docList">
+							<div v-for="ex in docExamples" :key="ex.path" :class="$style.docCard">
+								<div :class="$style.docHead">
+									<i :class="ex.icon"></i>
+									<strong>{{ ex.title }}</strong>
+									<span :class="$style.docMethod">{{ ex.method }}</span>
+									<code :class="$style.docPath">{{ ex.path }}</code>
+								</div>
+								<div :class="$style.docScopes">
+									<span :class="$style.docScopesLabel">需要权限：</span>
+									<code v-for="s in ex.scopes" :key="s" :class="$style.docScopeTag" :title="s">{{ scopeLabel(s) }} · {{ s }}</code>
+								</div>
+								<div :class="$style.docDesc">{{ ex.desc }}</div>
+								<div :class="$style.docCodeWrap">
+									<pre :class="$style.docCode">{{ ex.curl }}</pre>
+									<MkButton rounded small :class="$style.docCopy" @click="copyText(ex.curl)"><i class="ti ti-copy"></i> 复制</MkButton>
+								</div>
 							</div>
 						</div>
 						<FormLink to="/api-console" :behavior="isDesktop ? 'window' : null">打开 API Console</FormLink>
@@ -261,6 +258,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkApiScopePicker from '@/components/MkApiScopePicker.vue';
+import { scopeLabel } from '@/utility/api-permissions.js';
 import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -365,6 +363,42 @@ function applyAppTemplate(template: Template) {
 	selectedTemplateKey.value = template.key;
 	newAppPermissions.value = [...template.permissions];
 }
+
+const apiHost = window.location.host;
+
+type DocExample = { title: string; icon: string; scopes: string[]; method: string; path: string; curl: string; desc: string; };
+const docExamples = computed<DocExample[]>(() => [
+	{
+		title: '快捷登录 OAuth/OIDC', icon: 'ti ti-login', scopes: ['read:profile'], method: 'GET', path: '/oauth/authorize',
+		curl: `https://${apiHost}/oauth/authorize?client_id=<CLIENT_ID>&response_type=code&redirect_uri=<回调地址>&scope=read:profile&code_challenge=<PKCE>&code_challenge_method=S256`,
+		desc: '第三方网站用本站账号登录。用户资料只从 /oauth/userinfo 获取，建议用最小的 read:profile。',
+	},
+	{
+		title: '发帖', icon: 'ti ti-pencil', scopes: ['write:notes'], method: 'POST', path: '/api/notes/create',
+		curl: `curl -X POST https://${apiHost}/api/notes/create \\\n  -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \\\n  -d '{"text":"hello world","visibility":"public"}'`,
+		desc: '创建一条帖子。visibility 可选 public/home/followers/specified。',
+	},
+	{
+		title: '删帖', icon: 'ti ti-trash', scopes: ['write:notes'], method: 'POST', path: '/api/notes/delete',
+		curl: `curl -X POST https://${apiHost}/api/notes/delete \\\n  -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \\\n  -d '{"noteId":"<NOTE_ID>"}'`,
+		desc: '删除自己有权限删除的帖子（频道主可删本频道内的帖子）。',
+	},
+	{
+		title: '上传文件到网盘', icon: 'ti ti-cloud-upload', scopes: ['write:drive'], method: 'POST', path: '/api/drive/files/create',
+		curl: `curl -X POST https://${apiHost}/api/drive/files/create \\\n  -H "Authorization: Bearer <TOKEN>" \\\n  -F file=@./image.png`,
+		desc: '上传附件，返回文件对象（含 id、url），可用于发帖的 fileIds。',
+	},
+	{
+		title: '读取通知', icon: 'ti ti-bell', scopes: ['read:notifications'], method: 'POST', path: '/api/i/notifications',
+		curl: `curl -X POST https://${apiHost}/api/i/notifications \\\n  -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" -d '{"limit":20}'`,
+		desc: '拉取当前用户的通知列表。',
+	},
+	{
+		title: '发送聊天消息', icon: 'ti ti-messages', scopes: ['write:chat'], method: 'POST', path: '/api/chat/messages/create-to-room',
+		curl: `curl -X POST https://${apiHost}/api/chat/messages/create-to-room \\\n  -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \\\n  -d '{"toRoomId":"<ROOM_ID>","text":"hi"}'`,
+		desc: '向聊天房间发送消息（私聊用 create-to-user）。',
+	},
+]);
 
 function applyTokenTemplate(template: Template) {
 	newTokenName.value = template.title;
@@ -488,6 +522,79 @@ definePage(() => ({
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 	gap: 12px;
+}
+
+.docList {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.docHead {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.docMethod {
+	padding: 1px 8px;
+	border-radius: 6px;
+	font-size: 0.78em;
+	font-weight: 700;
+	background: var(--MI_THEME-accentedBg);
+	color: var(--MI_THEME-accent);
+}
+
+.docPath {
+	font-size: 0.86em;
+	opacity: 0.85;
+}
+
+.docScopes {
+	margin-top: 8px;
+	font-size: 0.85em;
+}
+
+.docScopesLabel {
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.docScopeTag {
+	display: inline-block;
+	margin: 2px 4px 2px 0;
+	padding: 1px 8px;
+	border-radius: 6px;
+	background: var(--MI_THEME-buttonBg);
+}
+
+.docDesc {
+	margin-top: 6px;
+	font-size: 0.88em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.docCodeWrap {
+	position: relative;
+	margin-top: 8px;
+}
+
+.docCode {
+	margin: 0;
+	padding: 12px 64px 12px 12px;
+	border-radius: 8px;
+	background: var(--MI_THEME-bg);
+	border: solid 1px var(--MI_THEME-divider);
+	font-size: 0.82em;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: Consolas, Monaco, monospace;
+}
+
+.docCopy {
+	position: absolute;
+	top: 8px;
+	right: 8px;
 }
 
 .statusCard,

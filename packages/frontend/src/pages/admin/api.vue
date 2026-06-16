@@ -57,112 +57,31 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div :class="$style.permissionHeader">
 								<div>
 									<div id="api-public-permissions-title" :class="$style.permissionTitle">允许普通开发者使用的权限范围</div>
-									<div :class="$style.permissionCaption">权限范围已选择 {{ selectedPublicPermissionCount }} 项。普通开发者只能申请这里开放的 scope，admin 权限不会出现在公共选项里。</div>
+									<div :class="$style.permissionCaption">已选 {{ selectedPublicPermissionCount }} 项。普通开发者只能申请这里开放的 scope，admin 权限不会出现在公共选项里。</div>
 								</div>
-								<MkButton rounded small @click="restoreDefaultPublicPermissions">恢复推荐默认权限</MkButton>
+								<MkButton rounded small @click="restoreDefaultPublicPermissions">恢复推荐默认</MkButton>
 							</div>
-
-							<div :class="$style.permissionGroups">
-								<section v-for="group in publicPermissionGroups" :key="group.key" :class="$style.permissionGroup">
-									<div :class="$style.permissionGroupHeader">
-										<div :class="$style.permissionGroupTitle">
-											<i :class="group.icon"></i>
-											<strong>{{ group.title }}</strong>
-										</div>
-										<div class="_buttons">
-											<MkButton rounded small @click="selectPermissionGroup(group)">全选</MkButton>
-											<MkButton rounded small @click="clearPermissionGroup(group)">清空</MkButton>
-										</div>
-									</div>
-									<div :class="$style.permissionOptions">
-										<button
-											v-for="permission in group.permissions"
-											:key="permission.scope"
-											type="button"
-											class="_button"
-											:class="[$style.permissionOption, { [$style.permissionOptionActive]: isPermissionSelected(permission.scope) }]"
-											:aria-pressed="isPermissionSelected(permission.scope)"
-											@click="togglePermission(permission.scope)"
-										>
-											<span :class="$style.permissionCheck"><i :class="isPermissionSelected(permission.scope) ? 'ti ti-check' : 'ti ti-plus'"></i></span>
-											<span :class="$style.permissionBody">
-												<strong>{{ permission.label }}</strong>
-												<code>{{ permission.scope }}</code>
-												<small>{{ permission.description }}</small>
-											</span>
-										</button>
-									</div>
-								</section>
-
-								<section v-if="unknownPublicPermissions.length > 0" :class="$style.permissionGroup">
-									<div :class="$style.permissionGroupHeader">
-										<div :class="$style.permissionGroupTitle">
-											<i class="ti ti-dots"></i>
-											<strong>其他权限</strong>
-										</div>
-									</div>
-									<div :class="$style.permissionOptions">
-										<button
-											v-for="scope in unknownPublicPermissions"
-											:key="scope"
-											type="button"
-											class="_button"
-											:class="[$style.permissionOption, $style.permissionOptionActive]"
-											aria-pressed="true"
-											@click="togglePermission(scope)"
-										>
-											<span :class="$style.permissionCheck"><i class="ti ti-check"></i></span>
-											<span :class="$style.permissionBody">
-												<strong>保留未知权限</strong>
-												<code>{{ scope }}</code>
-												<small>后端返回的兼容 scope，保存时会继续保留；点击可从公共权限中移除。</small>
-											</span>
-										</button>
-									</div>
-								</section>
-							</div>
+							<MkApiScopePicker
+								:modelValue="settings?.publicPermissions ?? []"
+								:availableScopes="ALL_API_SCOPES"
+								mode="open"
+								@update:modelValue="setPublicPermissions"
+							/>
 						</section>
 
 						<section :class="$style.permissionPanel" aria-labelledby="api-noapproval-permissions-title">
 							<div :class="$style.permissionHeader">
 								<div>
 									<div id="api-noapproval-permissions-title" :class="$style.permissionTitle">免申请权限范围</div>
-									<div :class="$style.permissionCaption">仅在「申请使用」模式下生效：已选 {{ selectedNoApprovalCount }} 项。当用户创建令牌/应用所请求的权限<strong>全部</strong>落在此范围内时，无需管理员审批即可使用；包含写入/敏感/admin 权限时仍需审批。</div>
+									<div :class="$style.permissionCaption">仅在「申请使用」模式下生效：已选 {{ selectedNoApprovalCount }} 项。用户创建令牌/应用所请求的权限<strong>全部</strong>落在此范围内时无需审批；包含写入/敏感权限时仍需审批。范围限定在上方「可申请权限」之内。</div>
 								</div>
 							</div>
-
-							<div :class="$style.permissionGroups">
-								<section v-for="group in publicPermissionGroups" :key="'na-' + group.key" :class="$style.permissionGroup">
-									<div :class="$style.permissionGroupHeader">
-										<div :class="$style.permissionGroupTitle">
-											<i :class="group.icon"></i>
-											<strong>{{ group.title }}</strong>
-										</div>
-										<div class="_buttons">
-											<MkButton rounded small @click="selectNoApprovalGroup(group)">全选</MkButton>
-											<MkButton rounded small @click="clearNoApprovalGroup(group)">清空</MkButton>
-										</div>
-									</div>
-									<div :class="$style.permissionOptions">
-										<button
-											v-for="permission in group.permissions"
-											:key="'na-' + permission.scope"
-											type="button"
-											class="_button"
-											:class="[$style.permissionOption, { [$style.permissionOptionActive]: isNoApprovalSelected(permission.scope) }]"
-											:aria-pressed="isNoApprovalSelected(permission.scope)"
-											@click="toggleNoApproval(permission.scope)"
-										>
-											<span :class="$style.permissionCheck"><i :class="isNoApprovalSelected(permission.scope) ? 'ti ti-check' : 'ti ti-plus'"></i></span>
-											<span :class="$style.permissionBody">
-												<strong>{{ permission.label }}</strong>
-												<code>{{ permission.scope }}</code>
-												<small>{{ permission.description }}</small>
-											</span>
-										</button>
-									</div>
-								</section>
-							</div>
+							<MkApiScopePicker
+								:modelValue="settings?.noApprovalPermissions ?? []"
+								:availableScopes="settings?.publicPermissions ?? []"
+								mode="open"
+								@update:modelValue="setNoApprovalPermissions"
+							/>
 						</section>
 
 						<div class="_buttons">
@@ -447,6 +366,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, reactive, ref, useCssModule, watch } from 'vue';
 import MkButton from '@/components/MkButton.vue';
+import MkApiScopePicker from '@/components/MkApiScopePicker.vue';
+import { ALL_API_SCOPES } from '@/utility/api-permissions.js';
 import MkFolder from '@/components/MkFolder.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';

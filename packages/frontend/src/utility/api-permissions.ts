@@ -30,6 +30,9 @@ export const API_SCOPE_GROUPS: ApiScopeGroup[] = [
 	{ key: 'misc', title: '其他', icon: 'ti ti-dots', scopes: ['read:federation', 'write:report-abuse'] },
 ];
 
+// 全部非 admin 的可选 scope（按分组顺序展开），用于管理后台的权限配置选择器。
+export const ALL_API_SCOPES: string[] = API_SCOPE_GROUPS.flatMap(g => g.scopes);
+
 // scope 的人类可读用途（复用 Misskey 的 _permissions 文案；缺失则回退原始 scope）。
 export function scopeLabel(scope: string): string {
 	return (i18n.ts._permissions as Record<string, string>)[scope] ?? scope;
