@@ -4,9 +4,10 @@
  */
 
 export function normalizePrimaryMenu(items: string[], available: Record<string, { show?: unknown }>): string[] {
-	// search/explore(検索)・drive(ドライブ)・achievements(実績) はプライマリメニューから外し、
+	// search(検索)・drive(ドライブ)・achievements(実績) はプライマリメニューから外し、
 	// 「もっと(ランチパッド)」へ集約する。項目が多すぎてスクロールバーが出るのを防ぐため。
-	const movedToLaunchPad = ['search', 'explore', 'drive', 'achievements'];
+	// explore(探索) は左メニューに常設する(ユーザーが消していても復活させる)。
+	const movedToLaunchPad = ['search', 'drive', 'achievements'];
 	let next = items.filter(item => !movedToLaunchPad.includes(item));
 	next = ensureAfter(next, 'channels', null);
 	if (available.chat?.show !== false) {
@@ -15,6 +16,8 @@ export function normalizePrimaryMenu(items: string[], available: Record<string, 
 	if (available.ai?.show !== false) {
 		next = ensureAfter(next, 'ai', null);
 	}
+	// 探索を左メニュー先頭に常設(過去に movedToLaunchPad で抜かれ保存済みのメニューにも復活させる)
+	next = ensureAfter(next, 'explore', null);
 	return next;
 }
 
