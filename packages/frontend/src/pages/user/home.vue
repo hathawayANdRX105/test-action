@@ -346,7 +346,8 @@ const AllPagination = {
 		userId: props.user.id,
 		withRenotes: noteview.value === 'all',
 		withReplies: noteview.value === 'all',
-		withChannelNotes: noteview.value === 'all',
+		// 用户主页显示其全部帖子(含发到频道的帖子),否则只发频道的用户主页几乎是空的
+		withChannelNotes: true,
 		withFiles: noteview.value === 'files',
 	})),
 };
