@@ -143,9 +143,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const birthday = ps.birthday.substring(5, 10);
 					const birthdayUserQuery = this.userProfilesRepository.createQueryBuilder('user_profile');
 					birthdayUserQuery.select('user_profile.userId')
-						.where(`SUBSTR(user_profile.birthday, 6, 5) = '${birthday}'`);
+						// パラメータ化(SQLインジェクション対策): 文字列を直接埋め込まない
+						.where('SUBSTR(user_profile.birthday, 6, 5) = :birthday', { birthday });
 
 					query.andWhere(`following.followeeId IN (${ birthdayUserQuery.getQuery() })`);
+					query.setParameters(birthdayUserQuery.getParameters());
 				} catch (err) {
 					throw new ApiError(meta.errors.birthdayInvalid);
 				}

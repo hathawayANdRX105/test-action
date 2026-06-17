@@ -11,7 +11,11 @@ import { DI } from '@/di-symbols.js';
 export const meta = {
 	tags: ['users'],
 
-	requireCredential: false,
+	// 用户留存/注册队列数据属于站点运营分析,改为仅管理员/版主可见,
+	// 防止匿名或普通用户(含恶意用户)拉取全站留存统计。
+	requireCredential: true,
+	requireModerator: true,
+	kind: 'read:admin:show-user',
 
 	res: {
 		type: 'array',
@@ -42,11 +46,8 @@ export const meta = {
 		},
 	},
 
-	allowGet: true,
-	cacheSec: 60 * 60,
-
 	// Admin overview can mount multiple retention charts at once; keep this read-only,
-	// cacheable endpoint tolerant of refreshes without tripping normal page use.
+	// tolerant of refreshes without tripping normal page use.
 	limit: {
 		type: 'bucket',
 		size: 60,
