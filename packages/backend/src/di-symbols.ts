@@ -54,6 +54,7 @@ export const DI = {
 	userNotePiningsRepository: Symbol('userNotePiningsRepository'),
 	userIpsRepository: Symbol('userIpsRepository'),
 	userFingerprintsRepository: Symbol('userFingerprintsRepository'),
+	noteArchivesRepository: Symbol('noteArchivesRepository'),
 	usedUsernamesRepository: Symbol('usedUsernamesRepository'),
 	followingsRepository: Symbol('followingsRepository'),
 	followRequestsRepository: Symbol('followRequestsRepository'),

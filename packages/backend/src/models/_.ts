@@ -76,6 +76,7 @@ import { MiUsedUsername } from '@/models/UsedUsername.js';
 import { MiUser } from '@/models/User.js';
 import { MiUserIp } from '@/models/UserIp.js';
 import { MiUserFingerprint } from '@/models/UserFingerprint.js';
+import { MiNoteArchive } from '@/models/NoteArchive.js';
 import { MiUserKeypair } from '@/models/UserKeypair.js';
 import { MiUserList } from '@/models/UserList.js';
 import { MiUserListFavorite } from '@/models/UserListFavorite.js';
@@ -215,6 +216,7 @@ export {
 	MiUser,
 	MiUserIp,
 	MiUserFingerprint,
+	MiNoteArchive,
 	MiUserKeypair,
 	MiUserList,
 	MiUserListFavorite,
@@ -307,6 +309,7 @@ export type UsedUsernamesRepository = Repository<MiUsedUsername> & MiRepository<
 export type UsersRepository = Repository<MiUser> & MiRepository<MiUser>;
 export type UserIpsRepository = Repository<MiUserIp> & MiRepository<MiUserIp>;
 export type UserFingerprintsRepository = Repository<MiUserFingerprint> & MiRepository<MiUserFingerprint>;
+export type NoteArchivesRepository = Repository<MiNoteArchive> & MiRepository<MiNoteArchive>;
 export type UserKeypairsRepository = Repository<MiUserKeypair> & MiRepository<MiUserKeypair>;
 export type UserListsRepository = Repository<MiUserList> & MiRepository<MiUserList>;
 export type UserListFavoritesRepository = Repository<MiUserListFavorite> & MiRepository<MiUserListFavorite>;

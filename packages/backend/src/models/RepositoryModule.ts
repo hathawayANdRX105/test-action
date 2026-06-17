@@ -43,6 +43,7 @@ import {
 	MiModerationLog,
 	MiMuting,
 	MiNote,
+	MiNoteArchive,
 	MiNoteFavorite,
 	MiNoteReaction,
 	MiNoteSchedule,
@@ -634,6 +635,12 @@ const $noteScheduleRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $noteArchivesRepository: Provider = {
+	provide: DI.noteArchivesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiNoteArchive).extend(miRepository as MiRepository<MiNoteArchive>),
+	inject: [DI.db],
+};
+
 export const repositoryProviders: Provider[] = [
 	[
 		$usersRepository,
@@ -725,5 +732,6 @@ export const repositoryProviders: Provider[] = [
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 		$noteScheduleRepository,
+		$noteArchivesRepository,
 	],
 ].flat();

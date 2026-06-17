@@ -165,6 +165,8 @@ export const paramDef = {
 		enableAchievements: { type: 'boolean' },
 		chatRoomDefaultMemberLimit: { type: 'integer', minimum: MIN_CHAT_ROOM_MEMBER_LIMIT, maximum: MAX_CHAT_ROOM_MEMBER_LIMIT },
 		chatEmergencyMode: { type: 'boolean' },
+		notesHideEmergencyMode: { type: 'boolean' },
+		notesPostingFrozen: { type: 'boolean' },
 		chatMessageRetentionDays: { type: 'integer', minimum: 0, maximum: 3650 },
 		chatBannedKeywords: { type: 'array', items: { type: 'string' } },
 		enableAi: { type: 'boolean' },
@@ -728,6 +730,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.chatEmergencyMode !== undefined) {
 				set.chatEmergencyMode = ps.chatEmergencyMode;
+			}
+
+			if (ps.notesHideEmergencyMode !== undefined) {
+				set.notesHideEmergencyMode = ps.notesHideEmergencyMode;
+			}
+
+			if (ps.notesPostingFrozen !== undefined) {
+				set.notesPostingFrozen = ps.notesPostingFrozen;
 			}
 
 			if (ps.chatMessageRetentionDays !== undefined) {

@@ -1007,6 +1007,90 @@ export interface Locale extends ILocale {
      */
     "clearCachedFiles": string;
     /**
+     * すべて選択
+     */
+    "selectAll": string;
+    /**
+     * 選択を解除
+     */
+    "deselectAll": string;
+    /**
+     * 一括選択
+     */
+    "driveSelectMode": string;
+    /**
+     * {n}件選択中
+     */
+    "driveSelectedCount": ParameterizedString<"n">;
+    /**
+     * 選択した{n}件を削除しますか？元に戻せません。
+     */
+    "driveDeleteSelectedConfirm": ParameterizedString<"n">;
+    /**
+     * ドライブ管理
+     */
+    "driveManageTitle": string;
+    /**
+     * ロール未設定ユーザーのデフォルトドライブ容量と1ファイルあたりのアップロード上限を設定し、リモートファイルキャッシュを削除できます。
+     */
+    "driveManageCaption": string;
+    /**
+     * ロール未設定ユーザーのデフォルトドライブ容量。新規アップロードに適用されます。
+     */
+    "driveDefaultCapacityCaption": string;
+    /**
+     * リモートファイルのキャッシュをすべて削除しますか？必要時に再取得されます。
+     */
+    "driveCleanRemoteConfirm": string;
+    /**
+     * ユーザー個別の上限
+     */
+    "drivePerUserTitle": string;
+    /**
+     * 特定のユーザーにより大きなドライブ容量を付与し、ファイルの閲覧・整理ができます。
+     */
+    "drivePerUserCaption": string;
+    /**
+     * 実効容量
+     */
+    "driveEffectiveCapacity": string;
+    /**
+     * ユーザー個別の容量上限
+     */
+    "driveUserOverride": string;
+    /**
+     * 空欄=解除（ロール/デフォルトに従う）。実効容量はロール値とこの値の大きい方になります。
+     */
+    "driveUserOverrideCaption": string;
+    /**
+     * このユーザーのファイルを見る
+     */
+    "driveViewUserFiles": string;
+    /**
+     * キーワードミュート記録
+     */
+    "chatMuteLog": string;
+    /**
+     * クリア
+     */
+    "chatClearMuteLog": string;
+    /**
+     * このルームのキーワードミュート記録をすべて消去しますか？
+     */
+    "chatMuteLogClearConfirm": string;
+    /**
+     * ミュート中
+     */
+    "chatStillMuted": string;
+    /**
+     * キーワード「{keyword}」に一致
+     */
+    "chatMutedByKeyword": ParameterizedString<"keyword">;
+    /**
+     * キーワードミュート記録はありません
+     */
+    "chatNoMuteLog": string;
+    /**
      * キャッシュされたリモートファイルをすべて削除しますか？
      */
     "clearCachedFilesConfirm": string;
@@ -5507,6 +5591,208 @@ export interface Locale extends ILocale {
      * {min} から {max} までの整数を入力してください。
      */
     "inputRangeError": ParameterizedString<"min" | "max">;
+    "_noteManagement": {
+        /**
+         * 投稿管理
+         */
+        "title": string;
+        /**
+         * 緊急対応
+         */
+        "emergency": string;
+        /**
+         * 緊急スイッチや復元・消去・凍結などの操作は管理者のみ。モデレーターは投稿の閲覧と削除が可能です。
+         */
+        "adminOnly": string;
+        /**
+         * 全投稿を非表示（読み取りブラックアウト）
+         */
+        "hideEmergencyMode": string;
+        /**
+         * オンにすると、管理者・モデレーター以外はすべてのタイムライン・プロフィール・個別投稿で投稿が一切見えなくなります。投稿はDBに残り、オフで復帰します。
+         */
+        "hideEmergencyModeCaption": string;
+        /**
+         * 全投稿の非表示が有効：現在、非モデレーターには投稿が見えません。
+         */
+        "hideEmergencyModeActive": string;
+        /**
+         * 全体の投稿を凍結
+         */
+        "postingFrozen": string;
+        /**
+         * オンにすると、管理者・モデレーター以外は投稿・返信・リノートができません。
+         */
+        "postingFrozenCaption": string;
+        /**
+         * 投稿が凍結中：現在、非モデレーターは投稿できません。
+         */
+        "postingFrozenActive": string;
+        /**
+         * すべての投稿
+         */
+        "allNotes": string;
+        /**
+         * 本文を検索
+         */
+        "searchText": string;
+        /**
+         * ユーザー名
+         */
+        "username": string;
+        /**
+         * 並び替え
+         */
+        "sort": string;
+        /**
+         * 時間（新→旧）
+         */
+        "newestFirst": string;
+        /**
+         * 時間（旧→新）
+         */
+        "oldestFirst": string;
+        /**
+         * フィンガープリント
+         */
+        "fingerprint": string;
+        /**
+         * 開始日
+         */
+        "since": string;
+        /**
+         * 終了日
+         */
+        "until": string;
+        /**
+         * 添付ありのみ
+         */
+        "withFiles": string;
+        /**
+         * 返信のみ
+         */
+        "repliesOnly": string;
+        /**
+         * リノートのみ
+         */
+        "renotesOnly": string;
+        /**
+         * 通報されたユーザーのみ
+         */
+        "reportedOnly": string;
+        /**
+         * {n} 件選択中
+         */
+        "selectedCount": ParameterizedString<"n">;
+        /**
+         * 一括削除
+         */
+        "bulkDelete": string;
+        /**
+         * 選択した {n} 件の投稿を削除します。理由を入力できます（アーカイブされ復元可能）。
+         */
+        "bulkDeleteConfirm": ParameterizedString<"n">;
+        /**
+         * 削除理由（任意）
+         */
+        "deleteReason": string;
+        /**
+         * 凍結済み
+         */
+        "suspended": string;
+        /**
+         * サイレンス済み
+         */
+        "silenced": string;
+        /**
+         * メール確認済み
+         */
+        "emailVerified": string;
+        /**
+         * メール未確認
+         */
+        "emailUnverified": string;
+        /**
+         * 投稿数
+         */
+        "notesCount": string;
+        /**
+         * ローカル投稿数
+         */
+        "localNotesCount": string;
+        /**
+         * フィンガープリント / IP 調査
+         */
+        "fingerprintInvestigation": string;
+        /**
+         * 条件
+         */
+        "lookupBy": string;
+        /**
+         * 値
+         */
+        "value": string;
+        /**
+         * 照会
+         */
+        "lookup": string;
+        /**
+         * {n} 件の関連アカウント
+         */
+        "relatedFound": ParameterizedString<"n">;
+        /**
+         * 選択を凍結して投稿削除
+         */
+        "banAndDelete": string;
+        /**
+         * 選択した {n} アカウントを凍結し、そのローカル投稿をすべて削除します（管理者・モデレーターは除外）。続行しますか？
+         */
+        "banConfirm": ParameterizedString<"n">;
+        /**
+         * {users} アカウントを凍結し、{notes} 件の投稿を削除しました。
+         */
+        "banDone": ParameterizedString<"users" | "notes">;
+        /**
+         * 削除アーカイブ
+         */
+        "deletedArchive": string;
+        /**
+         * 投稿日時
+         */
+        "noteCreatedAt": string;
+        /**
+         * 削除者
+         */
+        "deletedBy": string;
+        /**
+         * 理由
+         */
+        "reason": string;
+        /**
+         * 復元
+         */
+        "restore": string;
+        /**
+         * この投稿を再挿入します（ローカル復元のみ・再連合なし、投票/リアクションは復元されません）。復元しますか？
+         */
+        "restoreConfirm": string;
+        /**
+         * 完全消去
+         */
+        "purge": string;
+        /**
+         * このアーカイブ記録を完全に消去します。取り消せません。続行しますか？
+         */
+        "purgeConfirm": string;
+        /**
+         * アーカイブを全消去
+         */
+        "purgeAll": string;
+        /**
+         * すべての削除アーカイブ記録を完全に消去します。取り消せません。続行しますか？
+         */
+        "purgeAllConfirm": string;
+    };
     "_adminChatSettings": {
         /**
          * 管理者はすべての設定を管理できます。モデレーターは個別ルームの種類のみ管理でき、全体設定や人数上限は変更できません。読み取り専用のメッセージ表示では、ルーム参加や既読処理は行いません。

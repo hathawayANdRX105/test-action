@@ -15,6 +15,7 @@ import type { Config } from '@/config.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { NoteCreateService } from '@/core/NoteCreateService.js';
+import { NoteControlService } from '@/core/NoteControlService.js';
 import { DI } from '@/di-symbols.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
@@ -55,6 +56,12 @@ export const meta = {
 			message: 'No such renote target.',
 			code: 'NO_SUCH_RENOTE_TARGET',
 			id: 'b5c90186-4ab0-49c8-9bba-a1f76c282ba4',
+		},
+
+		postingFrozen: {
+			message: 'Posting is temporarily frozen by the administrator.',
+			code: 'POSTING_FROZEN',
+			id: 'a1d2b3c4-0001-4a1b-9c2d-0e1f2a3b4c5d',
 		},
 
 		cannotReRenote: {
@@ -263,10 +270,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private noteEntityService: NoteEntityService,
 		private noteCreateService: NoteCreateService,
+		private noteControlService: NoteControlService,
 		private readonly timeService: TimeService,
 		private readonly userService: UserService,
 	) {
 		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, ip, headers) => {
+			// 冻结全站发帖：除管理员/审核员外禁止发帖/回复/转发
+			if (await this.noteControlService.isPostingFrozenFor(me)) {
+				throw new ApiError(meta.errors.postingFrozen);
+			}
+
 			if (ps.text && ps.text.length > this.config.maxNoteLength) {
 				throw new ApiError(meta.errors.maxLength);
 			}

@@ -14,6 +14,7 @@ import type { Config } from '@/config.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { NoteEditService } from '@/core/NoteEditService.js';
+import { NoteControlService } from '@/core/NoteControlService.js';
 import { UserService } from '@/core/UserService.js';
 import { DI } from '@/di-symbols.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
@@ -144,6 +145,12 @@ export const meta = {
 			message: 'No such note.',
 			code: 'NO_SUCH_NOTE',
 			id: 'eef6c173-3010-4a23-8674-7c4fcaeba719',
+		},
+
+		postingFrozen: {
+			message: 'Posting is temporarily frozen by the administrator.',
+			code: 'POSTING_FROZEN',
+			id: 'a1d2b3c4-0002-4a1b-9c2d-0e1f2a3b4c5d',
 		},
 
 		youAreNotTheAuthor: {
@@ -313,10 +320,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private noteEntityService: NoteEntityService,
 		private noteEditService: NoteEditService,
+		private noteControlService: NoteControlService,
 		private readonly timeService: TimeService,
 		private readonly userService: UserService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			if (await this.noteControlService.isPostingFrozenFor(me)) {
+				throw new ApiError(meta.errors.postingFrozen);
+			}
+
 			if (ps.text && ps.text.length > this.config.maxNoteLength) {
 				throw new ApiError(meta.errors.maxLength);
 			}

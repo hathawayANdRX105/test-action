@@ -160,6 +160,8 @@ export const permissions = [
 	'read:admin:index-stats',
 	'read:admin:table-stats',
 	'read:admin:user-ips',
+	'read:admin:note',
+	'write:admin:note',
 	'read:admin:meta',
 	'write:admin:reset-password',
 	'write:admin:resolve-abuse-user-report',

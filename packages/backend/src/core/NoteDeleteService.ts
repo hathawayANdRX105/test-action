@@ -29,6 +29,7 @@ import { bindThis } from '@/decorators.js';
 import { IsOne } from '@/misc/is-one.js';
 import { SearchService } from '@/core/SearchService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { NoteArchiveService } from '@/core/NoteArchiveService.js';
 import { LatestNoteService } from '@/core/LatestNoteService.js';
 import { ApLogService } from '@/core/ApLogService.js';
 import { TimeService } from '@/global/TimeService.js';
@@ -62,6 +63,7 @@ export class NoteDeleteService {
 		private apDeliverManagerService: ApDeliverManagerService,
 		private searchService: SearchService,
 		private moderationLogService: ModerationLogService,
+		private noteArchiveService: NoteArchiveService,
 		private notesChart: NotesChart,
 		private perUserNotesChart: PerUserNotesChart,
 		private instanceChart: InstanceChart,
@@ -75,7 +77,7 @@ export class NoteDeleteService {
 	/**
 	 * 投稿を削除します。
 	 */
-	async delete(user: MiUser, note: MiNote, deleter?: MiUser, immediate = false): Promise<void> {
+	async delete(user: MiUser, note: MiNote, deleter?: MiUser, immediate = false, reason?: string | null): Promise<void> {
 		if (note.userId !== user.id) {
 			throw new Error(`Not deleting note ${note.id} because user ${user.id} is not the expected author ${note.userId}. This is likely a bug; please report this error to Sharkey team.`);
 		}
@@ -188,7 +190,7 @@ export class NoteDeleteService {
 				: this.latestNoteService.handleDeletedNoteDeferred(note));
 		}
 
-		// Write mod log
+		// Write mod log + 归档（仅管理/审核删除本地帖）
 		if (deleter && (user.id !== deleter.id)) {
 			promises.push(this.moderationLogService.log(deleter, 'deleteNote', {
 				noteId: note.id,
@@ -196,6 +198,7 @@ export class NoteDeleteService {
 				noteUserUsername: user.username,
 				noteUserHost: user.host,
 			}));
+			promises.push(this.noteArchiveService.archiveOnModerationDelete(note, user, deleter, reason));
 		}
 
 		// Delete AP logs

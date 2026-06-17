@@ -101,6 +101,10 @@ export const moderationLogTypes = [
 	'promoteQueue',
 	'deleteDriveFile',
 	'deleteNote',
+	'deleteNotesBulk',
+	'restoreNote',
+	'purgeNoteArchive',
+	'emergencyBanByFingerprint',
 	'createGlobalAnnouncement',
 	'createUserAnnouncement',
 	'updateGlobalAnnouncement',
@@ -252,6 +256,26 @@ export type ModerationLogPayloads = {
 		noteUserId: string;
 		noteUserUsername: string;
 		noteUserHost: string | null;
+	};
+	deleteNotesBulk: {
+		count: number;
+		noteIds: string[];
+		reason: string | null;
+		byFilter: boolean;
+	};
+	restoreNote: {
+		noteId: string;
+		userId: string;
+	};
+	purgeNoteArchive: {
+		count: number;
+	};
+	emergencyBanByFingerprint: {
+		ip: string | null;
+		fingerprint: string | null;
+		bannedUserIds: string[];
+		deletedNoteCount: number;
+		reason: string | null;
 	};
 	createGlobalAnnouncement: {
 		announcementId: string;

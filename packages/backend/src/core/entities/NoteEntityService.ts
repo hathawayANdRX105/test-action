@@ -21,6 +21,7 @@ import { DebounceLoader } from '@/misc/loader.js';
 import { QueryService } from '@/core/QueryService.js';
 import { TimeService } from '@/global/TimeService.js';
 import { RoleService } from '@/core/RoleService.js';
+import { NoteControlService } from '@/core/NoteControlService.js';
 import { NoteVisibilityService } from '@/core/NoteVisibilityService.js';
 import { IdService } from '@/core/IdService.js';
 import type { ReactionsBufferingService } from '@/core/ReactionsBufferingService.js';
@@ -117,6 +118,7 @@ export class NoteEntityService implements OnModuleInit {
 		private readonly timeService: TimeService,
 		private readonly roleService: RoleService,
 		private readonly idService: IdService,
+		private readonly noteControlService: NoteControlService,
 	) {
 	}
 
@@ -791,6 +793,9 @@ export class NoteEntityService implements OnModuleInit {
 		},
 	) {
 		if (notes.length === 0) return [];
+
+		// 帖子紧急隐藏（黑屏）：开启后除管理员/审核员外，所有列表/时间线一律返回空。
+		if (await this.noteControlService.isHiddenFor(me ?? null)) return [];
 
 		// Create session deduplicators
 		const noteFetcher = new Deduplicator(noteId => this.noteLoader.load(noteId));

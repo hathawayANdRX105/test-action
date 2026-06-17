@@ -239,6 +239,12 @@ type AdminCaptchaCurrentResponse = operations['admin___captcha___current']['resp
 type AdminCaptchaSaveRequest = operations['admin___captcha___save']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type AdminChatPurgeKeywordRequest = operations['admin___chat___purge-keyword']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminChatPurgeKeywordResponse = operations['admin___chat___purge-keyword']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminChatRoomsListRequest = operations['admin___chat___rooms___list']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -290,10 +296,22 @@ type AdminDriveFilesRequest = operations['admin___drive___files']['requestBody']
 type AdminDriveFilesResponse = operations['admin___drive___files']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminDriveSetUserCapacityRequest = operations['admin___drive___set-user-capacity']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminDriveSetUserCapacityResponse = operations['admin___drive___set-user-capacity']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminDriveShowFileRequest = operations['admin___drive___show-file']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AdminDriveShowFileResponse = operations['admin___drive___show-file']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminDriveUserCapacityRequest = operations['admin___drive___user-capacity']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminDriveUserCapacityResponse = operations['admin___drive___user-capacity']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminEmojiAddAliasesBulkRequest = operations['admin___emoji___add-aliases-bulk']['requestBody']['content']['application/json'];
@@ -402,6 +420,48 @@ type AdminInviteListResponse = operations['admin___invite___list']['responses'][
 
 // @public (undocumented)
 type AdminMetaResponse = operations['admin___meta']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesArchivedListRequest = operations['admin___notes___archived-list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesArchivedListResponse = operations['admin___notes___archived-list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesArchivePurgeRequest = operations['admin___notes___archive-purge']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesArchivePurgeResponse = operations['admin___notes___archive-purge']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesDeleteBulkRequest = operations['admin___notes___delete-bulk']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesDeleteBulkResponse = operations['admin___notes___delete-bulk']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesEmergencyBanRequest = operations['admin___notes___emergency-ban']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesEmergencyBanResponse = operations['admin___notes___emergency-ban']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesListRequest = operations['admin___notes___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesListResponse = operations['admin___notes___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesRelatedAccountsRequest = operations['admin___notes___related-accounts']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesRelatedAccountsResponse = operations['admin___notes___related-accounts']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesRestoreRequest = operations['admin___notes___restore']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesRestoreResponse = operations['admin___notes___restore']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminNsfwUserRequest = operations['admin___nsfw-user']['requestBody']['content']['application/json'];
@@ -1483,6 +1543,9 @@ type ChatRoomsBansListRequest = operations['chat___rooms___bans___list']['reques
 type ChatRoomsBansListResponse = operations['chat___rooms___bans___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type ChatRoomsClearMuteLogRequest = operations['chat___rooms___clear-mute-log']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
 type ChatRoomsCreateRequest = operations['chat___rooms___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -1553,6 +1616,12 @@ type ChatRoomsMembersRequest = operations['chat___rooms___members']['requestBody
 
 // @public (undocumented)
 type ChatRoomsMembersResponse = operations['chat___rooms___members']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type ChatRoomsMuteLogRequest = operations['chat___rooms___mute-log']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChatRoomsMuteLogResponse = operations['chat___rooms___mute-log']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type ChatRoomsMuteMemberRequest = operations['chat___rooms___mute-member']['requestBody']['content']['application/json'];
@@ -2223,6 +2292,8 @@ declare namespace entities {
         AdminAvatarDecorationsUpdateRequest,
         AdminCaptchaCurrentResponse,
         AdminCaptchaSaveRequest,
+        AdminChatPurgeKeywordRequest,
+        AdminChatPurgeKeywordResponse,
         AdminChatRoomsListRequest,
         AdminChatRoomsListResponse,
         AdminChatRoomsMessagesRequest,
@@ -2240,8 +2311,12 @@ declare namespace entities {
         AdminDriveCleanRemoteFilesRequest,
         AdminDriveFilesRequest,
         AdminDriveFilesResponse,
+        AdminDriveSetUserCapacityRequest,
+        AdminDriveSetUserCapacityResponse,
         AdminDriveShowFileRequest,
         AdminDriveShowFileResponse,
+        AdminDriveUserCapacityRequest,
+        AdminDriveUserCapacityResponse,
         AdminEmojiAddRequest,
         AdminEmojiAddResponse,
         AdminEmojiAddAliasesBulkRequest,
@@ -2278,6 +2353,20 @@ declare namespace entities {
         AdminInviteListRequest,
         AdminInviteListResponse,
         AdminMetaResponse,
+        AdminNotesArchivePurgeRequest,
+        AdminNotesArchivePurgeResponse,
+        AdminNotesArchivedListRequest,
+        AdminNotesArchivedListResponse,
+        AdminNotesDeleteBulkRequest,
+        AdminNotesDeleteBulkResponse,
+        AdminNotesEmergencyBanRequest,
+        AdminNotesEmergencyBanResponse,
+        AdminNotesListRequest,
+        AdminNotesListResponse,
+        AdminNotesRelatedAccountsRequest,
+        AdminNotesRelatedAccountsResponse,
+        AdminNotesRestoreRequest,
+        AdminNotesRestoreResponse,
         AdminNsfwUserRequest,
         AdminPromoCreateRequest,
         AdminQueueClearRequest,
@@ -2492,6 +2581,7 @@ declare namespace entities {
         ChatRoomsBansDeleteRequest,
         ChatRoomsBansListRequest,
         ChatRoomsBansListResponse,
+        ChatRoomsClearMuteLogRequest,
         ChatRoomsCreateRequest,
         ChatRoomsCreateResponse,
         ChatRoomsDeleteRequest,
@@ -2517,6 +2607,8 @@ declare namespace entities {
         ChatRoomsMembersRequest,
         ChatRoomsMembersResponse,
         ChatRoomsMuteRequest,
+        ChatRoomsMuteLogRequest,
+        ChatRoomsMuteLogResponse,
         ChatRoomsMuteMemberRequest,
         ChatRoomsOwnedRequest,
         ChatRoomsOwnedResponse,
@@ -3904,7 +3996,7 @@ type ModerationLog = {
 });
 
 // @public (undocumented)
-export const moderationLogTypes: readonly ["updateServerSettings", "suspend", "approve", "decline", "unsuspend", "updateUserNote", "addCustomEmoji", "updateCustomEmoji", "deleteCustomEmoji", "assignRole", "unassignRole", "createRole", "updateRole", "deleteRole", "clearQueue", "promoteQueue", "deleteDriveFile", "deleteNote", "createGlobalAnnouncement", "createUserAnnouncement", "updateGlobalAnnouncement", "updateUserAnnouncement", "deleteGlobalAnnouncement", "deleteUserAnnouncement", "resetPassword", "setMandatoryCW", "setMandatoryCWForNote", "setMandatoryCWForInstance", "suspendRemoteInstance", "unsuspendRemoteInstance", "rejectRemoteInstanceReports", "acceptRemoteInstanceReports", "updateRemoteInstanceNote", "markSensitiveDriveFile", "unmarkSensitiveDriveFile", "resolveAbuseReport", "forwardAbuseReport", "updateAbuseReportNote", "createInvitation", "createAd", "updateAd", "deleteAd", "createAvatarDecoration", "updateAvatarDecoration", "deleteAvatarDecoration", "unsetUserAvatar", "unsetUserBanner", "createSystemWebhook", "updateSystemWebhook", "deleteSystemWebhook", "createAbuseReportNotificationRecipient", "updateAbuseReportNotificationRecipient", "deleteAbuseReportNotificationRecipient", "deleteAccount", "deletePage", "deleteFlash", "deleteGalleryPost", "deleteChatRoom"];
+export const moderationLogTypes: readonly ["updateServerSettings", "suspend", "approve", "decline", "unsuspend", "updateUserNote", "addCustomEmoji", "updateCustomEmoji", "deleteCustomEmoji", "assignRole", "unassignRole", "createRole", "updateRole", "deleteRole", "clearQueue", "promoteQueue", "deleteDriveFile", "deleteNote", "deleteNotesBulk", "restoreNote", "purgeNoteArchive", "emergencyBanByFingerprint", "createGlobalAnnouncement", "createUserAnnouncement", "updateGlobalAnnouncement", "updateUserAnnouncement", "deleteGlobalAnnouncement", "deleteUserAnnouncement", "resetPassword", "setMandatoryCW", "setMandatoryCWForNote", "setMandatoryCWForInstance", "suspendRemoteInstance", "unsuspendRemoteInstance", "rejectRemoteInstanceReports", "acceptRemoteInstanceReports", "updateRemoteInstanceNote", "markSensitiveDriveFile", "unmarkSensitiveDriveFile", "resolveAbuseReport", "forwardAbuseReport", "updateAbuseReportNote", "createInvitation", "createAd", "updateAd", "deleteAd", "createAvatarDecoration", "updateAvatarDecoration", "deleteAvatarDecoration", "unsetUserAvatar", "unsetUserBanner", "createSystemWebhook", "updateSystemWebhook", "deleteSystemWebhook", "createAbuseReportNotificationRecipient", "updateAbuseReportNotificationRecipient", "deleteAbuseReportNotificationRecipient", "deleteAccount", "deletePage", "deleteFlash", "deleteGalleryPost", "deleteChatRoom"];
 
 // @public (undocumented)
 type MuteCreateRequest = operations['mute___create']['requestBody']['content']['application/json'];
@@ -4276,7 +4368,7 @@ type PartialRolePolicyOverride = Partial<{
 }>;
 
 // @public (undocumented)
-export const permissions: readonly ["read:profile", "read:account", "write:account", "read:blocks", "write:blocks", "read:drive", "write:drive", "read:favorites", "write:favorites", "read:following", "write:following", "read:messaging", "write:messaging", "read:mutes", "write:mutes", "write:notes", "read:notes-schedule", "write:notes-schedule", "read:notifications", "write:notifications", "read:reactions", "write:reactions", "write:votes", "read:pages", "write:pages", "write:page-likes", "read:page-likes", "read:user-groups", "write:user-groups", "read:channels", "write:channels", "read:gallery", "write:gallery", "read:gallery-likes", "write:gallery-likes", "read:flash", "write:flash", "read:flash-likes", "write:flash-likes", "read:admin:abuse-user-reports", "write:admin:delete-account", "write:admin:delete-all-files-of-a-user", "read:admin:index-stats", "read:admin:table-stats", "read:admin:user-ips", "read:admin:meta", "write:admin:reset-password", "write:admin:resolve-abuse-user-report", "read:admin:abuse-report:notification-recipient", "write:admin:abuse-report:notification-recipient", "write:admin:send-email", "read:admin:server-info", "read:admin:show-moderation-log", "read:admin:show-user", "write:admin:suspend-user", "write:admin:approve-user", "write:admin:decline-user", "write:admin:nsfw-user", "write:admin:unnsfw-user", "write:admin:cw-user", "write:admin:cw-note", "write:admin:cw-instance", "write:admin:silence-user", "write:admin:unsilence-user", "write:admin:unset-user-avatar", "write:admin:unset-user-banner", "write:admin:unsuspend-user", "write:admin:reject-quotes", "write:admin:restart-migration", "write:admin:meta", "read:admin:api", "write:admin:api", "write:admin:user-note", "write:admin:roles", "read:admin:roles", "write:admin:recommendation", "read:admin:recommendation", "write:admin:relays", "read:admin:relays", "write:admin:invite-codes", "read:admin:invite-codes", "write:admin:announcements", "read:admin:announcements", "write:admin:avatar-decorations", "read:admin:avatar-decorations", "write:admin:federation", "write:admin:account", "read:admin:account", "write:admin:emoji", "read:admin:emoji", "write:admin:queue", "read:admin:queue", "write:admin:promo", "write:admin:drive", "read:admin:drive", "write:admin:ad", "read:admin:ad", "write:invite-codes", "read:invite-codes", "write:clip-favorite", "read:clip-favorite", "read:federation", "write:report-abuse", "write:chat", "read:chat"];
+export const permissions: readonly ["read:profile", "read:account", "write:account", "read:blocks", "write:blocks", "read:drive", "write:drive", "read:favorites", "write:favorites", "read:following", "write:following", "read:messaging", "write:messaging", "read:mutes", "write:mutes", "write:notes", "read:notes-schedule", "write:notes-schedule", "read:notifications", "write:notifications", "read:reactions", "write:reactions", "write:votes", "read:pages", "write:pages", "write:page-likes", "read:page-likes", "read:user-groups", "write:user-groups", "read:channels", "write:channels", "read:gallery", "write:gallery", "read:gallery-likes", "write:gallery-likes", "read:flash", "write:flash", "read:flash-likes", "write:flash-likes", "read:admin:abuse-user-reports", "write:admin:delete-account", "write:admin:delete-all-files-of-a-user", "read:admin:index-stats", "read:admin:table-stats", "read:admin:user-ips", "read:admin:note", "write:admin:note", "read:admin:meta", "write:admin:reset-password", "write:admin:resolve-abuse-user-report", "read:admin:abuse-report:notification-recipient", "write:admin:abuse-report:notification-recipient", "write:admin:send-email", "read:admin:server-info", "read:admin:show-moderation-log", "read:admin:show-user", "write:admin:suspend-user", "write:admin:approve-user", "write:admin:decline-user", "write:admin:nsfw-user", "write:admin:unnsfw-user", "write:admin:cw-user", "write:admin:cw-note", "write:admin:cw-instance", "write:admin:silence-user", "write:admin:unsilence-user", "write:admin:unset-user-avatar", "write:admin:unset-user-banner", "write:admin:unsuspend-user", "write:admin:reject-quotes", "write:admin:restart-migration", "write:admin:meta", "read:admin:api", "write:admin:api", "write:admin:user-note", "write:admin:roles", "read:admin:roles", "write:admin:recommendation", "read:admin:recommendation", "write:admin:relays", "read:admin:relays", "write:admin:invite-codes", "read:admin:invite-codes", "write:admin:announcements", "read:admin:announcements", "write:admin:avatar-decorations", "read:admin:avatar-decorations", "write:admin:federation", "write:admin:account", "read:admin:account", "write:admin:emoji", "read:admin:emoji", "write:admin:queue", "read:admin:queue", "write:admin:promo", "write:admin:drive", "read:admin:drive", "write:admin:ad", "read:admin:ad", "write:invite-codes", "read:invite-codes", "write:clip-favorite", "read:clip-favorite", "read:federation", "write:report-abuse", "write:chat", "read:chat"];
 
 // @public (undocumented)
 type PingResponse = operations['ping']['responses']['200']['content']['application/json'];

@@ -132,6 +132,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		to: '/admin/drive',
 		active: currentPage.value?.route.name === 'drive',
 	}, {
+		icon: 'ti ti-notes',
+		text: i18n.ts._noteManagement.title,
+		to: '/admin/notes',
+		active: currentPage.value?.route.name === 'notes',
+	}, {
 		icon: 'ti ti-user-plus',
 		text: i18n.ts.invite,
 		to: '/admin/invites',

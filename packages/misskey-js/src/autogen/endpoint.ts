@@ -67,6 +67,8 @@ import type {
 	AdminAvatarDecorationsUpdateRequest,
 	AdminCaptchaCurrentResponse,
 	AdminCaptchaSaveRequest,
+	AdminChatPurgeKeywordRequest,
+	AdminChatPurgeKeywordResponse,
 	AdminChatRoomsListRequest,
 	AdminChatRoomsListResponse,
 	AdminChatRoomsMessagesRequest,
@@ -84,8 +86,12 @@ import type {
 	AdminDriveCleanRemoteFilesRequest,
 	AdminDriveFilesRequest,
 	AdminDriveFilesResponse,
+	AdminDriveSetUserCapacityRequest,
+	AdminDriveSetUserCapacityResponse,
 	AdminDriveShowFileRequest,
 	AdminDriveShowFileResponse,
+	AdminDriveUserCapacityRequest,
+	AdminDriveUserCapacityResponse,
 	AdminEmojiAddRequest,
 	AdminEmojiAddResponse,
 	AdminEmojiAddAliasesBulkRequest,
@@ -122,6 +128,20 @@ import type {
 	AdminInviteListRequest,
 	AdminInviteListResponse,
 	AdminMetaResponse,
+	AdminNotesArchivePurgeRequest,
+	AdminNotesArchivePurgeResponse,
+	AdminNotesArchivedListRequest,
+	AdminNotesArchivedListResponse,
+	AdminNotesDeleteBulkRequest,
+	AdminNotesDeleteBulkResponse,
+	AdminNotesEmergencyBanRequest,
+	AdminNotesEmergencyBanResponse,
+	AdminNotesListRequest,
+	AdminNotesListResponse,
+	AdminNotesRelatedAccountsRequest,
+	AdminNotesRelatedAccountsResponse,
+	AdminNotesRestoreRequest,
+	AdminNotesRestoreResponse,
 	AdminNsfwUserRequest,
 	AdminPromoCreateRequest,
 	AdminQueueClearRequest,
@@ -336,6 +356,7 @@ import type {
 	ChatRoomsBansDeleteRequest,
 	ChatRoomsBansListRequest,
 	ChatRoomsBansListResponse,
+	ChatRoomsClearMuteLogRequest,
 	ChatRoomsCreateRequest,
 	ChatRoomsCreateResponse,
 	ChatRoomsDeleteRequest,
@@ -361,6 +382,8 @@ import type {
 	ChatRoomsMembersRequest,
 	ChatRoomsMembersResponse,
 	ChatRoomsMuteRequest,
+	ChatRoomsMuteLogRequest,
+	ChatRoomsMuteLogResponse,
 	ChatRoomsMuteMemberRequest,
 	ChatRoomsOwnedRequest,
 	ChatRoomsOwnedResponse,
@@ -842,6 +865,7 @@ export type Endpoints = {
 	'admin/avatar-decorations/update': { req: AdminAvatarDecorationsUpdateRequest; res: EmptyResponse };
 	'admin/captcha/current': { req: EmptyRequest; res: AdminCaptchaCurrentResponse };
 	'admin/captcha/save': { req: AdminCaptchaSaveRequest; res: EmptyResponse };
+	'admin/chat/purge-keyword': { req: AdminChatPurgeKeywordRequest; res: AdminChatPurgeKeywordResponse };
 	'admin/chat/rooms/list': { req: AdminChatRoomsListRequest; res: AdminChatRoomsListResponse };
 	'admin/chat/rooms/messages': { req: AdminChatRoomsMessagesRequest; res: AdminChatRoomsMessagesResponse };
 	'admin/chat/rooms/show': { req: AdminChatRoomsShowRequest; res: AdminChatRoomsShowResponse };
@@ -855,7 +879,9 @@ export type Endpoints = {
 	'admin/drive/clean-remote-files': { req: AdminDriveCleanRemoteFilesRequest; res: EmptyResponse };
 	'admin/drive/cleanup': { req: EmptyRequest; res: EmptyResponse };
 	'admin/drive/files': { req: AdminDriveFilesRequest; res: AdminDriveFilesResponse };
+	'admin/drive/set-user-capacity': { req: AdminDriveSetUserCapacityRequest; res: AdminDriveSetUserCapacityResponse };
 	'admin/drive/show-file': { req: AdminDriveShowFileRequest; res: AdminDriveShowFileResponse };
+	'admin/drive/user-capacity': { req: AdminDriveUserCapacityRequest; res: AdminDriveUserCapacityResponse };
 	'admin/emoji/add': { req: AdminEmojiAddRequest; res: AdminEmojiAddResponse };
 	'admin/emoji/add-aliases-bulk': { req: AdminEmojiAddAliasesBulkRequest; res: EmptyResponse };
 	'admin/emoji/copy': { req: AdminEmojiCopyRequest; res: AdminEmojiCopyResponse };
@@ -883,6 +909,13 @@ export type Endpoints = {
 	'admin/invite/create': { req: AdminInviteCreateRequest; res: AdminInviteCreateResponse };
 	'admin/invite/list': { req: AdminInviteListRequest; res: AdminInviteListResponse };
 	'admin/meta': { req: EmptyRequest; res: AdminMetaResponse };
+	'admin/notes/archive-purge': { req: AdminNotesArchivePurgeRequest; res: AdminNotesArchivePurgeResponse };
+	'admin/notes/archived-list': { req: AdminNotesArchivedListRequest; res: AdminNotesArchivedListResponse };
+	'admin/notes/delete-bulk': { req: AdminNotesDeleteBulkRequest; res: AdminNotesDeleteBulkResponse };
+	'admin/notes/emergency-ban': { req: AdminNotesEmergencyBanRequest; res: AdminNotesEmergencyBanResponse };
+	'admin/notes/list': { req: AdminNotesListRequest; res: AdminNotesListResponse };
+	'admin/notes/related-accounts': { req: AdminNotesRelatedAccountsRequest; res: AdminNotesRelatedAccountsResponse };
+	'admin/notes/restore': { req: AdminNotesRestoreRequest; res: AdminNotesRestoreResponse };
 	'admin/nsfw-user': { req: AdminNsfwUserRequest; res: EmptyResponse };
 	'admin/promo/create': { req: AdminPromoCreateRequest; res: EmptyResponse };
 	'admin/queue/clear': { req: AdminQueueClearRequest; res: EmptyResponse };
@@ -1028,6 +1061,7 @@ export type Endpoints = {
 	'chat/messages/user-timeline': { req: ChatMessagesUserTimelineRequest; res: ChatMessagesUserTimelineResponse };
 	'chat/rooms/bans/delete': { req: ChatRoomsBansDeleteRequest; res: EmptyResponse };
 	'chat/rooms/bans/list': { req: ChatRoomsBansListRequest; res: ChatRoomsBansListResponse };
+	'chat/rooms/clear-mute-log': { req: ChatRoomsClearMuteLogRequest; res: EmptyResponse };
 	'chat/rooms/create': { req: ChatRoomsCreateRequest; res: ChatRoomsCreateResponse };
 	'chat/rooms/delete': { req: ChatRoomsDeleteRequest; res: EmptyResponse };
 	'chat/rooms/invitations/create': { req: ChatRoomsInvitationsCreateRequest; res: ChatRoomsInvitationsCreateResponse };
@@ -1044,6 +1078,7 @@ export type Endpoints = {
 	'chat/rooms/manage/update': { req: ChatRoomsManageUpdateRequest; res: ChatRoomsManageUpdateResponse };
 	'chat/rooms/members': { req: ChatRoomsMembersRequest; res: ChatRoomsMembersResponse };
 	'chat/rooms/mute': { req: ChatRoomsMuteRequest; res: EmptyResponse };
+	'chat/rooms/mute-log': { req: ChatRoomsMuteLogRequest; res: ChatRoomsMuteLogResponse };
 	'chat/rooms/mute-member': { req: ChatRoomsMuteMemberRequest; res: EmptyResponse };
 	'chat/rooms/owned': { req: ChatRoomsOwnedRequest; res: ChatRoomsOwnedResponse };
 	'chat/rooms/show': { req: ChatRoomsShowRequest; res: ChatRoomsShowResponse };

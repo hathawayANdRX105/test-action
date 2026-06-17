@@ -693,6 +693,18 @@ export class MiMeta {
 	})
 	public chatEmergencyMode: boolean;
 
+	// 帖子紧急隐藏（黑屏）：开启后除管理员/审核员外，任何人在所有时间线/单帖处都看不到任何帖子。
+	@Column('boolean', {
+		default: false,
+	})
+	public notesHideEmergencyMode: boolean;
+
+	// 冻结全站发帖：开启后除管理员/审核员外，任何人不能发帖/回复/转发。
+	@Column('boolean', {
+		default: false,
+	})
+	public notesPostingFrozen: boolean;
+
 	// 统一聊天保持期（天）。>0 时，早于该时长的聊天消息不可查看并会被自动清理。0=不限制。
 	@Column('integer', {
 		default: 0,

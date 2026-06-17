@@ -428,6 +428,14 @@ export const meta = {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
+			notesHideEmergencyMode: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			notesPostingFrozen: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
 			chatMessageRetentionDays: {
 				type: 'integer',
 				optional: false, nullable: false,
@@ -842,6 +850,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				enableAchievements: instance.enableAchievements,
 				chatRoomDefaultMemberLimit: instance.chatRoomDefaultMemberLimit,
 				chatEmergencyMode: instance.chatEmergencyMode,
+				notesHideEmergencyMode: instance.notesHideEmergencyMode,
+				notesPostingFrozen: instance.notesPostingFrozen,
 				chatMessageRetentionDays: instance.chatMessageRetentionDays,
 				chatBannedKeywords: instance.chatBannedKeywords,
 				enableAi: instance.enableAi,

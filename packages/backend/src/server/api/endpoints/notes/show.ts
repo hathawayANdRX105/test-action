@@ -10,6 +10,7 @@ import { DI } from '@/di-symbols.js';
 import type { NotesRepository } from '@/models/_.js';
 import { QueryService } from '@/core/QueryService.js';
 import { UserService } from '@/core/UserService.js';
+import { NoteControlService } from '@/core/NoteControlService.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -61,8 +62,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private noteEntityService: NoteEntityService,
 		private queryService: QueryService,
 		private readonly userService: UserService,
+		private readonly noteControlService: NoteControlService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			// 帖子紧急隐藏：除管理员/审核员外，单帖也不可见
+			if (await this.noteControlService.isHiddenFor(me ?? null)) {
+				throw new ApiError(meta.errors.noSuchNote);
+			}
+
 			const query = await this.notesRepository.createQueryBuilder('note')
 				.where('note.id = :noteId', { noteId: ps.noteId })
 				.innerJoinAndSelect('note.user', 'user');
