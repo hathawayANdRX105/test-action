@@ -140,6 +140,8 @@ import type {
 	AdminNotesListResponse,
 	AdminNotesRelatedAccountsRequest,
 	AdminNotesRelatedAccountsResponse,
+	AdminNotesRemoteDeleteByHostRequest,
+	AdminNotesRemoteDeleteByHostResponse,
 	AdminNotesRestoreRequest,
 	AdminNotesRestoreResponse,
 	AdminNsfwUserRequest,
@@ -228,6 +230,8 @@ import type {
 	AdminUpdateProxyAccountRequest,
 	AdminUpdateProxyAccountResponse,
 	AdminUpdateUserNoteRequest,
+	AdminUrlPreviewProxyTestRequest,
+	AdminUrlPreviewProxyTestResponse,
 	AdminUsersSearchRequest,
 	AdminUsersSearchResponse,
 	AiChatRequest,
@@ -787,6 +791,8 @@ import type {
 	UsersListsUpdateRequest,
 	UsersListsUpdateResponse,
 	UsersListsUpdateMembershipRequest,
+	UsersNoteChannelsRequest,
+	UsersNoteChannelsResponse,
 	UsersNotesRequest,
 	UsersNotesResponse,
 	UsersPagesRequest,
@@ -915,6 +921,7 @@ export type Endpoints = {
 	'admin/notes/emergency-ban': { req: AdminNotesEmergencyBanRequest; res: AdminNotesEmergencyBanResponse };
 	'admin/notes/list': { req: AdminNotesListRequest; res: AdminNotesListResponse };
 	'admin/notes/related-accounts': { req: AdminNotesRelatedAccountsRequest; res: AdminNotesRelatedAccountsResponse };
+	'admin/notes/remote/delete-by-host': { req: AdminNotesRemoteDeleteByHostRequest; res: AdminNotesRemoteDeleteByHostResponse };
 	'admin/notes/restore': { req: AdminNotesRestoreRequest; res: AdminNotesRestoreResponse };
 	'admin/nsfw-user': { req: AdminNsfwUserRequest; res: EmptyResponse };
 	'admin/promo/create': { req: AdminPromoCreateRequest; res: EmptyResponse };
@@ -978,6 +985,7 @@ export type Endpoints = {
 	'admin/update-meta': { req: AdminUpdateMetaRequest; res: EmptyResponse };
 	'admin/update-proxy-account': { req: AdminUpdateProxyAccountRequest; res: AdminUpdateProxyAccountResponse };
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
+	'admin/url-preview/proxy/test': { req: AdminUrlPreviewProxyTestRequest; res: AdminUrlPreviewProxyTestResponse };
 	'admin/users-search': { req: AdminUsersSearchRequest; res: AdminUsersSearchResponse };
 	'ai/chat': { req: AiChatRequest; res: EmptyResponse };
 	'ai/conversations/create': { req: AiConversationsCreateRequest; res: EmptyResponse };
@@ -1345,6 +1353,7 @@ export type Endpoints = {
 	'users/lists/unfavorite': { req: UsersListsUnfavoriteRequest; res: EmptyResponse };
 	'users/lists/update': { req: UsersListsUpdateRequest; res: UsersListsUpdateResponse };
 	'users/lists/update-membership': { req: UsersListsUpdateMembershipRequest; res: EmptyResponse };
+	'users/note-channels': { req: UsersNoteChannelsRequest; res: UsersNoteChannelsResponse };
 	'users/notes': { req: UsersNotesRequest; res: UsersNotesResponse };
 	'users/pages': { req: UsersPagesRequest; res: UsersPagesResponse };
 	'users/reactions': { req: UsersReactionsRequest; res: UsersReactionsResponse };

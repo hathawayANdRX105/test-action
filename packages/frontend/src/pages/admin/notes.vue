@@ -131,6 +131,106 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
+			<!-- 联合远程帖子 -->
+			<MkFolder :defaultOpen="false">
+				<template #icon><i class="ti ti-world"></i></template>
+				<template #label>{{ i18n.ts._noteManagement.remoteSection }}</template>
+
+				<div class="_gaps_m">
+					<MkInfo>{{ i18n.ts._noteManagement.remoteCaption }}</MkInfo>
+
+					<div :class="$style.filters">
+						<MkInput v-model="fr.search" type="search" debounce :class="$style.grow" @update:modelValue="reloadRemote">
+							<template #prefix><i class="ti ti-search"></i></template>
+							<template #label>{{ i18n.ts._noteManagement.combinedSearch }}</template>
+							<template #caption>{{ i18n.ts._noteManagement.remoteSearchCaption }}</template>
+						</MkInput>
+						<MkInput v-model="fr.host" :class="$style.filterItem" @update:modelValue="reloadRemote">
+							<template #label>{{ i18n.ts._noteManagement.host }}</template>
+							<template #caption>{{ i18n.ts._noteManagement.hostCaption }}</template>
+						</MkInput>
+						<MkSelect v-model="fr.sort" :class="$style.filterItem" @update:modelValue="reloadRemote">
+							<template #label>{{ i18n.ts._noteManagement.sort }}</template>
+							<option value="+createdAt">{{ i18n.ts._noteManagement.newestFirst }}</option>
+							<option value="-createdAt">{{ i18n.ts._noteManagement.oldestFirst }}</option>
+						</MkSelect>
+						<MkButton rounded @click="reloadRemote"><i class="ti ti-refresh"></i> {{ i18n.ts.reload }}</MkButton>
+					</div>
+
+					<MkFolder :defaultOpen="false">
+						<template #icon><i class="ti ti-filter"></i></template>
+						<template #label>{{ i18n.ts._noteManagement.advancedFilters }}</template>
+						<div class="_gaps_s">
+							<div :class="$style.filters">
+								<MkInput v-model="fr.query" :class="$style.filterItem"><template #label>{{ i18n.ts._noteManagement.searchText }}</template></MkInput>
+								<MkInput v-model="fr.username" :class="$style.filterItem"><template #label>{{ i18n.ts._noteManagement.username }}</template></MkInput>
+								<MkSelect v-model="fr.visibility" :class="$style.filterItem">
+									<template #label>{{ i18n.ts.visibility }}</template>
+									<option value="all">{{ i18n.ts.all }}</option>
+									<option value="public">public</option>
+									<option value="home">home</option>
+									<option value="followers">followers</option>
+									<option value="specified">specified</option>
+								</MkSelect>
+							</div>
+							<div :class="$style.filters">
+								<MkInput v-model="fr.sinceDate" type="date" :class="$style.filterItem"><template #label>{{ i18n.ts._noteManagement.since }}</template></MkInput>
+								<MkInput v-model="fr.untilDate" type="date" :class="$style.filterItem"><template #label>{{ i18n.ts._noteManagement.until }}</template></MkInput>
+							</div>
+							<div :class="$style.switches">
+								<MkSwitch v-model="fr.withFiles">{{ i18n.ts._noteManagement.withFiles }}</MkSwitch>
+								<MkSwitch v-model="fr.repliesOnly">{{ i18n.ts._noteManagement.repliesOnly }}</MkSwitch>
+								<MkSwitch v-model="fr.renotesOnly">{{ i18n.ts._noteManagement.renotesOnly }}</MkSwitch>
+							</div>
+							<MkButton rounded primary @click="reloadRemote"><i class="ti ti-search"></i> {{ i18n.ts.search }}</MkButton>
+						</div>
+					</MkFolder>
+
+					<div :class="$style.bar">
+						<label :class="$style.selectAll"><input type="checkbox" :checked="allOnPageSelectedRemote" :disabled="itemsRemote.length === 0" @change="toggleSelectAllPageRemote"/> {{ i18n.ts._noteManagement.selectAllPage }}</label>
+						<span :class="$style.dim">{{ i18n.tsx._noteManagement.selectedCount({ n: selectedRemote.size }) }}</span>
+						<div :class="$style.spacer"></div>
+						<MkButton rounded danger :disabled="selectedRemote.size === 0" :wait="bulkDeletingRemote" @click="bulkDeleteRemote"><i class="ti ti-trash"></i> {{ i18n.ts._noteManagement.bulkDelete }}</MkButton>
+						<MkButton rounded danger :wait="deletingAllRemote" @click="deleteAllMatchingRemote"><i class="ti ti-trash-x"></i> {{ i18n.ts._noteManagement.deleteAllMatching }}</MkButton>
+						<MkButton rounded danger :disabled="!fr.host" :wait="purgingHost" @click="purgeByHost"><i class="ti ti-broom"></i> {{ i18n.ts._noteManagement.deleteByHost }}</MkButton>
+						<MkButton rounded :disabled="!fr.host || !iAmAdmin" :wait="blockingHost" @click="blockHost"><i class="ti ti-ban"></i> {{ i18n.ts._noteManagement.blockHost }}</MkButton>
+						<MkButton rounded :disabled="!fr.host || !iAmAdmin" :wait="silencingHost" @click="silenceHost"><i class="ti ti-volume-off"></i> {{ i18n.ts._noteManagement.silenceHost }}</MkButton>
+					</div>
+
+					<MkLoading v-if="remoteLoading"/>
+					<MkResult v-else-if="itemsRemote.length === 0" type="empty"/>
+					<div v-else class="_gaps_s">
+						<div v-for="item in itemsRemote" :key="item.note.id" :class="[$style.noteRow, { [$style.selectedRow]: selectedRemote.has(item.note.id) }]">
+							<input type="checkbox" :checked="selectedRemote.has(item.note.id)" :class="$style.check" @change="toggleSelectRemote(item.note.id)"/>
+							<div :class="$style.noteMain">
+								<div :class="$style.noteHead">
+									<MkA :to="`/admin/user/${item.note.user.id}`" :class="$style.author">@{{ item.note.user.username }}</MkA>
+									<MkA v-if="item.note.user.host" :to="`/admin/instance-info/${item.note.user.host}`" :class="[$style.badge, $style.hostBadge]" :title="i18n.ts._noteManagement.instanceBadgeTooltip">
+										<i class="ti ti-world"></i> {{ item.note.user.host }}
+									</MkA>
+									<span v-if="item.note.user.isSuspended" :class="[$style.badge, $style.bad]">{{ i18n.ts._noteManagement.suspended }}</span>
+									<span :class="$style.badge">{{ item.note.visibility }}</span>
+									<MkTime :time="item.note.createdAt" :class="$style.dim"/>
+								</div>
+								<div v-if="item.note.cw" :class="$style.cw">CW: {{ item.note.cw }}</div>
+								<Mfm v-if="item.note.text" :text="item.note.text" :author="item.note.user" :nyaize="'respect'" :class="$style.text"/>
+								<div v-if="item.note.files && item.note.files.length > 0" :class="$style.dim">📎 {{ item.note.files.length }}</div>
+								<div :class="$style.rowActions">
+									<MkA :to="`/notes/${item.note.id}`" :class="$style.linkBtn"><i class="ti ti-external-link"></i></MkA>
+									<a v-if="item.note.url" :href="item.note.url" target="_blank" rel="noopener" :class="$style.linkBtn"><i class="ti ti-arrow-up-right"></i> {{ i18n.ts._noteManagement.viewOnRemote }}</a>
+									<button class="_button" :class="$style.linkBtn" @click="deleteOneRemote(item.note.id)"><i class="ti ti-trash"></i> {{ i18n.ts.delete }}</button>
+								</div>
+							</div>
+						</div>
+						<div :class="$style.bar">
+							<MkButton rounded :disabled="remoteOffset === 0" @click="prevRemote"><i class="ti ti-chevron-left"></i></MkButton>
+							<div :class="$style.dim">{{ Math.floor(remoteOffset / NOTES_LIMIT) + 1 }}</div>
+							<MkButton rounded primary :disabled="!remoteCanMore" @click="nextRemote"><i class="ti ti-chevron-right"></i></MkButton>
+						</div>
+					</div>
+				</div>
+			</MkFolder>
+
 			<!-- 指纹排查 -->
 			<MkFolder :defaultOpen="false">
 				<template #icon><i class="ti ti-fingerprint"></i></template>
@@ -356,6 +456,169 @@ async function bulkDelete() {
 	}
 }
 
+// 联合(远程)帖子
+const fr = reactive({
+	search: '', host: '', query: '', username: '', visibility: 'all', sort: '+createdAt' as '+createdAt' | '-createdAt',
+	sinceDate: '', untilDate: '',
+	withFiles: false, repliesOnly: false, renotesOnly: false,
+});
+const itemsRemote = ref<{ note: Misskey.entities.Note; ip: string | null; fingerprint: string | null }[]>([]);
+const remoteLoading = ref(false);
+const remoteOffset = ref(0);
+const remoteCanMore = ref(false);
+const selectedRemote = reactive(new Set<string>());
+const bulkDeletingRemote = ref(false);
+const deletingAllRemote = ref(false);
+const purgingHost = ref(false);
+const blockingHost = ref(false);
+const silencingHost = ref(false);
+
+const allOnPageSelectedRemote = computed(() => itemsRemote.value.length > 0 && itemsRemote.value.every(i => selectedRemote.has(i.note.id)));
+
+function buildRemoteFilterParams() {
+	return {
+		scope: 'remote' as const,
+		host: fr.host.trim() || null,
+		search: fr.search.trim() || null,
+		query: fr.query.trim() || null,
+		username: fr.username.trim() || null,
+		visibility: fr.visibility,
+		withFiles: fr.withFiles,
+		repliesOnly: fr.repliesOnly,
+		renotesOnly: fr.renotesOnly,
+		sinceDate: fr.sinceDate || null,
+		untilDate: fr.untilDate || null,
+	};
+}
+
+async function loadRemote() {
+	remoteLoading.value = true;
+	try {
+		const res = await misskeyApi('admin/notes/list', { limit: NOTES_LIMIT, offset: remoteOffset.value, sort: fr.sort, ...buildRemoteFilterParams() } as any) as any;
+		itemsRemote.value = res.items;
+		remoteCanMore.value = res.items.length >= NOTES_LIMIT;
+	} finally {
+		remoteLoading.value = false;
+	}
+}
+
+async function reloadRemote() { remoteOffset.value = 0; selectedRemote.clear(); await loadRemote(); }
+async function nextRemote() { remoteOffset.value += NOTES_LIMIT; await loadRemote(); }
+async function prevRemote() { remoteOffset.value = Math.max(0, remoteOffset.value - NOTES_LIMIT); await loadRemote(); }
+
+function toggleSelectRemote(id: string) { if (selectedRemote.has(id)) selectedRemote.delete(id); else selectedRemote.add(id); }
+function toggleSelectAllPageRemote() {
+	if (allOnPageSelectedRemote.value) {
+		for (const i of itemsRemote.value) selectedRemote.delete(i.note.id);
+	} else {
+		for (const i of itemsRemote.value) selectedRemote.add(i.note.id);
+	}
+}
+
+async function deleteOneRemote(id: string) {
+	const { canceled, result: reason } = await os.inputText({ title: i18n.ts._noteManagement.deleteReason });
+	if (canceled) return;
+	await os.apiWithDialog('admin/notes/delete-bulk', { noteIds: [id], reason: reason || null });
+	await loadRemote();
+}
+
+async function bulkDeleteRemote() {
+	if (selectedRemote.size === 0) return;
+	const { canceled, result: reason } = await os.inputText({ title: i18n.tsx._noteManagement.bulkDeleteConfirm({ n: selectedRemote.size }) });
+	if (canceled) return;
+	bulkDeletingRemote.value = true;
+	try {
+		await os.apiWithDialog('admin/notes/delete-bulk', { noteIds: [...selectedRemote], reason: reason || null });
+		selectedRemote.clear();
+		await loadRemote();
+	} finally {
+		bulkDeletingRemote.value = false;
+	}
+}
+
+async function deleteAllMatchingRemote() {
+	const { canceled, result: reason } = await os.inputText({ title: i18n.ts._noteManagement.deleteAllMatchingRemoteConfirm });
+	if (canceled) return;
+	deletingAllRemote.value = true;
+	try {
+		const res = await os.apiWithDialog('admin/notes/delete-bulk', { filter: buildRemoteFilterParams(), reason: reason || null }) as any;
+		await os.alert({ type: 'success', text: i18n.tsx._noteManagement.deletedCount({ n: res.deletedCount }) });
+		selectedRemote.clear();
+		remoteOffset.value = 0;
+		await loadRemote();
+	} finally {
+		deletingAllRemote.value = false;
+	}
+}
+
+async function purgeByHost() {
+	const host = fr.host.trim();
+	if (!host) return;
+	const { canceled: c1, result: pick } = await os.select({
+		title: i18n.tsx._noteManagement.purgeHostScope({ host }),
+		items: [
+			{ value: 1, text: i18n.tsx._noteManagement.pastNDays({ n: 1 }) },
+			{ value: 3, text: i18n.tsx._noteManagement.pastNDays({ n: 3 }) },
+			{ value: 7, text: i18n.tsx._noteManagement.pastNDays({ n: 7 }) },
+			{ value: 30, text: i18n.tsx._noteManagement.pastNDays({ n: 30 }) },
+			{ value: 0, text: i18n.ts._noteManagement.allTime },
+		],
+		default: 7,
+	});
+	if (c1 || pick == null) return;
+	const sinceDays = pick as number;
+	const { canceled: c2, result: reason } = await os.inputText({ title: i18n.tsx._noteManagement.purgeHostConfirm({ host, n: sinceDays }) });
+	if (c2) return;
+	purgingHost.value = true;
+	try {
+		const res = await os.apiWithDialog('admin/notes/remote/delete-by-host', { host, sinceDays, reason: reason || null }) as any;
+		await os.alert({ type: 'success', text: i18n.tsx._noteManagement.deletedCount({ n: res.deletedCount }) });
+		await loadRemote();
+	} finally {
+		purgingHost.value = false;
+	}
+}
+
+async function blockHost() {
+	const host = fr.host.trim().toLowerCase();
+	if (!host || !iAmAdmin) return;
+	const { canceled } = await os.confirm({ type: 'warning', text: i18n.tsx._noteManagement.blockHostConfirm({ host }) });
+	if (canceled) return;
+	blockingHost.value = true;
+	try {
+		const meta = await misskeyApi('admin/meta') as any;
+		const current: string[] = Array.isArray(meta.blockedHosts) ? meta.blockedHosts : [];
+		if (current.includes(host)) {
+			await os.alert({ type: 'info', text: i18n.ts._noteManagement.hostAlreadyBlocked });
+			return;
+		}
+		await os.apiWithDialog('admin/update-meta', { blockedHosts: [...current, host] });
+		await os.alert({ type: 'success', text: i18n.tsx._noteManagement.hostBlocked({ host }) });
+	} finally {
+		blockingHost.value = false;
+	}
+}
+
+async function silenceHost() {
+	const host = fr.host.trim().toLowerCase();
+	if (!host || !iAmAdmin) return;
+	const { canceled } = await os.confirm({ type: 'warning', text: i18n.tsx._noteManagement.silenceHostConfirm({ host }) });
+	if (canceled) return;
+	silencingHost.value = true;
+	try {
+		const meta = await misskeyApi('admin/meta') as any;
+		const current: string[] = Array.isArray(meta.silencedHosts) ? meta.silencedHosts : [];
+		if (current.includes(host)) {
+			await os.alert({ type: 'info', text: i18n.ts._noteManagement.hostAlreadySilenced });
+			return;
+		}
+		await os.apiWithDialog('admin/update-meta', { silencedHosts: [...current, host] });
+		await os.alert({ type: 'success', text: i18n.tsx._noteManagement.hostSilenced({ host }) });
+	} finally {
+		silencingHost.value = false;
+	}
+}
+
 // 指纹排查
 const lookupType = ref<'ip' | 'fingerprint'>('ip');
 const lookupValue = ref('');
@@ -487,9 +750,11 @@ loadArchive();
 .rowActions { display: flex; gap: 8px; margin-top: 8px; }
 .linkBtn { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border: 1px solid var(--MI_THEME-divider); border-radius: 999px; }
 .acctRow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--MI_THEME-divider); border-radius: var(--MI-radius); }
-.badge { display: inline-flex; align-items: center; min-height: 20px; padding: 0 8px; border-radius: 999px; font-size: 78%; background: var(--MI_THEME-panelHighlight); white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; gap: 4px; min-height: 20px; padding: 0 8px; border-radius: 999px; font-size: 78%; background: var(--MI_THEME-panelHighlight); white-space: nowrap; }
 .ok { background: color(from var(--MI_THEME-success) srgb r g b / 0.18); color: var(--MI_THEME-success); }
 .warn { background: color(from var(--MI_THEME-warn) srgb r g b / 0.18); color: var(--MI_THEME-warn); }
 .bad { background: color(from var(--MI_THEME-error) srgb r g b / 0.18); color: var(--MI_THEME-error); }
 .dimBadge { color: var(--MI_THEME-fgTransparentWeak); }
+.hostBadge { background: color(from var(--MI_THEME-accent) srgb r g b / 0.18); color: var(--MI_THEME-accent); font-weight: 700; }
+.hostBadge:hover { background: color(from var(--MI_THEME-accent) srgb r g b / 0.3); }
 </style>

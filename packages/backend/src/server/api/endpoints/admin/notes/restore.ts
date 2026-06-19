@@ -90,7 +90,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				id: archive.noteId,
 				updatedAt: null,
 				userId: archive.userId,
-				userHost: null,
+				// 远程帖恢复时保留原 host(归档时已存入);本地帖 archive.userHost 本来就是 null
+				userHost: archive.userHost,
 				text: archive.text,
 				cw: archive.cw,
 				name: raw.name ?? null,
@@ -123,7 +124,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 
 			await this.notesRepository.insert(note);
-			await this.usersRepository.increment({ id: archive.userId }, 'notesCount', 1);
+			// notesCount 是本地用户的字段;远程作者不在本站,跳过自增
+			if (archive.userHost == null) {
+				await this.usersRepository.increment({ id: archive.userId }, 'notesCount', 1);
+			}
 			await this.searchService.indexNote(note).catch(() => { /* best-effort */ });
 			await this.noteArchivesRepository.delete({ id: archive.id });
 

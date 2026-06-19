@@ -23,11 +23,10 @@ export class NoteArchiveService {
 		private readonly timeService: TimeService,
 	) {}
 
-	// 管理/审核删除本地帖时快照归档。失败不应阻断删除主流程。
+	// 管理/审核删除帖子时快照归档(本地或远程)。失败不应阻断删除主流程。
+	// 远程帖归档:userHost 非空,ip/fingerprint 本就为 null。便于事后查看与本地复原。
 	@bindThis
 	public async archiveOnModerationDelete(note: MiNote, author: MiUser, deleter: MiUser, reason?: string | null): Promise<void> {
-		if (note.userHost != null) return; // 仅本地帖
-
 		try {
 			await this.noteArchivesRepository.insert({
 				noteId: note.id,

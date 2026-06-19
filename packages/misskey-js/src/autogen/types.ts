@@ -2318,6 +2318,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    '/admin/notes/remote/delete-by-host': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * admin/notes/remote/delete-by-host
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:note*
+         */
+        post: operations['admin___notes___remote___delete-by-host'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     '/admin/notes/restore': {
         parameters: {
             query?: never;
@@ -3705,6 +3727,28 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:admin:user-note*
          */
         post: operations['admin___update-user-note'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    '/admin/url-preview/proxy/test': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * admin/url-preview/proxy/test
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:meta*
+         */
+        post: operations['admin___url-preview___proxy___test'];
         delete?: never;
         options?: never;
         head?: never;
@@ -11049,19 +11093,13 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * retention
-         * @description No description provided.
-         *
-         *     **Credential required**: *No*
-         */
-        get: operations['retention'];
+        get?: never;
         put?: never;
         /**
          * retention
          * @description No description provided.
          *
-         *     **Credential required**: *No*
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:show-user*
          */
         post: operations['retention'];
         delete?: never;
@@ -11987,6 +12025,28 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:account*
          */
         post: operations['users___lists___update-membership'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    '/users/note-channels': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * users/note-channels
+         * @description No description provided.
+         *
+         *     **Credential required**: *No*
+         */
+        post: operations['users___note-channels'];
         delete?: never;
         options?: never;
         head?: never;
@@ -21743,6 +21803,22 @@ export interface operations {
                         urlPreviewRequireContentLength: boolean;
                         urlPreviewUserAgent: string | null;
                         urlPreviewSummaryProxyUrl: string | null;
+                        /** @enum {string} */
+                        urlPreviewProxyMode: 'direct' | 'summaly' | 'outbound';
+                        urlPreviewOutboundProxies: {
+                            id: string;
+                            name: string;
+                            /** @enum {string} */
+                            type: 'socks5' | 'http' | 'https';
+                            host: string;
+                            port: number;
+                            username: string | null;
+                            passwordSet: boolean;
+                            isEnabled: boolean;
+                            priority: number;
+                        }[];
+                        /** @enum {string} */
+                        urlPreviewProxyStrategy: 'failover';
                         trustedLinkUrlPatterns: string[];
                         /** @enum {string} */
                         federation: 'all' | 'specified' | 'none';
@@ -21982,11 +22058,19 @@ export interface operations {
                     noteIds?: string[] | null;
                     /** @default null */
                     filter?: {
+                        search?: string | null;
                         /** Format: misskey:id */
                         userId?: string | null;
+                        username?: string | null;
                         query?: string | null;
                         /** @enum {string} */
+                        scope?: 'local' | 'remote' | 'all';
+                        host?: string | null;
+                        /** @enum {string} */
                         visibility?: 'all' | 'public' | 'home' | 'followers' | 'specified';
+                        withFiles?: boolean;
+                        repliesOnly?: boolean;
+                        renotesOnly?: boolean;
                         ip?: string | null;
                         fingerprint?: string | null;
                         reportedOnly?: boolean;
@@ -22160,6 +22244,15 @@ export interface operations {
                      * @enum {string}
                      */
                     sort?: '+createdAt' | '-createdAt';
+                    /**
+                     * @default local
+                     * @enum {string}
+                     */
+                    scope?: 'local' | 'remote' | 'all';
+                    /** @default null */
+                    host?: string | null;
+                    /** @default null */
+                    search?: string | null;
                     /** @default null */
                     query?: string | null;
                     /**
@@ -22288,6 +22381,83 @@ export interface operations {
                         isSuspended: boolean;
                         localNotesCount: number;
                     }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___notes___remote___delete-by-host': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    host: string;
+                    /** @default null */
+                    sinceDays?: number | null;
+                    /** @default null */
+                    reason?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        deletedCount: number;
+                    };
                 };
             };
             /** @description Client error */
@@ -27249,6 +27419,13 @@ export interface operations {
                     urlPreviewRequireContentLength?: boolean;
                     urlPreviewUserAgent?: string | null;
                     urlPreviewSummaryProxyUrl?: string | null;
+                    /** @enum {string} */
+                    urlPreviewProxyMode?: 'direct' | 'summaly' | 'outbound';
+                    urlPreviewOutboundProxies?: {
+                        [key: string]: unknown;
+                    }[];
+                    /** @enum {string} */
+                    urlPreviewProxyStrategy?: 'failover';
                     trustedLinkUrlPatterns?: string[] | null;
                     /** @enum {string} */
                     federation?: 'all' | 'none' | 'specified';
@@ -27412,6 +27589,87 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___url-preview___proxy___test': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    proxyId?: string | null;
+                    proxy?: {
+                        [key: string]: unknown;
+                    } | null;
+                    testUrl?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        ok: boolean;
+                        elapsedMs: number;
+                        outboundIp: string | null;
+                        proxyId: string;
+                        error: string | null;
+                    };
+                };
             };
             /** @description Client error */
             400: {
@@ -58112,6 +58370,95 @@ export interface operations {
             };
         };
     };
+    'users___note-channels': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    userId: string;
+                    /** @default 100 */
+                    limit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        channel: components['schemas']['Channel'];
+                        notesCount: number;
+                        /** Format: date-time */
+                        latestNotedAt: string;
+                        category: string | null;
+                    }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     users___notes: {
         parameters: {
             query?: never;
@@ -58136,6 +58483,8 @@ export interface operations {
                     withNonPublic?: boolean;
                     /** @default false */
                     withChannelNotes?: boolean;
+                    /** Format: misskey:id */
+                    channelId?: string;
                     /** @default 10 */
                     limit?: number;
                     /** Format: misskey:id */

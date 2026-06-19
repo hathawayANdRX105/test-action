@@ -255,6 +255,14 @@ export interface Locale extends ILocale {
      */
     "unpin": string;
     /**
+     * 自分のプロフィールでおすすめ
+     */
+    "profileRecommend": string;
+    /**
+     * プロフィールのおすすめを解除
+     */
+    "profileUnrecommend": string;
+    /**
      * 内容をコピー
      */
     "copyContent": string;
@@ -422,6 +430,14 @@ export interface Locale extends ILocale {
      * ノート
      */
     "notes": string;
+    /**
+     * チャンネル
+     */
+    "channels": string;
+    /**
+     * メディア
+     */
+    "media": string;
     /**
      * フォロー
      */
@@ -3572,7 +3588,23 @@ export interface Locale extends ILocale {
      */
     "addDescription": string;
     /**
-     * 個々のノートのメニューから「ピン留め」を選択することで、ここにノートを表示しておくことができます。
+     * おすすめ
+     */
+    "profileRecommended": string;
+    /**
+     * おすすめはまだありません
+     */
+    "noProfileRecommendedNotes": string;
+    /**
+     * すべてのチャンネル
+     */
+    "allChannels": string;
+    /**
+     * 未分類
+     */
+    "uncategorized": string;
+    /**
+     * ノートのメニューから「自分のプロフィールでおすすめ」を選択すると、ここに表示できます。
      */
     "userPagePinTip": string;
     /**
@@ -5820,6 +5852,90 @@ export interface Locale extends ILocale {
          * すべての削除アーカイブ記録を完全に消去します。取り消せません。続行しますか？
          */
         "purgeAllConfirm": string;
+        /**
+         * 連合(リモート)投稿
+         */
+        "remoteSection": string;
+        /**
+         * 他の連合サーバーから配信された投稿の管理。ここでの削除・ブロック・サイレンスは本サーバーにのみ適用され、ActivityPub Delete は上流に送信されません。
+         */
+        "remoteCaption": string;
+        /**
+         * 本文 / ユーザー名 / 投稿ID / ホスト名で横断検索
+         */
+        "remoteSearchCaption": string;
+        /**
+         * ホスト
+         */
+        "host": string;
+        /**
+         * リモートインスタンスのドメイン(例: misskey.io)。一括削除/ブロック/サイレンスに使用
+         */
+        "hostCaption": string;
+        /**
+         * オリジナルで開く
+         */
+        "viewOnRemote": string;
+        /**
+         * クリックでこのインスタンスを管理
+         */
+        "instanceBadgeTooltip": string;
+        /**
+         * ホスト単位で削除
+         */
+        "deleteByHost": string;
+        /**
+         * 現在のフィルターに一致するリモート投稿をすべて削除します(最大1000件・アーカイブされ復元可)。理由を入力できます。続行しますか？
+         */
+        "deleteAllMatchingRemoteConfirm": string;
+        /**
+         * 過去 {n} 日
+         */
+        "pastNDays": ParameterizedString<"n">;
+        /**
+         * 全期間
+         */
+        "allTime": string;
+        /**
+         * {host} をクリーンアップする範囲を選択：
+         */
+        "purgeHostScope": ParameterizedString<"host">;
+        /**
+         * {host} の過去 {n} 日分のローカル副本を削除します(最大1000件・アーカイブされ復元可)。理由を入力できます。続行しますか？
+         */
+        "purgeHostConfirm": ParameterizedString<"host" | "n">;
+        /**
+         * このホストをブロック
+         */
+        "blockHost": string;
+        /**
+         * このホストをサイレンス
+         */
+        "silenceHost": string;
+        /**
+         * {host} をブロックホストに追加します。以後新規投稿を受け取らず、フォロー関係も切れます。本サーバーのみ有効。続行しますか？
+         */
+        "blockHostConfirm": ParameterizedString<"host">;
+        /**
+         * {host} をサイレンスホストに追加します。当該インスタンスの投稿は公開タイムライン/発見で折りたたまれますが閲覧可能です。続行しますか？
+         */
+        "silenceHostConfirm": ParameterizedString<"host">;
+        /**
+         * {host} をブロックしました
+         */
+        "hostBlocked": ParameterizedString<"host">;
+        /**
+         * {host} をサイレンスしました
+         */
+        "hostSilenced": ParameterizedString<"host">;
+        /**
+         * このホストは既にブロック済みです
+         */
+        "hostAlreadyBlocked": string;
+        /**
+         * このホストは既にサイレンス済みです
+         */
+        "hostAlreadySilenced": string;
     };
     "_adminChatSettings": {
         /**
@@ -12746,6 +12862,94 @@ export interface Locale extends ILocale {
          * The following parameters are sent to the proxy as a query string. If the proxy does not support them, the values are ignored.
          */
         "summaryProxyDescription2": string;
+        /**
+         * プローブモード
+         */
+        "proxyMode": string;
+        /**
+         * 直接接続
+         */
+        "proxyModeDirect": string;
+        /**
+         * Summaly endpoint
+         */
+        "proxyModeSummaly": string;
+        /**
+         * アウトバウンドプロキシ
+         */
+        "proxyModeOutbound": string;
+        /**
+         * URLプレビューが有効でアウトバウンドプロキシモードを選択している場合、有効なプロキシが1件以上必要です。直接接続へフォールバックし得る状態では保存できません。
+         */
+        "outboundProxyRequired": string;
+        /**
+         * プローブ用アウトバウンドプロキシ
+         */
+        "outboundProxies": string;
+        /**
+         * メインプロキシ
+         */
+        "defaultProxyName": string;
+        /**
+         * クイック追加
+         */
+        "quickAddProxy": string;
+        /**
+         * host:port:user:pass をサポートし、既定では SOCKS5 remote DNS として解析します。
+         */
+        "quickAddProxyCaption": string;
+        /**
+         * プロキシをテスト
+         */
+        "testProxy": string;
+        /**
+         * すべてテスト
+         */
+        "testAllProxies": string;
+        /**
+         * ポート
+         */
+        "proxyPort": string;
+        /**
+         * SOCKS5 remote DNS
+         */
+        "proxyTypeSocks5": string;
+        /**
+         * HTTP CONNECT
+         */
+        "proxyTypeHttp": string;
+        /**
+         * HTTPS CONNECT
+         */
+        "proxyTypeHttps": string;
+        /**
+         * 設定済み
+         */
+        "passwordSet": string;
+        /**
+         * 空欄のまま保存すると既存のパスワードを保持します。
+         */
+        "passwordKeep": string;
+        /**
+         * パスワードはサーバーに保存され、この画面には表示されません。
+         */
+        "passwordCaption": string;
+        /**
+         * パスワードを消去
+         */
+        "clearPassword": string;
+        /**
+         * パスワードを保持
+         */
+        "keepPassword": string;
+        /**
+         * プロキシ利用可能
+         */
+        "proxyTestOk": string;
+        /**
+         * プロキシ利用不可
+         */
+        "proxyTestFailed": string;
     };
     "_mediaControls": {
         /**

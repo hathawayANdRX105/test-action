@@ -102,6 +102,7 @@ export const moderationLogTypes = [
 	'deleteDriveFile',
 	'deleteNote',
 	'deleteNotesBulk',
+	'deleteRemoteNotesByHost',
 	'restoreNote',
 	'purgeNoteArchive',
 	'emergencyBanByFingerprint',
@@ -262,6 +263,12 @@ export type ModerationLogPayloads = {
 		noteIds: string[];
 		reason: string | null;
 		byFilter: boolean;
+	};
+	deleteRemoteNotesByHost: {
+		host: string;
+		sinceDays: number | null;
+		count: number;
+		reason: string | null;
 	};
 	restoreNote: {
 		noteId: string;

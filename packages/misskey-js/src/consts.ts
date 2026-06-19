@@ -153,6 +153,7 @@ export const moderationLogTypes = [
 	'deleteDriveFile',
 	'deleteNote',
 	'deleteNotesBulk',
+	'deleteRemoteNotesByHost',
 	'restoreNote',
 	'purgeNoteArchive',
 	'emergencyBanByFingerprint',

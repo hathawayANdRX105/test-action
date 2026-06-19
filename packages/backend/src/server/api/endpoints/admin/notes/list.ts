@@ -47,7 +47,12 @@ export const paramDef = {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
 		offset: { type: 'integer', minimum: 0, default: 0 },
 		sort: { type: 'string', enum: ['+createdAt', '-createdAt'], default: '+createdAt' },
-		// 综合搜索：一个框同时匹配 正文 / 用户名 / 帖子ID / IP / 指纹
+		// 帖子来源:local=仅本地;remote=仅远程(联邦推送);all=两者
+		// 默认 local 保持原有「全部帖子」区零回归
+		scope: { type: 'string', enum: ['local', 'remote', 'all'], default: 'local' },
+		// 限定具体远程主机(如 misskey.io),仅在 scope!=local 时生效
+		host: { type: 'string', nullable: true, default: null },
+		// 综合搜索：一个框同时匹配 正文 / 用户名 / 帖子ID / IP / 指纹(本地)或 host(远程)
 		search: { type: 'string', nullable: true, default: null },
 		query: { type: 'string', nullable: true, default: null },
 		userId: { type: 'string', format: 'misskey:id', nullable: true, default: null },
@@ -88,8 +93,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const query = this.notesRepository.createQueryBuilder('note')
-				.innerJoinAndSelect('note.user', 'user')
-				.where('note.userHost IS NULL'); // 仅本地帖
+				.innerJoinAndSelect('note.user', 'user');
+
+			// 帖子来源(scope):local=仅本地;remote=仅远程联邦帖;all=两者
+			if (ps.scope === 'local') {
+				query.andWhere('note.userHost IS NULL');
+			} else if (ps.scope === 'remote') {
+				query.andWhere('note.userHost IS NOT NULL');
+				if (ps.host) query.andWhere('note.userHost = :host', { host: ps.host.toLowerCase() });
+			} else if (ps.host) {
+				// scope=all 时也允许按 host 过滤(host 提供→只看该主机)
+				query.andWhere('note.userHost = :host', { host: ps.host.toLowerCase() });
+			}
 
 			if (ps.search) {
 				const s = ps.search.trim();
@@ -98,7 +113,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						.orWhere('user.usernameLower ILIKE :su', { su: '%' + sqlLikeEscape(s.toLowerCase()) + '%' })
 						.orWhere('note.id = :sid', { sid: s })
 						.orWhere('note.ip = :sip', { sip: s })
-						.orWhere('note.fingerprint = :sfp', { sfp: s });
+						.orWhere('note.fingerprint = :sfp', { sfp: s })
+						.orWhere('note.userHost ILIKE :shost', { shost: '%' + sqlLikeEscape(s.toLowerCase()) + '%' });
 				}));
 			}
 			if (ps.userId) query.andWhere('note.userId = :userId', { userId: ps.userId });

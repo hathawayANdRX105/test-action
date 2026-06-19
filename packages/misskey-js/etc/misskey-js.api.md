@@ -458,6 +458,12 @@ type AdminNotesRelatedAccountsRequest = operations['admin___notes___related-acco
 type AdminNotesRelatedAccountsResponse = operations['admin___notes___related-accounts']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminNotesRemoteDeleteByHostRequest = operations['admin___notes___remote___delete-by-host']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminNotesRemoteDeleteByHostResponse = operations['admin___notes___remote___delete-by-host']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminNotesRestoreRequest = operations['admin___notes___restore']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -720,6 +726,12 @@ type AdminUpdateProxyAccountResponse = operations['admin___update-proxy-account'
 
 // @public (undocumented)
 type AdminUpdateUserNoteRequest = operations['admin___update-user-note']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUrlPreviewProxyTestRequest = operations['admin___url-preview___proxy___test']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUrlPreviewProxyTestResponse = operations['admin___url-preview___proxy___test']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminUsersSearchRequest = operations['admin___users-search']['requestBody']['content']['application/json'];
@@ -2365,6 +2377,8 @@ declare namespace entities {
         AdminNotesListResponse,
         AdminNotesRelatedAccountsRequest,
         AdminNotesRelatedAccountsResponse,
+        AdminNotesRemoteDeleteByHostRequest,
+        AdminNotesRemoteDeleteByHostResponse,
         AdminNotesRestoreRequest,
         AdminNotesRestoreResponse,
         AdminNsfwUserRequest,
@@ -2453,6 +2467,8 @@ declare namespace entities {
         AdminUpdateProxyAccountRequest,
         AdminUpdateProxyAccountResponse,
         AdminUpdateUserNoteRequest,
+        AdminUrlPreviewProxyTestRequest,
+        AdminUrlPreviewProxyTestResponse,
         AdminUsersSearchRequest,
         AdminUsersSearchResponse,
         AiChatRequest,
@@ -3012,6 +3028,8 @@ declare namespace entities {
         UsersListsUpdateRequest,
         UsersListsUpdateResponse,
         UsersListsUpdateMembershipRequest,
+        UsersNoteChannelsRequest,
+        UsersNoteChannelsResponse,
         UsersNotesRequest,
         UsersNotesResponse,
         UsersPagesRequest,
@@ -3996,7 +4014,7 @@ type ModerationLog = {
 });
 
 // @public (undocumented)
-export const moderationLogTypes: readonly ["updateServerSettings", "suspend", "approve", "decline", "unsuspend", "updateUserNote", "addCustomEmoji", "updateCustomEmoji", "deleteCustomEmoji", "assignRole", "unassignRole", "createRole", "updateRole", "deleteRole", "clearQueue", "promoteQueue", "deleteDriveFile", "deleteNote", "deleteNotesBulk", "restoreNote", "purgeNoteArchive", "emergencyBanByFingerprint", "createGlobalAnnouncement", "createUserAnnouncement", "updateGlobalAnnouncement", "updateUserAnnouncement", "deleteGlobalAnnouncement", "deleteUserAnnouncement", "resetPassword", "setMandatoryCW", "setMandatoryCWForNote", "setMandatoryCWForInstance", "suspendRemoteInstance", "unsuspendRemoteInstance", "rejectRemoteInstanceReports", "acceptRemoteInstanceReports", "updateRemoteInstanceNote", "markSensitiveDriveFile", "unmarkSensitiveDriveFile", "resolveAbuseReport", "forwardAbuseReport", "updateAbuseReportNote", "createInvitation", "createAd", "updateAd", "deleteAd", "createAvatarDecoration", "updateAvatarDecoration", "deleteAvatarDecoration", "unsetUserAvatar", "unsetUserBanner", "createSystemWebhook", "updateSystemWebhook", "deleteSystemWebhook", "createAbuseReportNotificationRecipient", "updateAbuseReportNotificationRecipient", "deleteAbuseReportNotificationRecipient", "deleteAccount", "deletePage", "deleteFlash", "deleteGalleryPost", "deleteChatRoom"];
+export const moderationLogTypes: readonly ["updateServerSettings", "suspend", "approve", "decline", "unsuspend", "updateUserNote", "addCustomEmoji", "updateCustomEmoji", "deleteCustomEmoji", "assignRole", "unassignRole", "createRole", "updateRole", "deleteRole", "clearQueue", "promoteQueue", "deleteDriveFile", "deleteNote", "deleteNotesBulk", "deleteRemoteNotesByHost", "restoreNote", "purgeNoteArchive", "emergencyBanByFingerprint", "createGlobalAnnouncement", "createUserAnnouncement", "updateGlobalAnnouncement", "updateUserAnnouncement", "deleteGlobalAnnouncement", "deleteUserAnnouncement", "resetPassword", "setMandatoryCW", "setMandatoryCWForNote", "setMandatoryCWForInstance", "suspendRemoteInstance", "unsuspendRemoteInstance", "rejectRemoteInstanceReports", "acceptRemoteInstanceReports", "updateRemoteInstanceNote", "markSensitiveDriveFile", "unmarkSensitiveDriveFile", "resolveAbuseReport", "forwardAbuseReport", "updateAbuseReportNote", "createInvitation", "createAd", "updateAd", "deleteAd", "createAvatarDecoration", "updateAvatarDecoration", "deleteAvatarDecoration", "unsetUserAvatar", "unsetUserBanner", "createSystemWebhook", "updateSystemWebhook", "deleteSystemWebhook", "createAbuseReportNotificationRecipient", "updateAbuseReportNotificationRecipient", "deleteAbuseReportNotificationRecipient", "deleteAccount", "deletePage", "deleteFlash", "deleteGalleryPost", "deleteChatRoom"];
 
 // @public (undocumented)
 type MuteCreateRequest = operations['mute___create']['requestBody']['content']['application/json'];
@@ -4854,6 +4872,12 @@ type UsersListsUpdateRequest = operations['users___lists___update']['requestBody
 
 // @public (undocumented)
 type UsersListsUpdateResponse = operations['users___lists___update']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type UsersNoteChannelsRequest = operations['users___note-channels']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type UsersNoteChannelsResponse = operations['users___note-channels']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type UsersNotesRequest = operations['users___notes']['requestBody']['content']['application/json'];

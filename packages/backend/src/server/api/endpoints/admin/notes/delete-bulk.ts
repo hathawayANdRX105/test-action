@@ -46,6 +46,9 @@ export const paramDef = {
 				userId: { type: 'string', format: 'misskey:id', nullable: true },
 				username: { type: 'string', nullable: true },
 				query: { type: 'string', nullable: true },
+				// 帖子来源,与 admin/notes/list 一致;默认 'local' 保持向后兼容
+				scope: { type: 'string', enum: ['local', 'remote', 'all'] },
+				host: { type: 'string', nullable: true },
 				visibility: { type: 'string', enum: ['all', 'public', 'home', 'followers', 'specified'] },
 				withFiles: { type: 'boolean' },
 				repliesOnly: { type: 'boolean' },
@@ -74,13 +77,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const query = this.notesRepository.createQueryBuilder('note')
-				.innerJoinAndSelect('note.user', 'user')
-				.where('note.userHost IS NULL'); // 仅本地帖
+				.innerJoinAndSelect('note.user', 'user');
 
+			// 显式 noteIds:不强制 scope,可混合本地/远程(管理员的选中行更直接)
+			// filter 模式:按 filter.scope(默认 local) + 可选 host 限定范围
 			if (ps.noteIds && ps.noteIds.length > 0) {
 				query.andWhere('note.id IN (:...noteIds)', { noteIds: ps.noteIds });
 			} else if (ps.filter) {
 				const f = ps.filter;
+				const scope = f.scope ?? 'local';
+				if (scope === 'local') {
+					query.andWhere('note.userHost IS NULL');
+				} else if (scope === 'remote') {
+					query.andWhere('note.userHost IS NOT NULL');
+					if (f.host) query.andWhere('note.userHost = :host', { host: f.host.toLowerCase() });
+				} else if (f.host) {
+					query.andWhere('note.userHost = :host', { host: f.host.toLowerCase() });
+				}
 				if (f.search) {
 					const s = f.search.trim();
 					query.andWhere(new Brackets(qb => {
