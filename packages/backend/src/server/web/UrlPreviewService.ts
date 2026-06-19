@@ -73,12 +73,14 @@ type PreviewRoute = {
 
 type AuthArray = [user: MiLocalUser | null | undefined, app: MiAccessToken | null | undefined, actor: MiLocalUser | string];
 
-// Up to 50 requests, then 10 / second (at 2 / 200ms rate)
+const URL_PREVIEW_ERROR_CACHE_SECONDS = 300;
+
+// Up to 100 requests, then 20 / second (at 4 / 200ms rate)
 const previewLimit: Keyed<BucketRateLimit> = {
 	key: '/url',
 	type: 'bucket',
-	size: 50,
-	dripSize: 2,
+	size: 100,
+	dripSize: 4,
 	dripRate: 200,
 };
 
@@ -281,31 +283,20 @@ export class UrlPreviewService {
 		} catch (err) {
 			this.logger.warn(`Failed to get preview of ${url} for ${lang}: ${renderInlineError(err)}`);
 
-			if (err instanceof UrlPreviewProxyUnavailableError) {
-				return this.renderProxyUnavailable(reply);
+				if (err instanceof UrlPreviewProxyUnavailableError) {
+					const errorResponse = await this.cacheError(cacheKey, url, err, URL_PREVIEW_ERROR_CACHE_SECONDS);
+					return this.renderError(errorResponse, reply);
+				}
+
+				const errorResponse = await this.cacheError(cacheKey, url, err);
+				return this.renderError(errorResponse, reply);
 			}
-
-			const errorResponse = await this.cacheError(cacheKey, url, err);
-			return this.renderError(errorResponse, reply);
 		}
-	}
 
-	private renderProxyUnavailable(reply: FastifyReply): FastifyReply {
-		reply.header('Cache-Control', 'max-age=30');
-
-		return reply.code(503).send({
-			error: {
-				message: 'URL preview outbound proxy is unavailable',
-				code: 'URL_PREVIEW_PROXY_UNAVAILABLE',
-				id: 'fdf6dd5c-8d58-4c16-bd30-0b457f602178',
-			},
-		});
-	}
-
-	private async cacheError(cacheKey: string, url: string, error: unknown): Promise<LocalSummalyResult> {
-		const errorResponse = {
-			url: url,
-			title: null,
+		private async cacheError(cacheKey: string, url: string, error: unknown, forcedAge?: number): Promise<LocalSummalyResult> {
+			const errorResponse = {
+				url: url,
+				title: null,
 			icon: null,
 			description: null,
 			thumbnail: null,
@@ -317,19 +308,21 @@ export class UrlPreviewService {
 				allow: [],
 			},
 			activityPub: null,
-			fediverseCreator: null,
-			error: {
-				status: 422,
-				age: 3600,
-				message: 'Failed to get preview',
-				code: 'URL_PREVIEW_FAILED',
-				id: '09d01cb5-53b9-4856-82e5-38a50c290a3b',
-			}
-		};
-		if (error instanceof StatusError) {
-			if (error.isPermanentError) {
-				// a permanent HTTP error (4xx), avoid trying again for a week
-				errorResponse.error.age = 86400 * 7;
+				fediverseCreator: null,
+				error: {
+					status: error instanceof UrlPreviewProxyUnavailableError ? 503 : 422,
+					age: forcedAge ?? 3600,
+					message: error instanceof UrlPreviewProxyUnavailableError ? 'URL preview outbound proxy is unavailable' : 'Failed to get preview',
+					code: error instanceof UrlPreviewProxyUnavailableError ? 'URL_PREVIEW_PROXY_UNAVAILABLE' : 'URL_PREVIEW_FAILED',
+					id: error instanceof UrlPreviewProxyUnavailableError ? 'fdf6dd5c-8d58-4c16-bd30-0b457f602178' : '09d01cb5-53b9-4856-82e5-38a50c290a3b',
+				}
+			};
+			if (forcedAge != null) {
+				errorResponse.error.age = forcedAge;
+			} else if (error instanceof StatusError) {
+				if (error.isPermanentError) {
+					// a permanent HTTP error (4xx), avoid trying again for a week
+					errorResponse.error.age = 86400 * 7;
 			}
 		} else if (error instanceof Error) {
 			if (error.message.match(/maxSize/)) {

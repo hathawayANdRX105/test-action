@@ -194,7 +194,6 @@ async function reply(viaKeyboard = false): Promise<void> {
 	await os.post({
 		reply: appearNote.value,
 		channel: appearNote.value.channel ?? undefined,
-		animation: !viaKeyboard,
 	});
 	focus();
 }

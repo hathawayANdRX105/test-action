@@ -441,6 +441,7 @@ export * as 'notes/state' from './endpoints/notes/state.js';
 export * as 'notes/thread-muting/create' from './endpoints/notes/thread-muting/create.js';
 export * as 'notes/thread-muting/delete' from './endpoints/notes/thread-muting/delete.js';
 export * as 'notes/timeline' from './endpoints/notes/timeline.js';
+export * as 'notes/translate-batch' from './endpoints/notes/translate-batch.js';
 export * as 'notes/translate' from './endpoints/notes/translate.js';
 export * as 'notes/unrenote' from './endpoints/notes/unrenote.js';
 export * as 'notes/user-list-timeline' from './endpoints/notes/user-list-timeline.js';

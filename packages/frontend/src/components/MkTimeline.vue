@@ -9,7 +9,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template #empty><MkResult type="empty" :text="i18n.ts.noNotes"/></template>
 
 		<template #default="{ items: notes }">
+			<!-- Masonry mode: CSS columns keep dense cards cheap to render. -->
+			<div v-if="viewMode === 'masonry'" :class="$style.masonryRoot">
+				<SkTimelineMasonryCard
+					v-for="note in notes"
+					:key="note.id"
+					:note="note as Misskey.entities.Note"
+					:data-scroll-anchor="note.id"
+				/>
+			</div>
+
+			<!-- Forum mode: compact list preview. -->
+			<div v-else-if="viewMode === 'forum'" :class="$style.forumRoot">
+				<SkTimelineForumItem
+					v-for="note in notes"
+					:key="note.id"
+					:note="note as Misskey.entities.Note"
+					:data-scroll-anchor="note.id"
+				/>
+			</div>
+
+			<!-- Twitter mode: default SkNote rendering. -->
 			<SkTransitionGroup
+				v-else
 				:class="[$style.root, { [$style.noGap]: noGap, '_gaps': !noGap, [$style.reverse]: paginationQuery.reversed }]"
 				:enterActiveClass="$style.transition_x_enterActive"
 				:leaveActiveClass="$style.transition_x_leaveActive"
@@ -45,6 +67,11 @@ import DynamicNote from '@/components/DynamicNote.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import { i18n } from '@/i18n.js';
 import SkTransitionGroup from '@/components/SkTransitionGroup.vue';
+import SkTimelineForumItem from '@/components/SkTimelineForumItem.vue';
+import SkTimelineMasonryCard from '@/components/SkTimelineMasonryCard.vue';
+
+// Global timeline style: twitter (default), forum, or masonry.
+const viewMode = computed(() => prefer.r.timelineViewMode.value ?? 'twitter');
 
 const props = withDefaults(defineProps<{
 	src: BasicTimelineType | 'mentions' | 'directs' | 'list' | 'antenna' | 'channel' | 'role';
@@ -60,6 +87,9 @@ const props = withDefaults(defineProps<{
 	onlyFiles?: boolean;
 	localTimelineMode?: 'chronological' | 'replies' | 'recommended';
 	discoveryMode?: boolean;
+	// 当设置 tag 时,绕过 src 用 notes/search-by-tag 拉数据(用于分类 tab 的标签过滤)
+	tag?: string | null;
+	tagScope?: 'local' | 'remote' | null;
 	recommendationSurface?: 'home' | 'explore';
 	recommendationCategory?: 'forYou' | 'trending' | 'messages' | 'sports' | 'entertainment' | 'tutorials' | 'resources';
 	recommendationSort?: 'personalized' | 'latestReply';
@@ -141,6 +171,7 @@ const stream = useStream();
 
 function connectChannel() {
 	const onNote = (note: TimelineNote) => prepend(note);
+	if (props.tag) return;
 	if (props.discoveryMode && ['recommended', 'local', 'social', 'global'].includes(props.src)) return;
 
 	if (props.src === 'antenna') {
@@ -233,6 +264,18 @@ function updatePaginationQuery() {
 		props.src === 'recommended' ? 'mixed' :
 		props.discoveryMode && ['local', 'social', 'global'].includes(props.src) ? props.src as 'local' | 'social' | 'global' :
 		null;
+
+	if (props.tag) {
+		paginationQuery = {
+			endpoint: 'notes/search-by-tag',
+			limit: 12,
+			params: {
+				tag: props.tag,
+				scope: props.tagScope ?? undefined,
+			},
+		};
+		return;
+	}
 
 	if (props.src === 'antenna') {
 		endpoint = 'antennas/notes';
@@ -450,6 +493,28 @@ defineExpose({
 
 .ad:empty {
 	display: none;
+}
+
+.masonryRoot {
+	container-type: inline-size;
+	column-count: 2;
+	column-gap: 8px;
+	padding: 8px;
+
+	@container (min-width: 900px) { column-count: 3; column-gap: 12px; padding: 12px; }
+	@container (min-width: 1400px) { column-count: 4; column-gap: 14px; }
+	@container (min-width: 2000px) { column-count: 5; column-gap: 16px; }
+}
+
+.forumRoot {
+	container-type: inline-size;
+	background: var(--MI_THEME-panel);
+	border-radius: var(--MI-radius, 8px);
+	overflow: hidden;
+
+	@media (max-width: 700px) {
+		border-radius: 0;
+	}
 }
 
 </style>

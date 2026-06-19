@@ -15,6 +15,12 @@ export const meta = {
 
 	kind: 'read:chat',
 
+	limit: {
+		type: 'bucket',
+		size: 60,
+		dripRate: 1000,
+	},
+
 	res: {
 		type: 'array',
 		optional: false, nullable: false,
@@ -64,9 +70,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const messages = await this.chatService.packedRoomTimeline(me.id, room.id, ps.limit, ps.sinceId, ps.untilId);
 
-			void this.chatService.readRoomChatMessage(me.id, room.id).catch(err => {
-				console.warn('Failed to update room chat read state:', err);
-			});
+			void this.chatService.readRoomChatMessage(me.id, room.id).catch(() => undefined);
 
 			return messages;
 		});

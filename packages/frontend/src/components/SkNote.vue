@@ -86,7 +86,7 @@ Displays a note in the Sharkey style. Used to show the "main" note in a given co
 					<div :class="$style.text">
 						<span v-if="appearNote.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
 						<Mfm
-							v-if="appearNote.text"
+							v-if="appearNote.text && !hideOriginalText"
 							:parsedNodes="parsed"
 							:text="appearNote.text"
 							:author="appearNote.user"
@@ -97,7 +97,7 @@ Displays a note in the Sharkey style. Used to show the "main" note in a given co
 							:isAnim="allowAnim"
 							:isBlock="true"
 						/>
-						<SkNoteTranslation :note="note" :translation="translation" :translating="translating"></SkNoteTranslation>
+						<SkNoteTranslation :note="appearNote" :translation="translation" :translating="translating" :replaceMode="hideOriginalText"></SkNoteTranslation>
 						<MkButton v-if="!allowAnim && animated" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-play ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.play }}</MkButton>
 						<MkButton v-else-if="!prefer.s.animatedMfm && allowAnim && animated" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-stop ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.stop }}</MkButton>
 					</div>
@@ -215,6 +215,7 @@ import { checkAnimationFromMfm } from '@/utility/check-animated-mfm.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { getAbuseNoteMenu, getCopyNoteLinkMenu, getNoteClipMenu, getNoteMenu, translateNote } from '@/utility/get-note-menu.js';
+import { useAutoTranslate } from '@/composables/use-auto-translate.js';
 import { getNoteVersionsMenu } from '@/utility/get-note-versions-menu.js';
 import { useNoteCapture } from '@/use/use-note-capture.js';
 import { deepClone } from '@/utility/clone.js';
@@ -296,6 +297,10 @@ const collapsed = ref(prefer.s.expandLongNote && appearNote.value.cw == null && 
 const isDeleted = ref(false);
 const translation = ref<Misskey.entities.NotesTranslateResponse | false | null>(null);
 const translating = ref(false);
+// 全局自动翻译挂钩(只对 appearNote 生效,转发的话翻原帖)
+useAutoTranslate({ note: appearNote, translation, translating });
+// 替换原文模式:开关 on + 当前帖有有效译文时,隐藏原文 Mfm
+const hideOriginalText = computed(() => prefer.r.autoTranslateReplaceOriginal.value && !!translation.value && (translation.value as Misskey.entities.NotesTranslateResponse).text != null);
 const showTicker = (prefer.s.instanceTicker === 'always') || (prefer.s.instanceTicker === 'remote' && appearNote.value.user.instance);
 const canRenote = computed(() => ['public', 'home'].includes(appearNote.value.visibility) || (appearNote.value.visibility === 'followers' && appearNote.value.userId === $i?.id));
 const canQuote = computed(() => canRenote.value && !props.mock && !$i?.rejectQuotes);

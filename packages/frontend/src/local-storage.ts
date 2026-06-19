@@ -30,7 +30,9 @@ export type Keys = (
 	'chatMessageDrafts' |
 	'exploreSearchHistory' |
 	'home:tab' |
+	'home:scope' |
 	'home:sub' |
+	'home:pinnedTags' |
 	'scratchpad' |
 	'debug' |
 	'preferences' |

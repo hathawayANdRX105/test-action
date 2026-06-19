@@ -217,6 +217,18 @@ export const PREF_DEF = {
 	showGapBetweenNotesInTimeline: {
 		default: false,
 	},
+	// 全局帖子流浏览样式:twitter=推特(SkNote大卡)/ forum=Discourse论坛风窄列表 / masonry=小红书风2~3列瀑布流
+	timelineViewMode: {
+		default: 'twitter' as 'twitter' | 'forum' | 'masonry',
+	},
+	// 全局自动翻译:开启后,所有展示的帖子会自动翻译成 UI 语言。结果走本地缓存避免重复请求。
+	autoTranslateNotes: {
+		default: false,
+	},
+	// 自动翻译开启时,是否用译文替换原文(true);默认 false=译文显示在原文下方
+	autoTranslateReplaceOriginal: {
+		default: false,
+	},
 	instanceTicker: {
 		default: 'remote' as 'none' | 'remote' | 'always',
 	},

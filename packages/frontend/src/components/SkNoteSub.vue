@@ -27,8 +27,8 @@ For example, when viewing a reply on the timeline, SkNoteSub will be used to dis
 					<Mfm v-if="appearNote.cw != ''" style="margin-right: 8px;" :text="appearNote.cw" :isBlock="true" :author="note.user" :nyaize="'respect'"/>
 					<MkCwButton v-model="showContent" :text="note.text" :files="note.files" :poll="note.poll"/>
 				</p>
-				<div v-show="appearNote.cw == null || showContent">
-					<MkSubNoteContent :class="$style.text" :note="note" :translating="translating" :translation="translation" :expandAllCws="props.expandAllCws"/>
+					<div v-show="appearNote.cw == null || showContent">
+						<MkSubNoteContent :class="$style.text" :note="appearNote" :translating="translating" :translation="translation" :expandAllCws="props.expandAllCws"/>
 				</div>
 			</div>
 			<MkReactionsViewer ref="reactionsViewer" :note="note"/>
@@ -114,6 +114,7 @@ import MkRippleEffect from '@/components/MkRippleEffect.vue';
 import { reactionPicker } from '@/utility/reaction-picker.js';
 import { claimAchievement } from '@/utility/achievements.js';
 import { getNoteClipMenu, getNoteMenu, translateNote } from '@/utility/get-note-menu.js';
+import { useAutoTranslate } from '@/composables/use-auto-translate.js';
 import { boostMenuItems, computeRenoteTooltip } from '@/utility/boost-quote.js';
 import { prefer } from '@/preferences.js';
 import { useNoteCapture } from '@/use/use-note-capture.js';
@@ -158,6 +159,7 @@ const hideLine = computed(() => props.detail);
 const el = shallowRef<HTMLElement>();
 const translation = ref<Misskey.entities.NotesTranslateResponse | false | null>(null);
 const translating = ref(false);
+useAutoTranslate({ note: appearNote, translation, translating });
 const isDeleted = ref(false);
 const reactButton = shallowRef<HTMLElement>();
 const clipButton = useTemplateRef('clipButton');
@@ -211,7 +213,6 @@ async function reply(viaKeyboard = false): Promise<void> {
 	await os.post({
 		reply: appearNote.value,
 		channel: appearNote.value.channel ?? undefined,
-		animation: !viaKeyboard,
 	});
 	focus();
 }

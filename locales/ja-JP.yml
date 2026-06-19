@@ -2893,6 +2893,35 @@ _timelines:
   global: "グローバル"
   timeline: "タイムライン"
 
+_categories:
+  category: "カテゴリ"
+  hotTags: "人気タグ"
+  all: "すべて"
+  empty: "人気タグはまだありません"
+  pinHint: "右クリックでピン留め"
+  unpinHint: "右クリックでピン解除"
+  expand: "もっと"
+  collapse: "閉じる"
+  pinned: "ピン留め済み"
+  scopeLabel: "範囲"
+
+_viewMode:
+  twitter: "カード"
+  forum: "フォーラム"
+  masonry: "グリッド"
+viewMode: "表示方式"
+
+_autoTranslate:
+  title: "自動翻訳"
+  on: "オン"
+  enable: "全体自動翻訳を有効化"
+  enableHint: "表示される投稿はすべて UI 言語に自動翻訳されます。翻訳結果は 7 日間ローカルにキャッシュされます。"
+  replace: "翻訳で原文を置き換える"
+  replaceHint: "オフ:翻訳は原文の下に表示。オン:翻訳が原文を置き換える(すっきり)。"
+  cached: "翻訳 {n} 件をキャッシュ済"
+  clearCache: "キャッシュをクリア"
+  notAvailable: "このサーバには翻訳サービスが設定されていません(管理者が 外部サービス で DeepL/LibreTranslate を設定する必要があります)。"
+
 _play:
   new: "Playの作成"
   edit: "Playの編集"

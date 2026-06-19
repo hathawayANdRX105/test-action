@@ -49,6 +49,8 @@ export const paramDef = {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 
 		tag: { type: 'string', minLength: 1 },
+		// scope 过滤:'local' = 只看本地原创帖(userHost IS NULL), 'remote' = 只看联合远程帖, null/缺省 = 全部
+		scope: { type: 'string', enum: ['local', 'remote'], nullable: true },
 		query: {
 			type: 'array',
 			description: 'The outer arrays are chained with OR, the inner arrays are chained with AND.',
@@ -101,6 +103,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (me) this.queryService.generateMutedNoteThreadQuery(query, me);
 
 			if (!this.serverSettings.enableBotTrending) query.andWhere('user.isBot = FALSE');
+
+			// scope 过滤(本地/远程)
+			if (ps.scope === 'local') query.andWhere('note.userHost IS NULL');
+			else if (ps.scope === 'remote') query.andWhere('note.userHost IS NOT NULL');
 
 			try {
 				if (ps.tag) {

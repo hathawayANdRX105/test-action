@@ -797,13 +797,25 @@ export function getRenoteMenu(props: {
 
 export async function translateNote(noteId: string, translation: Ref<Misskey.entities.NotesTranslateResponse | false | null>, translating: Ref<boolean>): Promise<void> {
 	if (translating.value || translation.value) return;
+	const targetLang = miLocalStorage.getItem('lang') ?? navigator.language;
+
+	// 先查本地缓存,命中就直接用,不打 API
+	const { getCachedTranslation, setCachedTranslation } = await import('@/utility/note-translation-cache.js');
+	const cached = getCachedTranslation(noteId, targetLang);
+	if (cached) {
+		translation.value = cached;
+		return;
+	}
+
 	translating.value = true;
 	try {
-		const targetLang = miLocalStorage.getItem('lang') ?? navigator.language;
-		translation.value = await misskeyApi('notes/translate', {
+		const resp = await misskeyApi('notes/translate', {
 			noteId,
 			targetLang,
 		});
+		translation.value = resp;
+		// 成功时写缓存(避免下次重复请求)
+		if (resp && resp.text) setCachedTranslation(noteId, targetLang, resp);
 	} catch (err) {
 		console.error(`Translation failed for ${noteId}: `, err);
 		translation.value = false;

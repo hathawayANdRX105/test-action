@@ -82,7 +82,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div>
 							<MkA v-if="appearNote.replyId" :class="$style.replyIcon" :to="`/notes/${appearNote.replyId}`"><i class="ph-arrow-bend-left-up ph-bold ph-lg"></i></MkA>
 							<Mfm
-								v-if="appearNote.text"
+								v-if="appearNote.text && !hideOriginalText"
 								:parsedNodes="parsed"
 								:text="appearNote.text"
 								:author="appearNote.user"
@@ -94,7 +94,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								class="_selectable"
 							/>
 						</div>
-						<SkNoteTranslation :note="note" :translation="translation" :translating="translating"></SkNoteTranslation>
+							<SkNoteTranslation :note="appearNote" :translation="translation" :translating="translating" :replaceMode="hideOriginalText"></SkNoteTranslation>
 						<MkButton v-if="!allowAnim && animated" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-play ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.play }}</MkButton>
 						<MkButton v-else-if="!prefer.s.animatedMfm && allowAnim && animated" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-stop ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.stop }}</MkButton>
 					</div>
@@ -214,6 +214,7 @@ import { checkAnimationFromMfm } from '@/utility/check-animated-mfm.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { getAbuseNoteMenu, getCopyNoteLinkMenu, getNoteClipMenu, getNoteMenu, translateNote } from '@/utility/get-note-menu.js';
+import { useAutoTranslate } from '@/composables/use-auto-translate.js';
 import { getNoteVersionsMenu } from '@/utility/get-note-versions-menu.js';
 import { useNoteCapture } from '@/use/use-note-capture.js';
 import { deepClone } from '@/utility/clone.js';
@@ -294,6 +295,12 @@ const collapsed = ref(prefer.s.expandLongNote && appearNote.value.cw == null && 
 const isDeleted = ref(false);
 const translation = ref<Misskey.entities.NotesTranslateResponse | false | null>(null);
 const translating = ref(false);
+useAutoTranslate({ note: appearNote, translation, translating });
+const hideOriginalText = computed(() =>
+	prefer.r.autoTranslateReplaceOriginal.value
+	&& !!translation.value
+	&& (translation.value as Misskey.entities.NotesTranslateResponse).text != null,
+);
 const showTicker = (prefer.s.instanceTicker === 'always') || (prefer.s.instanceTicker === 'remote' && appearNote.value.user.instance);
 const canRenote = computed(() => ['public', 'home'].includes(appearNote.value.visibility) || (appearNote.value.visibility === 'followers' && appearNote.value.userId === $i?.id));
 const canQuote = computed(() => canRenote.value && !props.mock && !$i?.rejectQuotes);

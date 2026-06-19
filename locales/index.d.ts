@@ -11301,6 +11301,104 @@ export interface Locale extends ILocale {
          */
         "bubble": string;
     };
+    "_categories": {
+        /**
+         * カテゴリ
+         */
+        "category": string;
+        /**
+         * 人気タグ
+         */
+        "hotTags": string;
+        /**
+         * すべて
+         */
+        "all": string;
+        /**
+         * 人気タグはまだありません
+         */
+        "empty": string;
+        /**
+         * 右クリックでピン留め
+         */
+        "pinHint": string;
+        /**
+         * 右クリックでピン解除
+         */
+        "unpinHint": string;
+        /**
+         * もっと
+         */
+        "expand": string;
+        /**
+         * 閉じる
+         */
+        "collapse": string;
+        /**
+         * ピン留め済み
+         */
+        "pinned": string;
+        /**
+         * 範囲
+         */
+        "scopeLabel": string;
+    };
+    "_viewMode": {
+        /**
+         * カード
+         */
+        "twitter": string;
+        /**
+         * フォーラム
+         */
+        "forum": string;
+        /**
+         * グリッド
+         */
+        "masonry": string;
+    };
+    /**
+     * 表示方式
+     */
+    "viewMode": string;
+    "_autoTranslate": {
+        /**
+         * 自動翻訳
+         */
+        "title": string;
+        /**
+         * オン
+         */
+        "on": string;
+        /**
+         * 全体自動翻訳を有効化
+         */
+        "enable": string;
+        /**
+         * 表示される投稿はすべて UI 言語に自動翻訳されます。翻訳結果は 7 日間ローカルにキャッシュされます。
+         */
+        "enableHint": string;
+        /**
+         * 翻訳で原文を置き換える
+         */
+        "replace": string;
+        /**
+         * オフ:翻訳は原文の下に表示。オン:翻訳が原文を置き換える(すっきり)。
+         */
+        "replaceHint": string;
+        /**
+         * 翻訳 {n} 件をキャッシュ済
+         */
+        "cached": ParameterizedString<"n">;
+        /**
+         * キャッシュをクリア
+         */
+        "clearCache": string;
+        /**
+         * このサーバには翻訳サービスが設定されていません(管理者が 外部サービス で DeepL/LibreTranslate を設定する必要があります)。
+         */
+        "notAvailable": string;
+    };
     "_play": {
         /**
          * Playの作成

@@ -22,22 +22,92 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</button>
 			</header>
 
-			<nav v-if="homeTab === 'timeline'" :class="$style.subTabs" role="tablist" :aria-label="i18n.ts._timelines.local + ' / ' + i18n.ts._timelines.global">
+			<!-- scope 切换:全部 / 本地 / 联合 —— 所有 tab 都展示 -->
+			<nav :class="$style.subTabs" role="tablist" :aria-label="i18n.ts._categories?.scopeLabel ?? '范围'">
 				<button
-					v-for="sub in timelineSubTabs"
-					:key="sub.key"
+					v-for="s in scopeTabs"
+					:key="s.key"
 					class="_button"
-					:class="[$style.subTab, { [$style.subTabActive]: timelineSub === sub.key }]"
+					:class="[$style.subTab, { [$style.subTabActive]: scope === s.key }]"
 					role="tab"
-					:aria-selected="timelineSub === sub.key"
-					@click="timelineSub = sub.key"
+					:aria-selected="scope === s.key"
+					@click="scope = s.key"
 				>
-					<i :class="['ti', sub.icon, $style.subTabIcon]"></i>
-					<span>{{ sub.title }}</span>
+					<i :class="['ti', s.icon, $style.subTabIcon]"></i>
+					<span>{{ s.title }}</span>
 				</button>
+				<div :class="$style.subTabsRight">
+					<SkAutoTranslateSwitch/>
+					<SkTimelineViewSwitch/>
+				</div>
 			</nav>
 
-			<section v-if="$i" :class="$style.composer">
+			<!-- 热门 # 标签行 —— 所有 tab 都展示 -->
+			<nav :class="$style.tagChips" :aria-label="i18n.ts._categories?.hotTags ?? '热门标签'">
+				<button
+					class="_button"
+					:class="[$style.tagChip, { [$style.tagChipActive]: categoryHashtag === null }]"
+					@click="categoryHashtag = null"
+				>
+					<i class="ph-list ph-bold ph-lg"></i>
+					<span>{{ i18n.ts._categories?.all ?? '全部' }}</span>
+				</button>
+
+				<!-- 置顶标签(用户钉的) -->
+				<button
+					v-for="tag in pinnedTags"
+						:key="'pin-' + tag"
+						class="_button"
+						:class="[$style.tagChip, $style.tagChipPinned, { [$style.tagChipActive]: categoryHashtag === tag }]"
+						:title="i18n.ts._categories?.unpinHint ?? '右键取消置顶'"
+						@click="categoryHashtag = tag"
+						@contextmenu.prevent="togglePinTag(tag)"
+					>
+					<i class="ph-push-pin-simple ph-bold ph-lg"></i>
+					<span>#{{ tag }}</span>
+				</button>
+
+				<!-- 热门标签 -->
+				<button
+					v-for="t in displayedHotTags"
+						:key="t.tag"
+						class="_button"
+						:class="[$style.tagChip, { [$style.tagChipActive]: categoryHashtag === t.tag, [$style.tagChipHot]: t.isHot }]"
+						:title="(t.isHot ? '🔥 ' : '') + (t.count > 0 ? `${t.count}` : '') + ' · ' + (i18n.ts._categories?.pinHint ?? '右键置顶')"
+						@click="categoryHashtag = t.tag"
+						@contextmenu.prevent="togglePinTag(t.tag)"
+					>
+					<i v-if="t.isHot" class="ph-flame ph-bold ph-lg" :class="$style.hotIcon"></i>
+					<span>#{{ t.tag }}</span>
+				</button>
+
+				<!-- 展开/收起更多 -->
+				<button
+					v-if="hotTags.length > 8"
+					class="_button"
+					:class="$style.tagChipMore"
+					@click="expandHotTags = !expandHotTags"
+				>
+					<i :class="expandHotTags ? 'ph-caret-up ph-bold ph-lg' : 'ph-caret-down ph-bold ph-lg'"></i>
+					<span>{{ expandHotTags ? (i18n.ts._categories?.collapse ?? '收起') : (i18n.ts._categories?.expand ?? '更多') }}</span>
+				</button>
+
+				<!-- 手动刷新 -->
+					<button
+						class="_button"
+						:class="$style.tagChipMore"
+						:disabled="hotTagsLoading"
+						:title="i18n.ts.reload"
+						@click="fetchHotTags()"
+					>
+					<i :class="['ph-arrows-clockwise ph-bold ph-lg', { [$style.spin]: hotTagsLoading }]"></i>
+				</button>
+
+				<span v-if="hotTagsLoading && hotTags.length === 0" :class="$style.tagLoading">{{ i18n.ts.loading }}…</span>
+				<span v-else-if="!hotTagsLoading && hotTags.length === 0 && pinnedTags.length === 0" :class="$style.tagLoading">{{ i18n.ts._categories?.empty ?? '暂无热门标签' }}</span>
+				</nav>
+
+				<section v-if="$i" :class="$style.composer">
 				<MkPostForm
 					:class="$style.composerForm"
 					fixed
@@ -64,12 +134,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:withSensitive="withSensitive"
 				:onlyFiles="onlyFiles"
 				:withBots="withBots"
-				:discoveryMode="homeTab === 'forYou'"
-				recommendationSurface="home"
-				recommendationCategory="forYou"
-				:recommendationSort="homeTab === 'latestReplies' ? 'latestReply' : 'personalized'"
-				:includeFollowedChannels="homeTab !== 'following' && homeTab !== 'timeline'"
-				:sound="homeTab === 'following'"
+				:discoveryMode="discoveryMode"
+					recommendationSurface="home"
+					recommendationCategory="forYou"
+					:recommendationSort="homeTab === 'latestReplies' ? 'latestReply' : 'personalized'"
+					:includeFollowedChannels="homeTab !== 'following'"
+					:sound="homeTab === 'following'"
+					:tag="categoryHashtag ?? undefined"
+					:tagScope="categoryHashtag ? (scope === 'local' ? 'local' : scope === 'global' ? 'remote' : undefined) : undefined"
 				@queue="queueUpdated"
 			/>
 		</main>
@@ -163,6 +235,8 @@ import { $i, iAmAdmin } from '@/i.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import SkTimelineViewSwitch from '@/components/SkTimelineViewSwitch.vue';
+import SkAutoTranslateSwitch from '@/components/SkAutoTranslateSwitch.vue';
 import { userPage } from '@/filters/user.js';
 import * as os from '@/os.js';
 import { buildSearchTrendRows } from '@/utility/search-trends.js';
@@ -170,8 +244,9 @@ import { miLocalStorage } from '@/local-storage.js';
 
 provide('shouldOmitHeaderTitle', true);
 
-type HomeTab = 'forYou' | 'following' | 'latestReplies' | 'timeline';
-type TimelineSub = 'local' | 'global';
+type HomeTab = 'forYou' | 'following' | 'latestReplies';
+// 全部=不区分,本地=只本站原创,联合=只远程联合
+type Scope = 'all' | 'local' | 'global';
 type DiscoverySections = Misskey.Endpoints['notes/discovery-sections']['res'];
 
 const sidebarLimits = {
@@ -191,19 +266,121 @@ let rightRailMaxOffset = 0;
 let rightRailOffsetInitialized = false;
 
 const HOME_TAB_KEY = 'home:tab';
-const HOME_SUB_KEY = 'home:sub';
+const HOME_SCOPE_KEY = 'home:scope';
 const initialTab = (() => {
-	const v = miLocalStorage.getItem(HOME_TAB_KEY) as HomeTab | null;
-	return (v && ['forYou', 'following', 'latestReplies', 'timeline'].includes(v)) ? v : 'forYou';
+	const v = miLocalStorage.getItem(HOME_TAB_KEY) as HomeTab | 'category' | null;
+	if (v === 'category') {
+		miLocalStorage.setItem(HOME_TAB_KEY, 'forYou');
+		return 'forYou';
+	}
+	return (v && ['forYou', 'following', 'latestReplies'].includes(v)) ? v : 'forYou';
 })();
-const initialSub = (() => {
-	const v = miLocalStorage.getItem(HOME_SUB_KEY) as TimelineSub | null;
-	return (v && (v === 'local' || v === 'global')) ? v : 'local';
+const initialScope = (() => {
+	const v = miLocalStorage.getItem(HOME_SCOPE_KEY) as Scope | null;
+	if (v === 'all' || v === 'local' || v === 'global') return v;
+	return 'all'; // 默认全部
 })();
 const homeTab = ref<HomeTab>(initialTab);
-const timelineSub = ref<TimelineSub>(initialSub);
+const scope = ref<Scope>(initialScope);
 watch(homeTab, v => miLocalStorage.setItem(HOME_TAB_KEY, v));
-watch(timelineSub, v => miLocalStorage.setItem(HOME_SUB_KEY, v));
+watch(scope, v => miLocalStorage.setItem(HOME_SCOPE_KEY, v));
+
+// === 热门 # 标签筛选 ===
+const categoryHashtag = ref<string | null>(null); // null = "全部"
+const hotTags = ref<Array<{ tag: string; count: number; isHot?: boolean }>>([]);
+const hotTagsLoading = ref(false);
+// 用户置顶的标签(全局共享 local/global),localStorage 持久化
+const PINNED_TAGS_KEY = 'home:pinnedTags';
+const pinnedTags = ref<string[]>((() => {
+	try { return JSON.parse(miLocalStorage.getItem(PINNED_TAGS_KEY) ?? '[]'); } catch { return []; }
+})());
+watch(pinnedTags, v => miLocalStorage.setItem(PINNED_TAGS_KEY, JSON.stringify(v.slice(0, 32))), { deep: true });
+
+function togglePinTag(tag: string) {
+	const i = pinnedTags.value.indexOf(tag);
+	if (i >= 0) pinnedTags.value = pinnedTags.value.filter(x => x !== tag);
+	else pinnedTags.value = [tag, ...pinnedTags.value].slice(0, 32);
+}
+
+// 客户端算法兜底:拉最近 N 条帖子,统计 hashtag 频次
+async function aggregateTagsFromNotes(scope: 'local' | 'remote'): Promise<Array<{ tag: string; count: number }>> {
+	try {
+		const ep = scope === 'local' ? 'notes/local-timeline' : 'notes/global-timeline';
+		const notes = await misskeyApi(ep, { limit: 100 }) as Array<{ tags?: string[] }>;
+		const counts = new Map<string, number>();
+		for (const n of (notes ?? [])) {
+			for (const t of (n.tags ?? [])) {
+				if (!t) continue;
+				const k = t.toLowerCase();
+				counts.set(k, (counts.get(k) ?? 0) + 1);
+			}
+		}
+		return [...counts.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 16)
+			.map(([tag, count]) => ({ tag, count }));
+	} catch {
+		return [];
+	}
+}
+
+async function fetchHotTags() {
+	hotTagsLoading.value = true;
+	try {
+		// scope='all' 拉两边数据合并;scope='local'/'global' 各拉一边
+		const s = scope.value;
+		const isLocal = s === 'local';
+		const isGlobal = s === 'global';
+		const r = await misskeyApi('hashtags/list', {
+			sort: isLocal ? '+attachedLocalUsers' : '+attachedRemoteUsers',
+			attachedToLocalUserOnly: isLocal,
+			attachedToRemoteUserOnly: isGlobal,
+			limit: 24,
+		}) as Array<{ tag: string; attachedLocalUsersCount?: number; attachedRemoteUsersCount?: number; attachedUsersCount?: number }>;
+		let result = (r ?? [])
+			.filter(x => !!x.tag)
+			.map(x => ({
+				tag: x.tag,
+				count: isLocal ? (x.attachedLocalUsersCount ?? 0)
+					: isGlobal ? (x.attachedRemoteUsersCount ?? 0)
+					: (x.attachedUsersCount ?? 0),
+			}));
+
+		// 不足 4 个,降级到客户端算法(拉最近 100 帖统计)
+		if (result.length < 4) {
+			const algoScope: 'local' | 'remote' = isLocal ? 'local' : 'remote';
+			const algo = await aggregateTagsFromNotes(algoScope);
+			const known = new Set(result.map(x => x.tag.toLowerCase()));
+			for (const t of algo) {
+				if (!known.has(t.tag.toLowerCase())) result.push(t);
+			}
+			result = result.slice(0, 24);
+		}
+
+		// 标记前 3 为"热"
+		hotTags.value = result.map((x, i) => ({ ...x, isHot: i < 3 }));
+	} catch {
+		hotTags.value = [];
+	} finally {
+		hotTagsLoading.value = false;
+	}
+}
+
+// scope 变了 → 重新拉(因为不同 scope 对应不同标签数据集)
+watch(scope, () => {
+	categoryHashtag.value = null;
+	fetchHotTags();
+});
+// 首次主动拉一次
+fetchHotTags();
+
+// 展开更多 + 计算展示哪些(置顶过滤掉,避免重复)
+const expandHotTags = ref(false);
+const displayedHotTags = computed(() => {
+	const pinSet = new Set(pinnedTags.value.map(t => t.toLowerCase()));
+	const list = hotTags.value.filter(t => !pinSet.has(t.tag.toLowerCase()));
+	return expandHotTags.value ? list : list.slice(0, 8);
+});
 const queue = ref(0);
 const sidebarSearchQuery = ref('');
 
@@ -238,17 +415,18 @@ const homeTabs = computed(() => [{
 	key: 'following' as const,
 	title: i18n.ts.homeTimelineFollowing,
 	icon: 'ti-user-check',
-}, {
-	key: 'latestReplies' as const,
-	title: i18n.ts.homeTimelineLatestReplies,
-	icon: 'ti-message-circle-2',
-}, {
-	key: 'timeline' as const,
-	title: i18n.ts._timelines.timeline,
-	icon: 'ti-timeline',
-}]);
+	}, {
+		key: 'latestReplies' as const,
+		title: i18n.ts.homeTimelineLatestReplies,
+		icon: 'ti-message-circle-2',
+	}]);
 
-const timelineSubTabs = computed(() => [{
+// 新统一 scope tabs (全部 / 本地 / 联合),默认全部
+const scopeTabs = computed(() => [{
+	key: 'all' as const,
+	title: i18n.ts._categories?.all ?? '全部',
+	icon: 'ti-circle-dot',
+}, {
 	key: 'local' as const,
 	title: i18n.ts._timelines.local,
 	icon: 'ti-home',
@@ -258,10 +436,24 @@ const timelineSubTabs = computed(() => [{
 	icon: 'ti-world',
 }]);
 
+// timelineSrc 路由表:
+// tag 选了走 search-by-tag(MkTimeline 内部自动接管),src 这里随便给一个不影响。
+// 否则按 (tab × scope) 决定:
+//   - following 永远 'home'(关注流不能强行换 scope,scope 选项仅作筛选 UI 占位)
+//   - forYou / latestReplies + all → 'recommended';+local/global → discoveryMode 下的 local/global pool
 const timelineSrc = computed(() => {
 	if (homeTab.value === 'following') return 'home';
-	if (homeTab.value === 'timeline') return timelineSub.value; // 'local' | 'global'
+	// forYou / latestReplies
+	if (scope.value === 'local') return 'local';
+	if (scope.value === 'global') return 'global';
 	return 'recommended';
+});
+
+// discoveryMode 控制是不是走 recommended-timeline 算法(local/global src + true = scope-filtered recommendation)
+const discoveryMode = computed(() => {
+	if (homeTab.value === 'following') return false;
+	// forYou / latestReplies 永远走推荐算法
+	return true;
 });
 const withRenotes = computed(() => store.r.tl.value.filter.withRenotes);
 const withReplies = computed(() => store.r.tl.value.filter.withReplies);
@@ -270,15 +462,16 @@ const onlyFiles = computed(() => store.r.tl.value.filter.onlyFiles);
 const withSensitive = computed(() => store.r.tl.value.filter.withSensitive);
 const timelineKey = computed(() => [
 	homeTab.value,
-	homeTab.value === 'timeline' ? timelineSub.value : '-',
+	scope.value,
+	categoryHashtag.value ?? '__all__',
 	withRenotes.value,
 	withReplies.value,
 	withBots.value,
 	onlyFiles.value,
-	withSensitive.value,
-	homeTab.value === 'latestReplies' ? 'latestReply' : 'personalized',
-	homeTab.value === 'following' || homeTab.value === 'timeline' ? 'strictFollowing' : 'withFollowedChannels',
-].join(':'));
+		withSensitive.value,
+		homeTab.value === 'latestReplies' ? 'latestReply' : 'personalized',
+		homeTab.value === 'following' ? 'strictFollowing' : 'withFollowedChannels',
+	].join(':'));
 
 const trendRows = computed(() => buildSearchTrendRows(searchTrends.value, sidebarLimits.trends));
 const visibleChannels = computed(() => discoverySections.value.channels.slice(0, sidebarLimits.channels));
@@ -288,7 +481,7 @@ const visibleTutorialNotes = computed(() => discoverySections.value.tutorialNote
 watch(homeTab, () => {
 	queue.value = 0;
 });
-watch(timelineSub, () => {
+watch(scope, () => {
 	queue.value = 0;
 });
 
@@ -601,6 +794,132 @@ definePage(() => ({
 	opacity: 0.85;
 }
 
+/* moved & merged below to add gap */
+
+.tagChips {
+	position: sticky;
+	top: calc(var(--MI-stickyTop, 0px) + 110px);
+	z-index: 8;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 10px 14px;
+	background: color-mix(in srgb, var(--MI_THEME-bg) 92%, transparent);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	border-bottom: solid 1px var(--MI_THEME-divider);
+}
+
+.tagChip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	font-size: 0.86em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	border: solid 1px var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
+	transition: all .12s;
+	cursor: pointer;
+
+	&:hover {
+		background: var(--MI_THEME-panelHighlight);
+		color: var(--MI_THEME-fg);
+	}
+
+	i { font-size: 0.85em; }
+}
+
+.tagChipActive {
+	background: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent, #fff);
+	border-color: var(--MI_THEME-accent);
+
+	&:hover {
+		background: var(--MI_THEME-accentDarken, var(--MI_THEME-accent));
+		color: var(--MI_THEME-fgOnAccent, #fff);
+	}
+}
+
+.tagChipPinned {
+	border-color: var(--MI_THEME-accent);
+	color: var(--MI_THEME-accent);
+
+	i {
+		color: var(--MI_THEME-accent);
+	}
+
+	&.tagChipActive i {
+		color: var(--MI_THEME-fgOnAccent, #fff);
+	}
+}
+
+.tagChipHot {
+	border-color: #ff6b35;
+
+	.hotIcon {
+		color: #ff6b35;
+	}
+
+	&.tagChipActive .hotIcon {
+		color: #fff;
+	}
+}
+
+.tagChipMore {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	font-size: 0.82em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	background: transparent;
+	border: solid 1px transparent;
+	cursor: pointer;
+
+	&:hover {
+		color: var(--MI_THEME-fg);
+		background: var(--MI_THEME-panelHighlight);
+	}
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: wait;
+	}
+
+	i { font-size: 0.95em; }
+}
+
+@keyframes spin {
+	to { transform: rotate(360deg); }
+}
+.spin {
+	animation: spin 0.9s linear infinite;
+}
+
+.tagLoading {
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	padding: 5px 8px;
+}
+
+.viewSwitchBar {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px 0;
+}
+
+.subTabsRight {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
 .subTabActive {
 	color: #fff;
 	background: var(--x-blue);
@@ -894,6 +1213,78 @@ definePage(() => ({
 
 	.rightRail {
 		display: none;
+	}
+}
+
+// 移动端:全屏铺满 + 紧凑间距
+@media (max-width: 700px) {
+	.shell {
+		width: 100%;
+		max-width: 100%;
+	}
+
+	// 一级 tabs 缩小 padding
+	.tabs {
+		padding: 0 6px;
+	}
+
+	.subTabs {
+		padding: 8px 8px;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+
+	.subTabsRight {
+		width: 100%;
+		justify-content: flex-end;
+		margin-left: 0;
+	}
+
+	// 标签 chip 行:横向滚动而不是换行(更像 X / 小红书)
+	.tagChips {
+		padding: 8px 8px;
+		gap: 5px;
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		scrollbar-width: none;
+		&::-webkit-scrollbar { display: none; }
+	}
+
+	.tagChip, .tagChipMore {
+		flex-shrink: 0;
+		font-size: 0.8em;
+		padding: 4px 10px;
+	}
+
+	// composer 边到边,无 margin
+	.composer {
+		margin: 0;
+		border-left: 0;
+		border-right: 0;
+		border-radius: 0;
+	}
+
+	// timeline 内容也铺到边
+	.timeline {
+		padding: 0;
+	}
+
+	// xFeed 卡片:边到边、无圆角、紧凑外间距
+	.xFeed :deep([data-scroll-anchor]) {
+		border-radius: 0 !important;
+		border-left: 0;
+		border-right: 0;
+		margin-bottom: 0;
+		border-bottom: solid 0.5px var(--MI_THEME-divider);
+		border-top: 0;
+	}
+
+	.viewSwitchBar {
+		padding: 6px 8px 0;
+	}
+
+	.newPosts {
+		border-radius: 0;
 	}
 }
 </style>

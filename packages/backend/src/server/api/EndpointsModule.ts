@@ -8,6 +8,7 @@ import { CoreModule } from '@/core/CoreModule.js';
 import * as endpointsObject from './endpoint-list.js';
 import { GetterService } from './GetterService.js';
 import { ApiLoggerService } from './ApiLoggerService.js';
+import { NoteTranslationService } from './endpoints/notes/translate-common.js';
 
 const endpoints = Object.entries(endpointsObject);
 const endpointProviders = endpoints.map(([path, endpoint]): Provider => ({ provide: `ep:${path}`, useClass: endpoint.default }));
@@ -22,6 +23,7 @@ const $Imports = [
 	providers: [
 		GetterService,
 		ApiLoggerService,
+		NoteTranslationService,
 		...endpointProviders,
 	],
 	exports: [

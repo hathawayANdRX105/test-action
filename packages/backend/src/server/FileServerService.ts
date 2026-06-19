@@ -106,7 +106,7 @@ export class FileServerService {
 			});
 
 			fastify.get<{ Params: { key: string; } }>('/files/:key', async (request, reply) => {
-				if (!await this.checkRateLimit(request, reply, '/files/', request.params.key)) return;
+				if (!await this.checkRateLimit(request, reply, '/files/')) return;
 
 				return await this.sendDriveFile(request, reply)
 					.catch(err => this.errorHandler(request, reply, err));
@@ -127,13 +127,7 @@ export class FileServerService {
 				return;
 			}
 
-			const keyUrl = new URL(url);
-			keyUrl.searchParams.forEach(k => keyUrl.searchParams.delete(k));
-			keyUrl.hash = '';
-			keyUrl.username = '';
-			keyUrl.password = '';
-
-			if (!await this.checkRateLimit(request, reply, '/proxy/', keyUrl.href)) return;
+			if (!await this.checkRateLimit(request, reply, '/proxy/')) return;
 
 			return await this.proxyHandler(request, reply)
 				.catch(err => this.errorHandler(request, reply, err));
@@ -605,7 +599,6 @@ export class FileServerService {
 		}>,
 		reply: FastifyReply,
 		group: string,
-		resource: string,
 	): Promise<boolean> {
 		const body = request.method === 'GET'
 			? request.query
@@ -631,22 +624,7 @@ export class FileServerService {
 			}
 		}
 
-		// Call both limits: the per-resource limit and the shared cross-resource limit
-		return await this.checkResourceLimit(reply, actor, group, resource) && await this.checkSharedLimit(reply, actor, group);
-	}
-
-	private async checkResourceLimit(reply: FastifyReply, actor: string | MiUser, group: string, resource: string): Promise<boolean> {
-		const limit: Keyed<RateLimit> = {
-			// Group by resource
-			key: `${group}${resource}`,
-			type: 'bucket',
-
-			// Maximum of 10 requests, average rate of 1 per minute
-			size: 10,
-			dripRate: 1000 * 60,
-		};
-
-		return await this.checkLimit(reply, actor, limit);
+		return await this.checkSharedLimit(reply, actor, group);
 	}
 
 	private async checkSharedLimit(reply: FastifyReply, actor: string | MiUser, group: string): Promise<boolean> {
@@ -654,8 +632,9 @@ export class FileServerService {
 			key: group,
 			type: 'bucket',
 
-			// Maximum of 3600 requests, average rate of 1 per second.
-			size: 3600,
+			// Keep an actor-level safety bucket, but do not rate-limit individual hot files.
+			size: 7200,
+			dripRate: 1000,
 		};
 
 		return await this.checkLimit(reply, actor, limit);

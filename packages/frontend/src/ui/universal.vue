@@ -162,6 +162,13 @@ $widgets-hide-threshold: 1600px;
 	width: 82vw;
 	max-width: 82vw;
 	margin-inline: auto;
+
+	// 移动端:必须撑满,不留任何缝隙
+	@media (max-width: 700px) {
+		width: 100%;
+		max-width: 100%;
+		margin-inline: 0;
+	}
 }
 
 // ウィジェット併用のワイドページ用。

@@ -10,11 +10,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span v-if="note.deletedAt" style="opacity: 0.5">({{ i18n.ts.deletedNote }})</span>
 		<div>
 			<MkA v-if="note.replyId" :class="$style.reply" :to="`/notes/${note.replyId}`" @click.stop><i class="ph-arrow-bend-left-up ph-bold ph-lg"></i></MkA>
-			<Mfm v-if="note.text" :text="note.text" :author="note.user" :nyaize="'respect'" :isAnim="allowAnim" :emojiUrls="note.emojis"/>
+			<!-- 替换模式 + 译文已就绪 → 隐藏原文 -->
+			<Mfm v-if="note.text && !hideOriginalText" :text="note.text" :author="note.user" :nyaize="'respect'" :isAnim="allowAnim" :emojiUrls="note.emojis"/>
 		</div>
 		<MkButton v-if="!allowAnim && animated && !hideFiles" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-play ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.play }}</MkButton>
 		<MkButton v-else-if="!prefer.s.animatedMfm && allowAnim && animated && !hideFiles" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-stop ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.stop }}</MkButton>
-		<SkNoteTranslation :note="note" :translation="translation" :translating="translating"></SkNoteTranslation>
+		<SkNoteTranslation :note="note" :translation="translation" :translating="translating" :replaceMode="hideOriginalText"></SkNoteTranslation>
 		<MkA v-if="note.renoteId" :class="$style.rp" :to="`/notes/${note.renoteId}`" @click.stop>RN: ...</MkA>
 	</div>
 	<details v-if="note.files && note.files.length > 0" :open="!prefer.s.collapseFiles && !hideFiles">
@@ -73,6 +74,12 @@ function noteclick(id: string) {
 
 const parsed = computed(() => props.note.text ? mfm.parse(props.note.text) : null);
 const animated = computed(() => parsed.value ? checkAnimationFromMfm(parsed.value) : null);
+// 替换模式 + 已有译文 → 隐藏原文
+const hideOriginalText = computed(() =>
+	prefer.r.autoTranslateReplaceOriginal.value
+	&& !!props.translation
+	&& (props.translation as Misskey.entities.NotesTranslateResponse).text != null,
+);
 let allowAnim = ref(prefer.s.advancedMfm && prefer.s.animatedMfm);
 
 const isLong = prefer.s.expandLongNote && !props.hideFiles ? false : shouldCollapsed(props.note, []);

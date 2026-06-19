@@ -10557,6 +10557,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    '/notes/translate-batch': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * notes/translate-batch
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:account*
+         */
+        post: operations['notes___translate-batch'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     '/notes/unrenote': {
         parameters: {
             query?: never;
@@ -52206,6 +52228,8 @@ export interface operations {
                     /** @default 10 */
                     limit?: number;
                     tag?: string;
+                    /** @enum {string|null} */
+                    scope?: 'local' | 'remote' | null;
                     /** @description The outer arrays are chained with OR, the inner arrays are chained with AND. */
                     query?: string[][];
                 };
@@ -52761,6 +52785,85 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'notes___translate-batch': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    noteIds: string[];
+                    targetLang: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        translations: {
+                            [key: string]: {
+                                sourceLang?: string;
+                                text?: string;
+                            } | false;
+                        };
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -59471,4 +59574,3 @@ export interface operations {
         };
     };
 }
-
