@@ -162,25 +162,80 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkStickyContainer>
 					<template #header>
 						<!-- You can't use v-if on these, as MkTab first *deletes* and replaces all children with native HTML elements. -->
-						<!-- Instead, we add a "no notes" placeholder and default to null (all notes) if there's nothing pinned. -->
+						<!-- Keep all profile content modes mounted as native options for MkTab. -->
 						<!-- It also converts all comments into text! -->
 						<MkTab v-model="noteview" :class="$style.tab">
-							<option value="pinned">{{ i18n.ts.pinnedOnly }}</option>
-							<option :value="null">{{ i18n.ts.notes }}</option>
+							<option value="recommended">{{ i18n.ts.profileRecommended }}</option>
+							<option value="notes">{{ i18n.ts.notes }}</option>
 							<option value="all">{{ i18n.ts.all }}</option>
-							<option value="files">{{ i18n.ts.withFiles }}</option>
+							<option value="channels">{{ i18n.ts.channels }}</option>
+							<option value="media">{{ i18n.ts.media }}</option>
 						</MkTab>
 					</template>
 					<MkLazy>
-						<div v-if="noteview === 'pinned'" class="_gaps">
+						<div v-if="noteview === 'recommended'" class="_gaps">
 							<div v-if="user.pinnedNotes.length < 1" class="_fullinfo">
-								<MkResult type="empty" :text="i18n.ts.noNotes"/>
+								<MkResult type="empty" :text="i18n.ts.noProfileRecommendedNotes"/>
 							</div>
 							<div v-else class="_panel">
 								<DynamicNote v-for="note of user.pinnedNotes" :key="note.id" class="note" :class="$style.pinnedNote" :note="note" :pinned="true" @expandMute="n => onExpandMute(n)"/>
 							</div>
 						</div>
-						<MkNotes v-else :class="$style.tl" :noGap="true" :pagination="AllPagination" @expandMute="n => onExpandMute(n)"/>
+						<div v-else-if="noteview === 'channels'" :class="$style.channelSurface">
+							<div :class="$style.channelFilters">
+								<MkLoading v-if="userNoteChannelsFetching" mode="compact"/>
+								<template v-else-if="userNoteChannels.length > 0">
+									<div :class="$style.channelCategoryRow">
+										<button
+											class="_button"
+											:class="[$style.channelChip, { [$style.activeChannelChip]: selectedChannelCategory === null }]"
+											@click="selectedChannelCategory = null"
+										>
+											{{ i18n.ts.all }}
+										</button>
+										<button
+											v-for="category in channelCategories"
+											:key="category"
+											class="_button"
+											:class="[$style.channelChip, { [$style.activeChannelChip]: selectedChannelCategory === category }]"
+											@click="selectChannelCategory(category)"
+										>
+											{{ category === UNCATEGORIZED_CATEGORY ? i18n.ts.uncategorized : category }}
+										</button>
+									</div>
+									<div :class="$style.channelChipRow">
+										<button
+											class="_button"
+											:class="[$style.channelChip, { [$style.activeChannelChip]: selectedChannelId === null }]"
+											@click="selectedChannelId = null"
+										>
+											<i class="ti ti-layout-grid"></i>
+											<span>{{ i18n.ts.allChannels }}</span>
+										</button>
+										<button
+											v-for="row in filteredUserNoteChannels"
+											:key="row.channel.id"
+											class="_button"
+											:class="[$style.channelChip, { [$style.activeChannelChip]: selectedChannelId === row.channel.id }]"
+											@click="selectedChannelId = row.channel.id"
+										>
+											<i class="ti ti-device-tv"></i>
+											<span>{{ row.channel.name }}</span>
+											<b>{{ row.notesCount }}</b>
+										</button>
+									</div>
+								</template>
+								<MkResult v-else type="empty" :text="i18n.ts.noNotes"/>
+							</div>
+							<MkNotes v-if="userNoteChannels.length > 0" :key="`channels-${selectedChannelId ?? 'all'}`" :class="$style.tl" :noGap="true" :pagination="channelNotesPagination" @expandMute="n => onExpandMute(n)"/>
+						</div>
+						<MkPagination v-else-if="noteview === 'media'" v-slot="{items}" :pagination="mediaPagination">
+							<div :class="$style.mediaStream">
+								<MkNoteMediaGrid v-for="note in items" :key="note.id" :note="note" square/>
+							</div>
+						</MkPagination>
+						<MkNotes v-else-if="noteview === 'all'" :class="$style.tl" :noGap="true" :pagination="allNotesPagination" @expandMute="n => onExpandMute(n)"/>
+						<MkNotes v-else :class="$style.tl" :noGap="true" :pagination="profileNotesPagination" @expandMute="n => onExpandMute(n)"/>
 					</MkLazy>
 				</MkStickyContainer>
 			</div>
@@ -202,6 +257,9 @@ import { getScrollPosition } from '@@/js/scroll.js';
 import { useMuteOverrides } from '@/utility/check-word-mute.js';
 import MkTab from '@/components/MkTab.vue';
 import MkNotes from '@/components/MkNotes.vue';
+import MkNoteMediaGrid from '@/components/MkNoteMediaGrid.vue';
+import MkPagination from '@/components/MkPagination.vue';
+import MkLoading from '@/components/global/MkLoading.vue';
 import MkFollowButton from '@/components/MkFollowButton.vue';
 import MkAccountMoved from '@/components/MkAccountMoved.vue';
 import MkFukidashi from '@/components/MkFukidashi.vue';
@@ -292,7 +350,12 @@ const memoDraft = ref(props.user.memo);
 const isEditingMemo = ref(false);
 const moderationNote = ref(props.user.moderationNote ?? '');
 const editModerationNote = ref(false);
-const noteview = ref<string | null>(props.user.pinnedNotes.length ? 'pinned' : null);
+const noteview = ref<'recommended' | 'notes' | 'all' | 'channels' | 'media'>(props.user.pinnedNotes.length ? 'recommended' : 'all');
+const userNoteChannels = ref<Misskey.entities.UsersNoteChannelsResponse>([]);
+const userNoteChannelsFetching = ref(false);
+const UNCATEGORIZED_CATEGORY = '__uncategorized__';
+const selectedChannelCategory = ref<string | null>(null);
+const selectedChannelId = ref<string | null>(null);
 
 const listenbrainzdata = ref(false);
 if (props.user.listenbrainz) {
@@ -331,26 +394,101 @@ watch(moderationNote, async () => {
 	await misskeyApi('admin/update-user-note', { userId: props.user.id, text: moderationNote.value });
 });
 
-const pagination = {
-	endpoint: 'users/featured-notes' as const,
-	limit: 10,
-	params: computed(() => ({
-		userId: props.user.id,
-	})),
-};
-
-const AllPagination = {
+const profileNotesPagination = {
 	endpoint: 'users/notes' as const,
 	limit: 10,
 	params: computed(() => ({
 		userId: props.user.id,
-		withRenotes: noteview.value === 'all',
-		withReplies: noteview.value === 'all',
-		// 用户主页显示其全部帖子(含发到频道的帖子),否则只发频道的用户主页几乎是空的
-		withChannelNotes: true,
-		withFiles: noteview.value === 'files',
+		withRenotes: false,
+		withReplies: false,
+		withChannelNotes: false,
 	})),
 };
+
+const allNotesPagination = {
+	endpoint: 'users/notes' as const,
+	limit: 10,
+	params: computed(() => ({
+		userId: props.user.id,
+		withRenotes: true,
+		withReplies: true,
+		withChannelNotes: true,
+	})),
+};
+
+const channelNotesPagination = {
+	endpoint: 'users/notes' as const,
+	limit: 10,
+	params: computed(() => ({
+		userId: props.user.id,
+		withRenotes: true,
+		withReplies: true,
+		withChannelNotes: true,
+		channelId: selectedChannelId.value ?? undefined,
+	})),
+};
+
+const mediaPagination = {
+	endpoint: 'users/notes' as const,
+	limit: 15,
+	params: computed(() => ({
+		userId: props.user.id,
+		withRenotes: true,
+		withReplies: false,
+		withChannelNotes: true,
+		withFiles: true,
+	})),
+};
+
+const channelCategories = computed(() => {
+	const categories = new Set<string>();
+	for (const row of userNoteChannels.value) {
+		categories.add(row.category ?? UNCATEGORIZED_CATEGORY);
+	}
+	return [...categories];
+});
+
+const filteredUserNoteChannels = computed(() => {
+	if (selectedChannelCategory.value == null) return userNoteChannels.value;
+	return userNoteChannels.value.filter(row => (row.category ?? UNCATEGORIZED_CATEGORY) === selectedChannelCategory.value);
+});
+
+function selectChannelCategory(category: string) {
+	selectedChannelCategory.value = category;
+	if (selectedChannelId.value != null && !filteredUserNoteChannels.value.some(row => row.channel.id === selectedChannelId.value)) {
+		selectedChannelId.value = null;
+	}
+}
+
+async function loadUserNoteChannels() {
+	if (userNoteChannelsFetching.value) return;
+	userNoteChannelsFetching.value = true;
+	try {
+		userNoteChannels.value = await misskeyApi('users/note-channels', {
+			userId: props.user.id,
+		});
+		if (selectedChannelId.value != null && !userNoteChannels.value.some(row => row.channel.id === selectedChannelId.value)) {
+			selectedChannelId.value = null;
+		}
+	} finally {
+		userNoteChannelsFetching.value = false;
+	}
+}
+
+watch(noteview, (value) => {
+	if (value === 'channels' && userNoteChannels.value.length === 0) {
+		loadUserNoteChannels();
+	}
+}, { immediate: true });
+
+watch(() => props.user.id, () => {
+	userNoteChannels.value = [];
+	selectedChannelCategory.value = null;
+	selectedChannelId.value = null;
+	if (noteview.value === 'channels') {
+		loadUserNoteChannels();
+	}
+});
 
 const style = computed(() => {
 	if (props.user.bannerUrl == null) return {};
@@ -1014,6 +1152,73 @@ html[style*="color-scheme: dark"] .ftskorzw > .main > .profile > .main > .title 
 	border-radius: var(--MI-radius);
 	overflow: clip;
 	z-index: 0;
+}
+
+.channelSurface {
+	display: flex;
+	flex-direction: column;
+	gap: var(--MI-marginHalf);
+}
+
+.channelFilters {
+	padding: 10px;
+	background: var(--MI_THEME-panel);
+	border-radius: var(--MI-radius);
+}
+
+.channelCategoryRow,
+.channelChipRow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.channelChipRow {
+	margin-top: 8px;
+}
+
+.channelChip {
+	display: inline-flex;
+	align-items: center;
+	max-width: 100%;
+	min-height: 34px;
+	gap: 6px;
+	padding: 7px 10px;
+	color: var(--MI_THEME-fg);
+	background: color-mix(in srgb, var(--MI_THEME-buttonBg), transparent 20%);
+	border: 1px solid var(--MI_THEME-divider);
+	border-radius: var(--MI-radius-sm);
+
+	> span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	> b {
+		min-width: 1.5em;
+		padding: 1px 6px;
+		border-radius: var(--MI-radius-ellipse);
+		background: color-mix(in srgb, var(--MI_THEME-fg), transparent 88%);
+		font-size: 0.78em;
+		font-weight: 700;
+		text-align: center;
+	}
+}
+
+.activeChannelChip {
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent), transparent 88%);
+	border-color: color-mix(in srgb, var(--MI_THEME-accent), transparent 35%);
+}
+
+.mediaStream {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+	gap: var(--MI-marginHalf);
+	padding: 8px;
+	background: var(--MI_THEME-panel);
+	border-radius: var(--MI-radius);
 }
 
 .tab {

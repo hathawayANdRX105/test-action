@@ -69,6 +69,7 @@ export const paramDef = {
 		withBots: { type: 'boolean', default: true },
 		withNonPublic: { type: 'boolean', default: true },
 		withChannelNotes: { type: 'boolean', default: false },
+		channelId: { type: 'string', format: 'misskey:id' },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },
@@ -99,6 +100,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
 			const isSelf = me && (me.id === ps.userId);
+			const withChannelNotes = ps.withChannelNotes || ps.channelId != null;
 
 			if (ps.withReplies && ps.withFiles) throw new ApiError(meta.errors.bothWithRepliesAndWithFiles);
 
@@ -114,7 +116,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					sinceId,
 					limit: ps.limit,
 					userId: ps.userId,
-					withChannelNotes: ps.withChannelNotes,
+					withChannelNotes,
+					channelId: ps.channelId,
+					withFiles: ps.withFiles,
+					withRenotes: ps.withRenotes,
+					withQuotes: ps.withQuotes,
+					withBots: ps.withBots,
+					withNonPublic: ps.withNonPublic,
+					withReplies: ps.withReplies,
+				}, me);
+
+				return await this.noteEntityService.packMany(timeline, me);
+			}
+
+			if (withChannelNotes) {
+				const timeline = await this.getFromDb({
+					untilId,
+					sinceId,
+					limit: ps.limit,
+					userId: ps.userId,
+					withChannelNotes,
+					channelId: ps.channelId,
 					withFiles: ps.withFiles,
 					withRenotes: ps.withRenotes,
 					withQuotes: ps.withQuotes,
@@ -129,7 +151,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const redisTimelines: FanoutTimelineName[] = [ps.withFiles ? `userTimelineWithFiles:${ps.userId}` : `userTimeline:${ps.userId}`];
 
 			if (ps.withReplies) redisTimelines.push(`userTimelineWithReplies:${ps.userId}`);
-			if (ps.withChannelNotes) redisTimelines.push(`userTimelineWithChannel:${ps.userId}`);
+			if (withChannelNotes) redisTimelines.push(`userTimelineWithChannel:${ps.userId}`);
 
 			const timeline = await this.fanoutTimelineEndpointService.timeline({
 				untilId,
@@ -143,8 +165,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				ignoreAuthorFromInstanceBlock: true,
 				ignoreAuthorFromUserSuspension: true,
 				ignoreAuthorFromUserSilence: true,
-				excludeReplies: !ps.withChannelNotes && !ps.withReplies, // userTimelineWithChannel may include replies
-				excludeNoFiles: !ps.withChannelNotes && ps.withFiles, // userTimelineWithChannel may include notes without files
+				excludeReplies: !withChannelNotes && !ps.withReplies, // userTimelineWithChannel may include replies
+				excludeNoFiles: !withChannelNotes && ps.withFiles, // userTimelineWithChannel may include notes without files
 				excludePureRenotes: !ps.withRenotes,
 				excludeBots: !ps.withBots,
 				noteFilter: note => {
@@ -159,7 +181,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					sinceId,
 					limit,
 					userId: ps.userId,
-					withChannelNotes: ps.withChannelNotes,
+					withChannelNotes,
+					channelId: ps.channelId,
 					withFiles: ps.withFiles,
 					withRenotes: ps.withRenotes,
 					withQuotes: ps.withQuotes,
@@ -179,6 +202,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		limit: number,
 		userId: string,
 		withChannelNotes: boolean,
+		channelId?: string,
 		withFiles: boolean,
 		withRenotes: boolean,
 		withQuotes: boolean,
@@ -198,7 +222,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			.leftJoinAndSelect('renote.user', 'renoteUser')
 			.limit(ps.limit);
 
-		if (ps.withChannelNotes) {
+		if (ps.channelId != null) {
+			query.andWhere('note.channelId = :channelId', { channelId: ps.channelId });
+			if (!isSelf) {
+				query.andWhere('channel.isSensitive = false');
+			}
+		} else if (ps.withChannelNotes) {
 			if (!isSelf) query.andWhere(new Brackets(qb => {
 				qb.orWhere('note.channelId IS NULL');
 				qb.orWhere('channel.isSensitive = false');

@@ -49,11 +49,12 @@ const pagination: Paging<'users/notes'> = {
 		withNonPublic: props.withNonPublic,
 		withRenotes: false,
 		withQuotes: props.withQuotes,
-		withReplies: props.withReplies,
-		withRepliesToSelf: props.withReplies,
+		withReplies: props.onlyFiles ? false : props.withReplies,
+		withRepliesToSelf: props.onlyFiles ? false : props.withReplies,
+		withChannelNotes: true,
 		withFiles: props.onlyFiles,
 		withBots: props.withBots,
-		allowPartial: true,
+		allowPartial: false,
 	})),
 };
 
