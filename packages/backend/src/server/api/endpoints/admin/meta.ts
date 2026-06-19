@@ -13,6 +13,7 @@ import { instanceUnsignedFetchOptions } from '@/const.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
 import { MiMeta } from '@/models/Meta.js';
 import { normalizeInstanceBrandName, normalizeInstanceBrandUrl } from '@/misc/brand-name.js';
+import { publicUrlPreviewOutboundProxies } from '@/misc/url-preview-proxy.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -436,6 +437,20 @@ export const meta = {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
+			notesHideRemoteEmergency: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			notesRemoteKeywordBlocklist: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: { type: 'string' },
+			},
+			notesLocalKeywordBlocklist: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: { type: 'string' },
+			},
 			chatMessageRetentionDays: {
 				type: 'integer',
 				optional: false, nullable: false,
@@ -654,6 +669,36 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			urlPreviewProxyMode: {
+				type: 'string',
+				enum: ['direct', 'summaly', 'outbound'],
+				optional: false, nullable: false,
+			},
+			urlPreviewOutboundProxies: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					optional: false,
+					nullable: false,
+					properties: {
+						id: { type: 'string', optional: false, nullable: false },
+						name: { type: 'string', optional: false, nullable: false },
+						type: { type: 'string', enum: ['socks5', 'http', 'https'], optional: false, nullable: false },
+						host: { type: 'string', optional: false, nullable: false },
+						port: { type: 'number', optional: false, nullable: false },
+						username: { type: 'string', optional: false, nullable: true },
+						passwordSet: { type: 'boolean', optional: false, nullable: false },
+						isEnabled: { type: 'boolean', optional: false, nullable: false },
+						priority: { type: 'number', optional: false, nullable: false },
+					},
+				},
+			},
+			urlPreviewProxyStrategy: {
+				type: 'string',
+				enum: ['failover'],
+				optional: false, nullable: false,
+			},
 			trustedLinkUrlPatterns: {
 				type: 'array',
 				optional: false, nullable: false,
@@ -852,6 +897,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				chatEmergencyMode: instance.chatEmergencyMode,
 				notesHideEmergencyMode: instance.notesHideEmergencyMode,
 				notesPostingFrozen: instance.notesPostingFrozen,
+				notesHideRemoteEmergency: instance.notesHideRemoteEmergency,
+				notesRemoteKeywordBlocklist: instance.notesRemoteKeywordBlocklist,
+				notesLocalKeywordBlocklist: instance.notesLocalKeywordBlocklist,
 				chatMessageRetentionDays: instance.chatMessageRetentionDays,
 				chatBannedKeywords: instance.chatBannedKeywords,
 				enableAi: instance.enableAi,
@@ -880,6 +928,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				urlPreviewRequireContentLength: instance.urlPreviewRequireContentLength,
 				urlPreviewUserAgent: instance.urlPreviewUserAgent,
 				urlPreviewSummaryProxyUrl: instance.urlPreviewSummaryProxyUrl,
+				urlPreviewProxyMode: instance.urlPreviewProxyMode ?? (instance.urlPreviewSummaryProxyUrl ? 'summaly' : 'direct'),
+				urlPreviewOutboundProxies: publicUrlPreviewOutboundProxies(instance.urlPreviewOutboundProxies ?? []),
+				urlPreviewProxyStrategy: instance.urlPreviewProxyStrategy ?? 'failover',
 				trustedLinkUrlPatterns: instance.trustedLinkUrlPatterns,
 				federation: instance.federation,
 				federationHosts: instance.federationHosts,

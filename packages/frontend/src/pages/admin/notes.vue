@@ -27,6 +27,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkSwitch>
 					<MkInfo v-if="postingFrozen" warn>{{ i18n.ts._noteManagement.postingFrozenActive }}</MkInfo>
 
+					<!-- 联邦 / 关键词紧急屏蔽:都对管理员/版主豁免;改后无需重启,5s 内全站生效 -->
+					<MkSwitch v-model="hideRemote" :disabled="!iAmAdmin">
+						<template #label>{{ i18n.ts._noteManagement.hideRemoteEmergency }}</template>
+						<template #caption>{{ i18n.ts._noteManagement.hideRemoteEmergencyCaption }}</template>
+					</MkSwitch>
+					<MkInfo v-if="hideRemote" warn>{{ i18n.ts._noteManagement.hideRemoteEmergencyActive }}</MkInfo>
+
+					<MkTextarea v-model="remoteKeywords" :disabled="!iAmAdmin">
+						<template #label>{{ i18n.ts._noteManagement.remoteKeywordBlocklist }}</template>
+						<template #caption>{{ i18n.ts._noteManagement.keywordBlocklistCaption }}</template>
+					</MkTextarea>
+
+					<MkTextarea v-model="localKeywords" :disabled="!iAmAdmin">
+						<template #label>{{ i18n.ts._noteManagement.localKeywordBlocklist }}</template>
+						<template #caption>{{ i18n.ts._noteManagement.keywordBlocklistCaption }}</template>
+					</MkTextarea>
+
 					<div class="_buttons">
 						<MkButton primary rounded :disabled="!iAmAdmin" :wait="savingEmergency" @click="saveEmergency"><i class="ti ti-check"></i> {{ i18n.ts.save }}</MkButton>
 					</div>
@@ -322,6 +339,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
+import MkTextarea from '@/components/MkTextarea.vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
@@ -343,7 +361,14 @@ const instanceMeta = await misskeyApi('admin/meta') as Misskey.entities.AdminMet
 // 紧急方案
 const hideMode = ref<boolean>((instanceMeta as any).notesHideEmergencyMode ?? false);
 const postingFrozen = ref<boolean>((instanceMeta as any).notesPostingFrozen ?? false);
+const hideRemote = ref<boolean>((instanceMeta as any).notesHideRemoteEmergency ?? false);
+const remoteKeywords = ref<string>(((instanceMeta as any).notesRemoteKeywordBlocklist ?? []).join('\n'));
+const localKeywords = ref<string>(((instanceMeta as any).notesLocalKeywordBlocklist ?? []).join('\n'));
 const savingEmergency = ref(false);
+
+function parseKeywords(raw: string): string[] {
+	return Array.from(new Set(raw.split('\n').map(k => k.trim()).filter(k => k.length > 0))).slice(0, 200);
+}
 
 async function saveEmergency() {
 	savingEmergency.value = true;
@@ -351,6 +376,9 @@ async function saveEmergency() {
 		await os.apiWithDialog('admin/update-meta', {
 			notesHideEmergencyMode: hideMode.value,
 			notesPostingFrozen: postingFrozen.value,
+			notesHideRemoteEmergency: hideRemote.value,
+			notesRemoteKeywordBlocklist: parseKeywords(remoteKeywords.value),
+			notesLocalKeywordBlocklist: parseKeywords(localKeywords.value),
 		});
 		await fetchInstance(true);
 	} finally {

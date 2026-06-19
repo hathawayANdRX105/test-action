@@ -54,4 +54,43 @@ export class NoteControlService {
 		if (!meta.notesPostingFrozen) return false;
 		return !(await this.roleService.isModerator(user));
 	}
+
+	// 联邦/关键词紧急过滤:针对一批待打包的帖子,返回应屏蔽的 noteId 集合(仅对非管理员/版主生效)。
+	// 三类条件,任一命中即应屏蔽:
+	//   ① notesHideRemoteEmergency:屏蔽所有 userHost 非空(远程)的帖子;
+	//   ② notesRemoteKeywordBlocklist:远程帖 text/cw 命中任一关键词(小写子串);
+	//   ③ notesLocalKeywordBlocklist:本地帖 text/cw 命中任一关键词。
+	// 仅在有非空开关/关键词时才调 isModerator,避免空查询时的开销。
+	@bindThis
+	public async filterHiddenNoteIds(
+		notes: { id: string; userHost: string | null; text: string | null; cw: string | null }[],
+		me: { id: MiUser['id'] } | null,
+	): Promise<Set<string>> {
+		if (notes.length === 0) return new Set();
+
+		const meta = await this.getControlMeta();
+		const hideRemote = meta.notesHideRemoteEmergency === true;
+		const remoteKw = (meta.notesRemoteKeywordBlocklist ?? []).map(k => k.toLowerCase()).filter(k => k.length > 0);
+		const localKw = (meta.notesLocalKeywordBlocklist ?? []).map(k => k.toLowerCase()).filter(k => k.length > 0);
+
+		if (!hideRemote && remoteKw.length === 0 && localKw.length === 0) return new Set();
+
+		// 管理员/版主豁免:与现有紧急隐藏/冻结发帖的语义一致。
+		const exempt = await this.roleService.isModerator(me);
+		if (exempt) return new Set();
+
+		const hidden = new Set<string>();
+		for (const n of notes) {
+			const isRemote = n.userHost != null;
+			if (isRemote && hideRemote) { hidden.add(n.id); continue; }
+			const haystack = ((n.text ?? '') + ' ' + (n.cw ?? '')).toLowerCase();
+			if (haystack.length === 0) continue;
+			const kws = isRemote ? remoteKw : localKw;
+			if (kws.length === 0) continue;
+			for (const kw of kws) {
+				if (haystack.includes(kw)) { hidden.add(n.id); break; }
+			}
+		}
+		return hidden;
+	}
 }

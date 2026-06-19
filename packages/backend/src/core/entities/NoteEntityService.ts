@@ -797,6 +797,13 @@ export class NoteEntityService implements OnModuleInit {
 		// 帖子紧急隐藏（黑屏）：开启后除管理员/审核员外，所有列表/时间线一律返回空。
 		if (await this.noteControlService.isHiddenFor(me ?? null)) return [];
 
+		// 联邦/关键词紧急过滤(非管理员/版主):命中即从该批中剔除。
+		// 仅在 meta 有非空设置时才会真正算,空 Set 表示无需过滤。
+		const hidden = await this.noteControlService.filterHiddenNoteIds(notes, me ?? null);
+		const filtered = hidden.size > 0 ? notes.filter(n => !hidden.has(n.id)) : notes;
+		if (filtered.length === 0) return [];
+		notes = filtered;
+
 		// Create session deduplicators
 		const noteFetcher = new Deduplicator(noteId => this.noteLoader.load(noteId));
 		const channelFetcher = new Deduplicator(channelId => this.channelLoader.load(channelId));

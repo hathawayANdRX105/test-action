@@ -21746,6 +21746,9 @@ export interface operations {
                         chatEmergencyMode: boolean;
                         notesHideEmergencyMode: boolean;
                         notesPostingFrozen: boolean;
+                        notesHideRemoteEmergency: boolean;
+                        notesRemoteKeywordBlocklist: string[];
+                        notesLocalKeywordBlocklist: string[];
                         chatMessageRetentionDays: number;
                         chatBannedKeywords: string[];
                         enableAi: boolean;
@@ -27382,6 +27385,9 @@ export interface operations {
                     chatEmergencyMode?: boolean;
                     notesHideEmergencyMode?: boolean;
                     notesPostingFrozen?: boolean;
+                    notesHideRemoteEmergency?: boolean;
+                    notesRemoteKeywordBlocklist?: string[];
+                    notesLocalKeywordBlocklist?: string[];
                     chatMessageRetentionDays?: number;
                     chatBannedKeywords?: string[];
                     enableAi?: boolean;

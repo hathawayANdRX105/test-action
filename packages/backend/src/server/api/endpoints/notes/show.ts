@@ -93,6 +93,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.signinRequired);
 			}
 
+			// 联邦/关键词紧急过滤(非管理员/版主):命中即视为不可见。
+			const hidden = await this.noteControlService.filterHiddenNoteIds([note], me ?? null);
+			if (hidden.has(note.id)) {
+				throw new ApiError(meta.errors.noSuchNote);
+			}
+
 			return await this.noteEntityService.pack(note, me, {
 				detail: true,
 			});

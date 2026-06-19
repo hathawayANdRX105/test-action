@@ -5661,6 +5661,30 @@ export interface Locale extends ILocale {
          */
         "postingFrozenActive": string;
         /**
+         * リモート投稿をすべて非表示（連合ブラックアウト）
+         */
+        "hideRemoteEmergency": string;
+        /**
+         * オンにすると、他の連合サーバーから配信された投稿が管理者・モデレーター以外には一切表示されなくなります（DB には残ります）。連合の炎上・巻き込み事故への一時止血用。オフで復帰。
+         */
+        "hideRemoteEmergencyCaption": string;
+        /**
+         * 全リモート投稿を非表示中：現在、非モデレーターには連合サーバーの投稿が一切見えません。
+         */
+        "hideRemoteEmergencyActive": string;
+        /**
+         * リモート投稿キーワードブロック（1行1キーワード）
+         */
+        "remoteKeywordBlocklist": string;
+        /**
+         * ローカル投稿キーワードブロック（1行1キーワード）
+         */
+        "localKeywordBlocklist": string;
+        /**
+         * 本文+CW にいずれかのキーワード（小文字部分一致）を含む投稿を、非モデレーターには非表示にします。変更後5秒以内に全体反映。再起動不要。最大200件。
+         */
+        "keywordBlocklistCaption": string;
+        /**
          * すべての投稿
          */
         "allNotes": string;

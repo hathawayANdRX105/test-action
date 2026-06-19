@@ -5,6 +5,7 @@
 
 import { Entity, Column, PrimaryColumn, ManyToOne } from 'typeorm';
 import { apiAccessModes, defaultApiPublicPermissions, type ApiAccessMode, type InstanceUnsignedFetchOption, instanceUnsignedFetchOptions } from '@/const.js';
+import type { UrlPreviewOutboundProxy, UrlPreviewProxyMode } from '@/misc/url-preview-proxy.js';
 import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
@@ -705,6 +706,26 @@ export class MiMeta {
 	})
 	public notesPostingFrozen: boolean;
 
+	// 紧急屏蔽所有远程(联邦推送)帖子：开启后除管理员/版主外,
+	// 时间线/单帖请求里的远程帖一律不渲染(库里仍在)。用于联邦风暴/被卷入争议事件时止血。
+	@Column('boolean', {
+		default: false,
+	})
+	public notesHideRemoteEmergency: boolean;
+
+	// 远程帖关键词黑名单(小写子串匹配 text+cw),管理员/版主豁免。
+	// 命中即在打包时过滤,不写入历史也不需要任何后台任务,改完直读 DB 即时生效。
+	@Column('varchar', {
+		length: 256, array: true, default: '{}',
+	})
+	public notesRemoteKeywordBlocklist: string[];
+
+	// 本地帖关键词黑名单(同上,仅作用本地帖)。
+	@Column('varchar', {
+		length: 256, array: true, default: '{}',
+	})
+	public notesLocalKeywordBlocklist: string[];
+
 	// 统一聊天保持期（天）。>0 时，早于该时长的聊天消息不可查看并会被自动清理。0=不限制。
 	@Column('integer', {
 		default: 0,
@@ -865,6 +886,23 @@ export class MiMeta {
 		nullable: true,
 	})
 	public urlPreviewSummaryProxyUrl: string | null;
+
+	@Column('varchar', {
+		length: 16,
+		default: 'outbound',
+	})
+	public urlPreviewProxyMode: UrlPreviewProxyMode;
+
+	@Column('jsonb', {
+		default: [],
+	})
+	public urlPreviewOutboundProxies: UrlPreviewOutboundProxy[];
+
+	@Column('varchar', {
+		length: 16,
+		default: 'failover',
+	})
+	public urlPreviewProxyStrategy: 'failover';
 
 	@Column('varchar', {
 		length: 1024,

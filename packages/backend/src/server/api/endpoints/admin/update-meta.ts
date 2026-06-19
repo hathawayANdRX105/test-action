@@ -14,6 +14,11 @@ import { DI } from '@/di-symbols.js';
 import { normalizeForSearch } from '@/misc/normalize-for-search.js';
 import { SearchTrendService } from '@/core/SearchTrendService.js';
 import { normalizeInstanceBrandName, normalizeInstanceBrandUrl } from '@/misc/brand-name.js';
+import {
+	enabledUrlPreviewOutboundProxies,
+	normalizeUrlPreviewOutboundProxies,
+	urlPreviewProxyModes,
+} from '@/misc/url-preview-proxy.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -167,6 +172,9 @@ export const paramDef = {
 		chatEmergencyMode: { type: 'boolean' },
 		notesHideEmergencyMode: { type: 'boolean' },
 		notesPostingFrozen: { type: 'boolean' },
+		notesHideRemoteEmergency: { type: 'boolean' },
+		notesRemoteKeywordBlocklist: { type: 'array', items: { type: 'string' } },
+		notesLocalKeywordBlocklist: { type: 'array', items: { type: 'string' } },
 		chatMessageRetentionDays: { type: 'integer', minimum: 0, maximum: 3650 },
 		chatBannedKeywords: { type: 'array', items: { type: 'string' } },
 		enableAi: { type: 'boolean' },
@@ -224,6 +232,15 @@ export const paramDef = {
 		urlPreviewRequireContentLength: { type: 'boolean' },
 		urlPreviewUserAgent: { type: 'string', nullable: true },
 		urlPreviewSummaryProxyUrl: { type: 'string', nullable: true },
+		urlPreviewProxyMode: { type: 'string', enum: urlPreviewProxyModes },
+		urlPreviewOutboundProxies: {
+			type: 'array',
+			items: {
+				type: 'object',
+				additionalProperties: true,
+			},
+		},
+		urlPreviewProxyStrategy: { type: 'string', enum: ['failover'] },
 		trustedLinkUrlPatterns: {
 			type: 'array', nullable: true, items: {
 				type: 'string',
@@ -740,6 +757,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.notesPostingFrozen = ps.notesPostingFrozen;
 			}
 
+			if (ps.notesHideRemoteEmergency !== undefined) {
+				set.notesHideRemoteEmergency = ps.notesHideRemoteEmergency;
+			}
+
+			if (ps.notesRemoteKeywordBlocklist !== undefined) {
+				// 去空 + 去重 + 上限 200 条,与 chatBannedKeywords 风格一致
+				set.notesRemoteKeywordBlocklist = Array.from(new Set(
+					ps.notesRemoteKeywordBlocklist.map(k => k.trim()).filter(k => k.length > 0),
+				)).slice(0, 200);
+			}
+
+			if (ps.notesLocalKeywordBlocklist !== undefined) {
+				set.notesLocalKeywordBlocklist = Array.from(new Set(
+					ps.notesLocalKeywordBlocklist.map(k => k.trim()).filter(k => k.length > 0),
+				)).slice(0, 200);
+			}
+
 			if (ps.chatMessageRetentionDays !== undefined) {
 				set.chatMessageRetentionDays = ps.chatMessageRetentionDays;
 			}
@@ -869,6 +903,29 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.urlPreviewSummaryProxyUrl = value === '' ? null : value;
 			}
 
+			if (ps.urlPreviewProxyMode !== undefined) {
+				set.urlPreviewProxyMode = ps.urlPreviewProxyMode;
+			}
+
+			if (ps.urlPreviewOutboundProxies !== undefined) {
+				set.urlPreviewOutboundProxies = normalizeUrlPreviewOutboundProxies(ps.urlPreviewOutboundProxies, this.serverSettings.urlPreviewOutboundProxies ?? []);
+			}
+
+			if (ps.urlPreviewProxyStrategy !== undefined) {
+				set.urlPreviewProxyStrategy = 'failover';
+			}
+
+			if (isUrlPreviewSettingsTouched(ps)) {
+				const nextUrlPreviewEnabled = set.urlPreviewEnabled ?? this.serverSettings.urlPreviewEnabled;
+				const nextSummaryProxyUrl = set.urlPreviewSummaryProxyUrl ?? this.serverSettings.urlPreviewSummaryProxyUrl;
+				const nextUrlPreviewProxyMode = set.urlPreviewProxyMode ?? this.serverSettings.urlPreviewProxyMode ?? (nextSummaryProxyUrl ? 'summaly' : 'direct');
+				const nextUrlPreviewOutboundProxies = set.urlPreviewOutboundProxies ?? this.serverSettings.urlPreviewOutboundProxies ?? [];
+
+				if (nextUrlPreviewEnabled && nextUrlPreviewProxyMode === 'outbound' && enabledUrlPreviewOutboundProxies(nextUrlPreviewOutboundProxies).length === 0) {
+					throw new Error('URL preview outbound mode requires at least one enabled proxy');
+				}
+			}
+
 			if (Array.isArray(ps.trustedLinkUrlPatterns)) {
 				set.trustedLinkUrlPatterns = ps.trustedLinkUrlPatterns.filter(Boolean);
 			}
@@ -920,6 +977,10 @@ function sanitize(meta: Partial<MiMeta & OnApplicationShutdown & OnApplicationBo
 		swPrivateKey: '<redacted>',
 		objectStorageAccessKey: '<redacted>',
 		objectStorageSecretKey: '<redacted>',
+		urlPreviewOutboundProxies: meta.urlPreviewOutboundProxies?.map(proxy => ({
+			...proxy,
+			password: proxy.password ? '<redacted>' : null,
+		})),
 		deeplAuthKey: '<redacted>',
 		libreTranslateKey: '<redacted>',
 		verifymailAuthKey: '<redacted>',
@@ -928,4 +989,17 @@ function sanitize(meta: Partial<MiMeta & OnApplicationShutdown & OnApplicationBo
 		onApplicationShutdown: undefined,
 	};
 	return meta;
+}
+
+function isUrlPreviewSettingsTouched(ps: Record<string, unknown>): boolean {
+	return ps.urlPreviewEnabled !== undefined
+		|| ps.urlPreviewTimeout !== undefined
+		|| ps.urlPreviewMaximumContentLength !== undefined
+		|| ps.urlPreviewRequireContentLength !== undefined
+		|| ps.urlPreviewUserAgent !== undefined
+		|| ps.summalyProxy !== undefined
+		|| ps.urlPreviewSummaryProxyUrl !== undefined
+		|| ps.urlPreviewProxyMode !== undefined
+		|| ps.urlPreviewOutboundProxies !== undefined
+		|| ps.urlPreviewProxyStrategy !== undefined;
 }
