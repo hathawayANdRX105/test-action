@@ -11293,6 +11293,10 @@ export interface Locale extends ILocale {
          */
         "global": string;
         /**
+         * タイムライン
+         */
+        "timeline": string;
+        /**
          * Bubble
          */
         "bubble": string;

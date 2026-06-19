@@ -2873,6 +2873,7 @@ _timelines:
   local: "Local"
   social: "Social"
   global: "Global"
+  timeline: "Timeline"
 _play:
   new: "Create Play"
   edit: "Edit Play"

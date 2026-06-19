@@ -2891,6 +2891,7 @@ _timelines:
   local: "ローカル"
   social: "ソーシャル"
   global: "グローバル"
+  timeline: "タイムライン"
 
 _play:
   new: "Playの作成"

@@ -17,9 +17,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:aria-selected="homeTab === tab.key"
 					@click="homeTab = tab.key"
 				>
+					<i :class="['ti', tab.icon, $style.tabIcon]"></i>
 					<span :class="$style.tabLabel">{{ tab.title }}</span>
 				</button>
 			</header>
+
+			<nav v-if="homeTab === 'timeline'" :class="$style.subTabs" role="tablist" :aria-label="i18n.ts._timelines.local + ' / ' + i18n.ts._timelines.global">
+				<button
+					v-for="sub in timelineSubTabs"
+					:key="sub.key"
+					class="_button"
+					:class="[$style.subTab, { [$style.subTabActive]: timelineSub === sub.key }]"
+					role="tab"
+					:aria-selected="timelineSub === sub.key"
+					@click="timelineSub = sub.key"
+				>
+					<i :class="['ti', sub.icon, $style.subTabIcon]"></i>
+					<span>{{ sub.title }}</span>
+				</button>
+			</nav>
 
 			<section v-if="$i" :class="$style.composer">
 				<MkPostForm
@@ -52,7 +68,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				recommendationSurface="home"
 				recommendationCategory="forYou"
 				:recommendationSort="homeTab === 'latestReplies' ? 'latestReply' : 'personalized'"
-				:includeFollowedChannels="homeTab !== 'following'"
+				:includeFollowedChannels="homeTab !== 'following' && homeTab !== 'timeline'"
 				:sound="homeTab === 'following'"
 				@queue="queueUpdated"
 			/>
@@ -150,10 +166,12 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { userPage } from '@/filters/user.js';
 import * as os from '@/os.js';
 import { buildSearchTrendRows } from '@/utility/search-trends.js';
+import { miLocalStorage } from '@/local-storage.js';
 
 provide('shouldOmitHeaderTitle', true);
 
-type HomeTab = 'forYou' | 'following' | 'latestReplies';
+type HomeTab = 'forYou' | 'following' | 'latestReplies' | 'timeline';
+type TimelineSub = 'local' | 'global';
 type DiscoverySections = Misskey.Endpoints['notes/discovery-sections']['res'];
 
 const sidebarLimits = {
@@ -172,7 +190,20 @@ let rightRailOffset = 0;
 let rightRailMaxOffset = 0;
 let rightRailOffsetInitialized = false;
 
-const homeTab = ref<HomeTab>('forYou');
+const HOME_TAB_KEY = 'home:tab';
+const HOME_SUB_KEY = 'home:sub';
+const initialTab = (() => {
+	const v = miLocalStorage.getItem(HOME_TAB_KEY) as HomeTab | null;
+	return (v && ['forYou', 'following', 'latestReplies', 'timeline'].includes(v)) ? v : 'forYou';
+})();
+const initialSub = (() => {
+	const v = miLocalStorage.getItem(HOME_SUB_KEY) as TimelineSub | null;
+	return (v && (v === 'local' || v === 'global')) ? v : 'local';
+})();
+const homeTab = ref<HomeTab>(initialTab);
+const timelineSub = ref<TimelineSub>(initialSub);
+watch(homeTab, v => miLocalStorage.setItem(HOME_TAB_KEY, v));
+watch(timelineSub, v => miLocalStorage.setItem(HOME_SUB_KEY, v));
 const queue = ref(0);
 const sidebarSearchQuery = ref('');
 
@@ -202,15 +233,36 @@ const discoverySections = ref<DiscoverySections>({
 const homeTabs = computed(() => [{
 	key: 'forYou' as const,
 	title: i18n.ts.homeTimelineForYou,
+	icon: 'ti-sparkles',
 }, {
 	key: 'following' as const,
 	title: i18n.ts.homeTimelineFollowing,
+	icon: 'ti-user-check',
 }, {
 	key: 'latestReplies' as const,
 	title: i18n.ts.homeTimelineLatestReplies,
+	icon: 'ti-message-circle-2',
+}, {
+	key: 'timeline' as const,
+	title: i18n.ts._timelines.timeline,
+	icon: 'ti-timeline',
 }]);
 
-const timelineSrc = computed(() => homeTab.value === 'following' ? 'home' : 'recommended');
+const timelineSubTabs = computed(() => [{
+	key: 'local' as const,
+	title: i18n.ts._timelines.local,
+	icon: 'ti-home',
+}, {
+	key: 'global' as const,
+	title: i18n.ts._timelines.global,
+	icon: 'ti-world',
+}]);
+
+const timelineSrc = computed(() => {
+	if (homeTab.value === 'following') return 'home';
+	if (homeTab.value === 'timeline') return timelineSub.value; // 'local' | 'global'
+	return 'recommended';
+});
 const withRenotes = computed(() => store.r.tl.value.filter.withRenotes);
 const withReplies = computed(() => store.r.tl.value.filter.withReplies);
 const withBots = computed(() => store.r.tl.value.filter.withBots);
@@ -218,13 +270,14 @@ const onlyFiles = computed(() => store.r.tl.value.filter.onlyFiles);
 const withSensitive = computed(() => store.r.tl.value.filter.withSensitive);
 const timelineKey = computed(() => [
 	homeTab.value,
+	homeTab.value === 'timeline' ? timelineSub.value : '-',
 	withRenotes.value,
 	withReplies.value,
 	withBots.value,
 	onlyFiles.value,
 	withSensitive.value,
 	homeTab.value === 'latestReplies' ? 'latestReply' : 'personalized',
-	homeTab.value === 'following' ? 'strictFollowing' : 'withFollowedChannels',
+	homeTab.value === 'following' || homeTab.value === 'timeline' ? 'strictFollowing' : 'withFollowedChannels',
 ].join(':'));
 
 const trendRows = computed(() => buildSearchTrendRows(searchTrends.value, sidebarLimits.trends));
@@ -233,6 +286,9 @@ const visibleRecommendedUsers = computed(() => recommendedUsers.value.slice(0, s
 const visibleTutorialNotes = computed(() => discoverySections.value.tutorialNotes.slice(0, sidebarLimits.tutorialNotes));
 
 watch(homeTab, () => {
+	queue.value = 0;
+});
+watch(timelineSub, () => {
 	queue.value = 0;
 });
 
@@ -411,15 +467,15 @@ definePage(() => ({
 	// rest of the instance keeps its own theme accent.
 	--x-blue: #1d9bf0;
 	--x-blue-hover: #1a8cd8;
-	--timeline-main-width: var(--layout-main-column-width, 600px);
-	--timeline-rail-width: var(--layout-side-rail-width, 350px);
-	--timeline-column-gap: var(--layout-column-gap, 30px);
-	--timeline-outer-gap: 0px;
+	// 中间正文 / 右栏宽度随视口缩放(小屏维持原值,大屏放大,4K 用得起来),
+	// 总宽度有 clamp 上限 → 整体 margin-inline:auto 居中,不会撑爆,也不会留太大空白。
+	--timeline-main-width: clamp(620px, 52vw, 1280px);
+	--timeline-rail-width: clamp(320px, 24vw, 520px);
+	--timeline-column-gap: clamp(20px, 1.6vw, 44px);
 
 	box-sizing: border-box;
-	width: min(calc(100% - var(--timeline-outer-gap)), calc(var(--timeline-main-width) + var(--timeline-rail-width) + var(--timeline-column-gap)));
-	margin-left: var(--timeline-outer-gap);
-	margin-right: auto;
+	width: min(100%, calc(var(--timeline-main-width) + var(--timeline-rail-width) + var(--timeline-column-gap)));
+	margin-inline: auto;
 	display: grid;
 	grid-template-columns: minmax(0, var(--timeline-main-width)) minmax(300px, var(--timeline-rail-width));
 	column-gap: var(--timeline-column-gap);
@@ -441,8 +497,8 @@ definePage(() => ({
 	top: var(--MI-stickyTop, 0px);
 	z-index: 10;
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	min-height: 53px;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	min-height: 56px;
 	background: color-mix(in srgb, var(--MI_THEME-bg) 85%, transparent);
 	backdrop-filter: blur(12px);
 	-webkit-backdrop-filter: blur(12px);
@@ -454,6 +510,7 @@ definePage(() => ({
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	gap: 7px;
 	min-width: 0;
 	padding: 0 8px;
 	font-size: 15px;
@@ -480,17 +537,93 @@ definePage(() => ({
 	}
 }
 
+.tabIcon {
+	font-size: 1.05em;
+	opacity: 0.85;
+}
+
 .tabLabel {
 	padding: 16px 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .tabActive {
 	font-weight: 700;
 	color: var(--MI_THEME-fg);
 
-	&::after {
-		width: max(36px, 56%);
+	.tabIcon {
+		color: var(--x-blue);
+		opacity: 1;
 	}
+
+	&::after {
+		width: max(40px, 60%);
+	}
+}
+
+// 二级标签:本地 / 联合 —— 仅在「时间线」一级激活时显示
+.subTabs {
+	position: sticky;
+	top: calc(var(--MI-stickyTop, 0px) + 56px);
+	z-index: 9;
+	display: flex;
+	gap: 8px;
+	padding: 10px 14px;
+	background: color-mix(in srgb, var(--MI_THEME-bg) 90%, transparent);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border-bottom: solid 1px var(--MI_THEME-divider);
+}
+
+.subTab {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 14px;
+	border-radius: 999px;
+	font-size: 0.92em;
+	font-weight: 600;
+	color: var(--MI_THEME-fgTransparentWeak);
+	border: solid 1px var(--MI_THEME-divider);
+	background: transparent;
+	transition: background .12s, color .12s, border-color .12s;
+
+	&:hover {
+		background: var(--MI_THEME-panelHighlight);
+		color: var(--MI_THEME-fg);
+	}
+}
+
+.subTabIcon {
+	font-size: 1em;
+	opacity: 0.85;
+}
+
+.subTabActive {
+	color: #fff;
+	background: var(--x-blue);
+	border-color: var(--x-blue);
+
+	.subTabIcon {
+		opacity: 1;
+	}
+
+	&:hover {
+		background: var(--x-blue-hover);
+		border-color: var(--x-blue-hover);
+		color: #fff;
+	}
+}
+
+// 窄屏(隐藏组件栏的临界点附近)标签变小,留更多空间
+@media (max-width: 900px) {
+	.tab {
+		font-size: 14px;
+		gap: 4px;
+	}
+	.tabLabel { padding: 14px 0; }
 }
 
 .composer {

@@ -2861,6 +2861,7 @@ _timelines:
   local: "本地"
   social: "社交"
   global: "全局"
+  timeline: "时间线"
 _play:
   new: "创建 Play"
   edit: "编辑 Play"
