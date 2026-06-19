@@ -58,11 +58,13 @@ export class NotePiningService {
 	// Fetch pinee
 		const note = await this.notesRepository.findOneBy({
 			id: noteId,
-			userId: user.id,
 		});
 
 		if (note == null) {
 			throw new IdentifiableError('70c4e51f-5bea-449c-a030-53bee3cce202', `Note ${noteId} does not exist`);
+		}
+		if (note.userId !== user.id && note.visibility !== 'public') {
+			throw new IdentifiableError('70c4e51f-5bea-449c-a030-53bee3cce202', `Note ${noteId} is not publicly recommendable`);
 		}
 
 		await this.db.transaction(async tem => {
@@ -83,8 +85,8 @@ export class NotePiningService {
 			});
 		});
 
-		// Deliver to remote followers
-		if (this.userEntityService.isLocalUser(user) && !note.localOnly && ['public', 'home'].includes(note.visibility)) {
+		// Deliver ActivityPub featured changes only for the user's own notes.
+		if (note.userId === user.id && this.userEntityService.isLocalUser(user) && !note.localOnly && ['public', 'home'].includes(note.visibility)) {
 			trackPromise(this.deliverPinnedChange(user, note.id, true));
 		}
 	}
@@ -99,7 +101,6 @@ export class NotePiningService {
 	// Fetch unpinee
 		const note = await this.notesRepository.findOneBy({
 			id: noteId,
-			userId: user.id,
 		});
 
 		if (note == null) {
@@ -111,8 +112,8 @@ export class NotePiningService {
 			noteId: note.id,
 		});
 
-		// Deliver to remote followers
-		if (this.userEntityService.isLocalUser(user) && !note.localOnly && ['public', 'home'].includes(note.visibility)) {
+		// Deliver ActivityPub featured changes only for the user's own notes.
+		if (note.userId === user.id && this.userEntityService.isLocalUser(user) && !note.localOnly && ['public', 'home'].includes(note.visibility)) {
 			trackPromise(this.deliverPinnedChange(user, noteId, false));
 		}
 	}

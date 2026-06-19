@@ -31,11 +31,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 	<div v-show="tab === 'chat'" ref="chatPaneEl" :class="$style.chatPane">
 		<div v-if="room != null && room.announcementPinned && room.announcement.length > 0" :class="$style.announcement">
-			<i class="ti ti-pinned" :class="$style.announcementIcon"></i>
-			<div :class="$style.announcementBody">
-				<div :class="$style.announcementTitle">{{ i18n.ts._chat.announcement }}</div>
-				<div :class="$style.announcementText">{{ room.announcement }}</div>
+			<div :class="$style.announcementHeader">
+				<div :class="$style.announcementHeading">
+					<i class="ti ti-pinned" :class="$style.announcementIcon"></i>
+					<div :class="$style.announcementTitle">{{ i18n.ts._chat.announcement }}</div>
+				</div>
+				<button class="_button" :class="$style.announcementToggle" :title="announcementExpanded ? i18n.ts.showLess : i18n.ts.showMore" :aria-label="announcementExpanded ? i18n.ts.showLess : i18n.ts.showMore" :aria-expanded="announcementExpanded" @click="toggleAnnouncement">
+					<i class="ti" :class="announcementExpanded ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
+				</button>
 			</div>
+			<div :class="[$style.announcementText, { [$style.announcementTextExpanded]: announcementExpanded }]">{{ room.announcement }}</div>
 		</div>
 		<div class="_gaps">
 			<div v-if="initializing">
@@ -259,8 +264,10 @@ const showScrollToLatestButton = ref(false);
 const showChatTabsScrollControls = ref(false);
 const canScrollChatTabsLeft = ref(false);
 const canScrollChatTabsRight = ref(false);
+const announcementExpanded = ref(false);
 const tab = ref('chat');
 
+const CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX = 'chatRoomAnnouncementExpanded:';
 const SCROLL_LATEST_THRESHOLD = 24;
 const SCROLL_AUTO_STICK_THRESHOLD = 4;
 const SCROLL_HISTORY_THRESHOLD = 480;
@@ -276,7 +283,7 @@ const STREAM_CONNECT_TIMEOUT = 5000;
 const CHAT_RECONCILE_TIMEOUT_MS = 5000;
 const CHAT_RECOVERY_FETCH_TIMEOUT_MS = 10000;
 const STREAM_RECOVERY_DEBOUNCE_MS = 800;
-const STREAM_RECOVERY_POLL_INTERVAL_MS = 20000;
+const STREAM_RECOVERY_POLL_INTERVAL_MS = 1000 * 60 * 5;
 const STREAM_RECOVERY_ERROR_RETRY_MS = 5000;
 const STREAM_LATEST_GAP_MAX_PAGES = 3;
 const STREAM_RECOVERY_STALE_MS = 60000;
@@ -332,6 +339,28 @@ const canDeleteAnyMessage = computed(() => {
 	return $i.isAdmin || $i.isModerator;
 });
 const canManageRoomUsers = computed(() => room.value?.canManage === true);
+
+function getAnnouncementExpandedStorageKey(roomId: string) {
+	return `${CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX}${roomId}`;
+}
+
+function restoreAnnouncementExpanded(roomId: string) {
+	announcementExpanded.value = window.localStorage.getItem(getAnnouncementExpandedStorageKey(roomId)) === '1';
+}
+
+function toggleAnnouncement() {
+	if (room.value == null) return;
+	announcementExpanded.value = !announcementExpanded.value;
+	window.localStorage.setItem(getAnnouncementExpandedStorageKey(room.value.id), announcementExpanded.value ? '1' : '0');
+}
+
+watch(() => room.value?.id, roomId => {
+	if (roomId == null) {
+		announcementExpanded.value = false;
+		return;
+	}
+	restoreAnnouncementExpanded(roomId);
+});
 
 type ScrollAnchor = {
 	id: string;
@@ -998,8 +1027,6 @@ function messageLimit(): number | undefined {
 	return isRoomChat.value ? MAX_ROOM_MESSAGES : undefined;
 }
 
-function mergeMessages(...sources: NormalizedChatMessage[][]): NormalizedChatMessage[];
-function mergeMessages(options: { keep?: 'newest' | 'oldest' }, ...sources: NormalizedChatMessage[][]): NormalizedChatMessage[];
 function mergeMessages(first: NormalizedChatMessage[] | { keep?: 'newest' | 'oldest' }, ...rest: NormalizedChatMessage[][]): NormalizedChatMessage[] {
 	const options = Array.isArray(first) ? { keep: 'newest' as const } : { keep: first.keep ?? 'newest' };
 	const sources = Array.isArray(first) ? [first, ...rest] : rest;
@@ -2574,38 +2601,81 @@ definePage(computed(() => {
 	position: sticky;
 	top: 0;
 	z-index: 900;
-	display: flex;
-	align-items: flex-start;
-	gap: 10px;
+	display: grid;
+	gap: 8px;
 	margin: 8px 12px 0;
-	padding: 10px 14px;
+	padding: 10px 12px 11px;
 	border-radius: var(--MI-radius-sm);
-	background: color(from var(--MI_THEME-accent) srgb r g b / 0.1);
-	border: solid 1px color(from var(--MI_THEME-accent) srgb r g b / 0.25);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 94%, var(--MI_THEME-bg));
+	color: var(--MI_THEME-fg);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 84%, transparent);
+	box-shadow: 0 8px 18px -14px var(--MI_THEME-shadow);
+}
+
+.announcementHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+}
+
+.announcementHeading {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
 }
 
 .announcementIcon {
 	flex: 0 0 auto;
-	margin-top: 2px;
 	color: var(--MI_THEME-accent);
-}
-
-.announcementBody {
-	min-width: 0;
-	flex: 1;
 }
 
 .announcementTitle {
 	font-size: 0.8em;
 	font-weight: 700;
-	color: var(--MI_THEME-accent);
-	margin-bottom: 2px;
+	color: var(--MI_THEME-fg);
 }
 
 .announcementText {
+	color: var(--MI_THEME-fg);
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
-	font-size: 0.92em;
+	font-size: 0.88em;
+	line-height: 1.35;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 1;
+	line-clamp: 1;
+	overflow: hidden;
+}
+
+.announcementTextExpanded {
+	display: block;
+	-webkit-line-clamp: unset;
+	line-clamp: unset;
+	line-height: 1.55;
+	overflow: visible;
+}
+
+.announcementToggle {
+	display: grid;
+	place-items: center;
+	flex: 0 0 auto;
+	width: 32px;
+	height: 32px;
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 32%, var(--MI_THEME-divider));
+	border-radius: 999px;
+	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+	&:hover {
+		color: var(--MI_THEME-accent);
+		background: color-mix(in srgb, var(--MI_THEME-accent) 20%, var(--MI_THEME-panel));
+		border-color: color-mix(in srgb, var(--MI_THEME-accent) 46%, var(--MI_THEME-divider));
+	}
 }
 
 .localHeader {

@@ -179,7 +179,7 @@ describe('chat room scroll state', () => {
 
 	test('recovers missed latest messages after stream reconnect and visibility restore', () => {
 		assert.match(roomSource, /const STREAM_RECOVERY_DEBOUNCE_MS = 800;/);
-		assert.match(roomSource, /const STREAM_RECOVERY_POLL_INTERVAL_MS = 20000;/);
+		assert.match(roomSource, /const STREAM_RECOVERY_POLL_INTERVAL_MS = 1000 \* 60 \* 5;/);
 		assert.match(roomSource, /const STREAM_RECOVERY_ERROR_RETRY_MS = 5000;/);
 		assert.match(roomSource, /const STREAM_RECOVERY_STALE_MS = 60000;/);
 		assert.match(roomSource, /const STREAM_LATEST_GAP_MAX_PAGES = 5;/);

@@ -99,7 +99,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onActivated, onDeactivated, onMounted, ref } from 'vue';
+import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import { useInterval } from '@@/js/use-interval.js';
 import XRoomAvatar from './XRoomAvatar.vue';
@@ -110,6 +110,7 @@ import { useRouter } from '@/router.js';
 import * as os from '@/os.js';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkButton from '@/components/MkButton.vue';
+import { useStream } from '@/stream.js';
 
 const $i = ensureSignin();
 const router = useRouter();
@@ -152,6 +153,8 @@ const userEntries = ref<UserEntry[]>([]);
 const invitations = ref<Misskey.entities.ChatRoomInvitation[]>([]);
 // 邀请太多时可折叠收起（记住上次的展开/收起状态）。
 const invitationsOpen = ref(window.localStorage.getItem('chatInvitationsCollapsed') !== '1');
+const CHAT_SIDEBAR_FALLBACK_REFRESH_INTERVAL_MS = 1000 * 60;
+const CHAT_SIDEBAR_EVENT_REFRESH_DEBOUNCE_MS = 400;
 
 function toggleInvitations() {
 	invitationsOpen.value = !invitationsOpen.value;
@@ -162,6 +165,79 @@ function toggleInvitations() {
 const knownRooms = ref<Map<string, Misskey.entities.ChatRoom>>(new Map());
 let roomListLoaded = false;
 let firstConversationEmitted = false;
+let isActivated = true;
+let mainConnection: Misskey.IChannelConnection<Misskey.Channels['main']> | null = null;
+let pendingConversationRefreshTimer: number | null = null;
+let queuedRefreshNeedsRoomList = false;
+let queuedRefreshWhileFetching = false;
+
+function shouldRefreshSidebarNow() {
+	return !window.document.hidden && isActivated;
+}
+
+async function runSidebarRefresh(options: { includeRoomList: boolean }) {
+	if (fetching.value) {
+		queuedRefreshNeedsRoomList = queuedRefreshNeedsRoomList || options.includeRoomList;
+		queuedRefreshWhileFetching = true;
+		return;
+	}
+
+	fetching.value = true;
+
+	try {
+		if (options.includeRoomList) roomListLoaded = false;
+		if (!roomListLoaded) await fetchRoomList();
+		await Promise.all([fetchConversations(), fetchInvitations()]);
+	} finally {
+		fetching.value = false;
+		if (queuedRefreshWhileFetching && shouldRefreshSidebarNow()) {
+			const includeRoomList = queuedRefreshNeedsRoomList;
+			queuedRefreshNeedsRoomList = false;
+			queuedRefreshWhileFetching = false;
+			void runSidebarRefresh({ includeRoomList });
+		} else {
+			queuedRefreshNeedsRoomList = false;
+			queuedRefreshWhileFetching = false;
+		}
+	}
+}
+
+function clearPendingConversationRefresh() {
+	if (pendingConversationRefreshTimer == null) return;
+	window.clearTimeout(pendingConversationRefreshTimer);
+	pendingConversationRefreshTimer = null;
+}
+
+function flushScheduledConversationRefresh() {
+	pendingConversationRefreshTimer = null;
+	if (!shouldRefreshSidebarNow()) return;
+	void pollConversations('event');
+}
+
+function scheduleConversationRefresh(reason: 'event' | 'fallback' | 'activation') {
+	if (!shouldRefreshSidebarNow()) return;
+	if (reason === 'activation') {
+		roomListLoaded = false;
+	}
+	if (pendingConversationRefreshTimer != null) return;
+	pendingConversationRefreshTimer = window.setTimeout(flushScheduledConversationRefresh, CHAT_SIDEBAR_EVENT_REFRESH_DEBOUNCE_MS);
+}
+
+function onMainNewChatMessage() {
+	scheduleConversationRefresh('event');
+}
+
+function setupMainStream() {
+	if (mainConnection != null) return;
+	mainConnection = useStream().useChannel('main', null, 'ChatSidebar');
+	mainConnection.on('newChatMessage', onMainNewChatMessage);
+}
+
+function disposeMainStream() {
+	mainConnection?.off('newChatMessage', onMainNewChatMessage);
+	mainConnection?.dispose();
+	mainConnection = null;
+}
 
 // joining + owned を取得して補完用キャッシュを更新する（初回とページ復帰時のみ）
 async function fetchRoomList() {
@@ -248,27 +324,12 @@ async function fetchConversations() {
 
 // 初回・ページ復帰時：ルーム一覧も含めて全取得
 async function fetchAll() {
-	if (fetching.value) return;
-	fetching.value = true;
-
-	try {
-		if (!roomListLoaded) await fetchRoomList();
-		await Promise.all([fetchConversations(), fetchInvitations()]);
-	} finally {
-		fetching.value = false;
-	}
+	await runSidebarRefresh({ includeRoomList: true });
 }
 
 // ポーリング用：会話一覧（履歴）のみ更新。ルーム一覧は叩かない。
-async function pollConversations() {
-	if (fetching.value) return;
-	fetching.value = true;
-
-	try {
-		await Promise.all([fetchConversations(), fetchInvitations()]);
-	} finally {
-		fetching.value = false;
-	}
+async function pollConversations(reason: 'event' | 'fallback' | 'activation' = 'fallback') {
+	await runSidebarRefresh({ includeRoomList: reason === 'activation' });
 }
 
 async function fetchInvitations() {
@@ -376,31 +437,34 @@ async function createRoom() {
 	router.push(`/chat/room/${room.id}`);
 }
 
-let isActivated = true;
-
 onActivated(() => {
 	isActivated = true;
-	// ページ復帰時はルーム一覧も更新（新規参加ルームの反映）
-	roomListLoaded = false;
-	fetchAll();
+	scheduleConversationRefresh('activation');
 });
 
 onDeactivated(() => {
 	isActivated = false;
+	clearPendingConversationRefresh();
 });
 
-// ポーリングは履歴(未読/最新メッセージ)のみ。ルーム一覧は変化が少ないため叩かない（高並列時の負荷削減）
+// WSイベントが主経路。低頻度の兜底だけ残し、長時間切断・イベント欠落時にも一覧が自然に復旧する。
 useInterval(() => {
-	if (!window.document.hidden && isActivated) {
-		pollConversations();
+	if (shouldRefreshSidebarNow()) {
+		pollConversations('fallback');
 	}
-}, 1000 * 10, {
+}, CHAT_SIDEBAR_FALLBACK_REFRESH_INTERVAL_MS, {
 	immediate: false,
 	afterMounted: true,
 });
 
 onMounted(() => {
+	setupMainStream();
 	fetchAll();
+});
+
+onBeforeUnmount(() => {
+	clearPendingConversationRefresh();
+	disposeMainStream();
 });
 </script>
 

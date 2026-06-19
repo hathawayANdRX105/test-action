@@ -280,8 +280,8 @@ export function getNoteMenu(props: {
 		copyToClipboard(appearNote.text);
 	}
 
-	function togglePin(pin: boolean): void {
-		os.apiWithDialog(pin ? 'i/pin' : 'i/unpin', {
+	function toggleProfileRecommendation(recommend: boolean): void {
+		os.apiWithDialog(recommend ? 'i/pin' : 'i/unpin', {
 			noteId: appearNote.id,
 		}, undefined, {
 			'72dab508-c64d-498f-8740-a8eec1ba385a': {
@@ -434,20 +434,18 @@ export function getNoteMenu(props: {
 			});
 		}
 
-		if (appearNote.userId === $i.id) {
-			if (($i.pinnedNoteIds ?? []).includes(appearNote.id)) {
-				menuItems.push({
-					icon: 'ti ti-pinned-off',
-					text: i18n.ts.unpin,
-					action: () => togglePin(false),
-				});
-			} else {
-				menuItems.push({
-					icon: 'ti ti-pin',
-					text: i18n.ts.pin,
-					action: () => togglePin(true),
-				});
-			}
+		if (($i.pinnedNoteIds ?? []).includes(appearNote.id)) {
+			menuItems.push({
+				icon: 'ti ti-pinned-off',
+				text: i18n.ts.profileUnrecommend,
+				action: () => toggleProfileRecommendation(false),
+			});
+		} else if (appearNote.userId === $i.id || appearNote.visibility === 'public') {
+			menuItems.push({
+				icon: 'ti ti-sparkles',
+				text: i18n.ts.profileRecommend,
+				action: () => toggleProfileRecommendation(true),
+			});
 		}
 
 		menuItems.push({
