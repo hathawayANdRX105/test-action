@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="[$style.root, { [$style.isMe]: isMe, [$style.isRoom]: isRoomChat }]">
+<div :class="[$style.root, { [$style.isMe]: isMe, [$style.isRoom]: isRoomChat, [$style.hasMedia]: hasFile, [$style.hasVideo]: hasVideoFile }]">
 	<MkAvatar v-if="message.fromUser != null" :class="$style.avatar" :user="message.fromUser" :link="false" :preview="false" @click="onAvatarClick" @contextmenu.prevent.stop="onAvatarContextmenu" @pointerdown="onAvatarPointerdown" @pointerup="stopAvatarLongPress" @pointerleave="stopAvatarLongPress" @pointercancel="stopAvatarLongPress"/>
 	<div v-else :class="[$style.avatar, $style.avatarFallback]"><i class="ti ti-user-question"></i></div>
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i v-else-if="isMe" class="ti ti-checks" :class="$style.sentIcon"></i>
 			</div>
 		</div>
-		<div :class="[$style.bubble, { [$style.mentionedBubble]: isMentionedMe }]">
+		<div :class="[$style.bubble, { [$style.mentionedBubble]: isMentionedMe, [$style.mediaBubble]: hasFile, [$style.videoBubble]: hasVideoFile }]">
 			<div v-if="isMentionedMe" :class="$style.mentionNotice"><i class="ti ti-at"></i><span>{{ i18n.ts.you }}</span></div>
 			<div v-if="message.reply || message.quote || messageWithReferenceState.replyUnavailable || messageWithReferenceState.quoteUnavailable" :class="$style.references">
 				<button v-if="message.reply && message.reply.id !== '0'" class="_button" :class="[$style.reference, $style.referenceButton]" @click.stop="openReference(message.reply.id)">
@@ -150,6 +150,8 @@ type MessageWithMentionState = typeof props.message & {
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const isRoomChat = computed(() => props.message.toRoomId != null);
 const isPending = computed(() => (props.message as MessageWithSendState).sendStatus === 'pending');
+const hasFile = computed(() => props.message.file != null);
+const hasVideoFile = computed(() => props.message.file?.type.startsWith('video') === true);
 const canDelete = computed(() => !isPending.value && (isMe.value || props.canDeleteAnyMessage === true || (props.canManageRoomUsers === true && props.message.toRoomId != null)) && $i.policies.chatAvailability === 'available');
 const canMuteRoomSender = computed(() => props.enableRoomUserMute === true && !isPending.value && isRoomChat.value && !isMe.value && props.message.fromUser != null && $i.policies.chatAvailability === 'available');
 const canManageSender = computed(() => !isPending.value && props.canManageRoomUsers === true && !isMe.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
@@ -222,7 +224,7 @@ function onContextmenu(ev: MouseEvent) {
 	showMenu(ev, true);
 }
 
-let avatarLongPressTimer: ReturnType<typeof window.setTimeout> | null = null;
+let avatarLongPressTimer: number | null = null;
 let avatarLongPressEvent: MouseEvent | null = null;
 let avatarLongPressTriggered = false;
 
@@ -265,7 +267,7 @@ function onAvatarClick(ev: MouseEvent) {
 	}
 
 	if (isMe.value || props.message.fromUser == null) return;
-	router.push(userPage(props.message.fromUser), ev.ctrlKey ? 'forcePage' : null);
+	router.push(userPage(props.message.fromUser), ev.ctrlKey ? 'forcePage' : undefined);
 }
 
 function onAvatarContextmenu(ev: MouseEvent) {
@@ -678,6 +680,22 @@ onBeforeUnmount(() => {
 	max-width: min(82%, 760px);
 }
 
+.hasMedia .body {
+	flex-basis: min(92%, 920px);
+	max-width: min(92%, 920px);
+}
+
+.isMe.hasMedia .body {
+	flex-basis: min(92%, 920px);
+	max-width: min(92%, 920px);
+}
+
+.hasVideo .body,
+.isMe.hasVideo .body {
+	flex-basis: min(96%, 1040px);
+	max-width: min(96%, 1040px);
+}
+
 .header {
 	display: flex;
 	align-items: center;
@@ -797,6 +815,25 @@ onBeforeUnmount(() => {
 		var(--MI_THEME-panel);
 	box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
 	filter: drop-shadow(0 0 3px color(from var(--MI_THEME-accent) srgb r g b / 0.28));
+}
+
+.mediaBubble {
+	width: 100%;
+	max-width: 100%;
+	padding: 8px;
+}
+
+.videoBubble {
+	.file {
+		min-width: min(100%, 420px);
+	}
+}
+
+.file {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	min-width: min(100%, 320px);
 }
 
 .mentionNotice {

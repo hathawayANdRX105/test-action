@@ -20,7 +20,7 @@ Discourse 风的论坛模式 timeline 单条。
 		</div>
 		<div :class="$style.titleBlock">
 			<div :class="$style.title">
-				<span v-if="note.cw" :class="$style.cw">[CW] {{ note.cw }}</span>
+				<span v-if="appearNote.cw" :class="$style.cw">[CW] {{ appearNote.cw }}</span>
 				<span v-else>{{ textPreview }}</span>
 				<span v-for="tag in topTags" :key="tag" :class="$style.tag">#{{ tag }}</span>
 			</div>
@@ -47,30 +47,38 @@ import MkTime from '@/components/global/MkTime.vue';
 import { i18n } from '@/i18n.js';
 import { useRouter } from '@/router.js';
 import { useTimelinePreviewTranslation } from '@/composables/use-timeline-preview-translation.js';
+import { getAppearNote } from '@/utility/get-appear-note.js';
 
 const props = defineProps<{
 	note: Misskey.entities.Note;
 }>();
 
 const router = useRouter();
-const noteRef = computed(() => props.note);
+const appearNote = computed(() => getAppearNote(props.note));
+const translationNoteRef = computed(() => appearNote.value);
 const {
 	previewTranslationText,
 	translatedPreview,
 	shouldReplacePreviewText,
-} = useTimelinePreviewTranslation(noteRef);
+} = useTimelinePreviewTranslation(translationNoteRef);
 
 function shrinkText(text: string, max: number): string {
 	return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
+const isRenotePreview = computed(() => appearNote.value.id !== props.note.id);
+const sourcePreviewText = computed(() => {
+	const t = shouldReplacePreviewText.value ? translatedPreview.value : (appearNote.value.text ?? '').replace(/\s+/g, ' ').trim();
+	if (!t) return '';
+	return isRenotePreview.value ? `RN: ${t}` : t;
+});
+
 // 提取首行文本,去掉换行,截到 120 字
 const textPreview = computed(() => {
-	const t = shouldReplacePreviewText.value ? translatedPreview.value : (props.note.text ?? '').replace(/\s+/g, ' ').trim();
+	const t = sourcePreviewText.value;
 	if (!t) {
-		if (props.note.files && props.note.files.length > 0) return `[${i18n.ts.file} × ${props.note.files.length}]`;
-		if (props.note.poll) return `[${i18n.ts.poll}]`;
-		if (props.note.renote) return `RN: ${(props.note.renote.text ?? '').slice(0, 60)}`;
+		if (appearNote.value.files && appearNote.value.files.length > 0) return `[${i18n.ts.file} × ${appearNote.value.files.length}]`;
+		if (appearNote.value.poll) return `[${i18n.ts.poll}]`;
 		return '';
 	}
 	return shrinkText(t, 120);
@@ -78,11 +86,12 @@ const textPreview = computed(() => {
 
 const previewTranslationLine = computed(() => {
 	if (shouldReplacePreviewText.value || !previewTranslationText.value) return '';
-	return shrinkText(previewTranslationText.value, 140);
+	const t = isRenotePreview.value ? `RN: ${previewTranslationText.value}` : previewTranslationText.value;
+	return shrinkText(t, 140);
 });
 
 // 拿前 3 个 hashtag
-const topTags = computed(() => (props.note.tags ?? []).slice(0, 3));
+const topTags = computed(() => (appearNote.value.tags ?? []).slice(0, 3));
 
 // 反应数总和
 const totalReactions = computed(() => {

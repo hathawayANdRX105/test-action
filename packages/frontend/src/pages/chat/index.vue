@@ -101,10 +101,16 @@ definePage(() => ({
 .root {
 	height: 100%;
 	min-height: 0;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
 }
 
 .wide {
 	display: grid;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
 	grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
 }
 
@@ -122,6 +128,8 @@ definePage(() => ({
 }
 
 .main {
+	width: 100%;
+	max-width: 100%;
 	min-width: 0;
 	min-height: 0;
 	height: 100%;

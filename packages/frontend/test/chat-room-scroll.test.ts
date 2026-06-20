@@ -7,6 +7,7 @@
 
 import { assert, describe, test } from 'vitest';
 import { appendDetachedChatMessages, ChatAutoScrollState, ChatReadReceiptBatcher, findMissingChatMessageIdsInLatestWindow, getChatScrollMetrics, isChatMessageVisibleAtLatestEdge, isNearChatLatest, mergeChatMessagesForTimeline, prependChatMessageForTimeline, sortChatMessagesForTimeline } from '@/pages/chat/room-scroll.js';
+import mediaListSource from '@/components/MkMediaList.vue?raw';
 import roomSource from '@/pages/chat/room.vue?raw';
 
 describe('chat room scroll state', () => {
@@ -72,9 +73,11 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /@container \(max-width:\s*520px\)\s*\{[\s\S]*grid-template-areas:\s*"title menu"\s*"tabs tabs";/);
 	});
 
-	test('uses the shared layout width for the visible chat surface', () => {
-		assert.match(roomSource, /\.chatPane\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--layout-main-column-width,\s*100%\)\);/);
-		assert.match(roomSource, /\.form\s*\{[\s\S]*max-width:\s*var\(--layout-main-column-width,\s*100%\);/);
+	test('uses the full available width for the visible chat surface', () => {
+		assert.match(roomSource, /\.chatPane\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/);
+		assert.match(roomSource, /\.form\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/);
+		assert.notMatch(roomSource, /\.chatPane\s*\{[\s\S]*var\(--layout-main-column-width/);
+		assert.notMatch(roomSource, /\.form\s*\{[\s\S]*var\(--layout-main-column-width/);
 	});
 
 	test('normalizes normal column scroll metrics for latest-at-bottom chat', () => {
@@ -151,10 +154,18 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /function scheduleLatestOnChatTabReturn\(\) \{[\s\S]*ensureLatestOnChatTabReturn/);
 		assert.match(roomSource, /v-show=\"tab === 'chat'\" ref=\"chatPaneEl\"/);
 		assert.match(roomSource, /async function scrollToLatestAfterLayout/);
-			assert.match(roomSource, /const sinceId = findNewestPersistedMessageId\(\);[\s\S]*flushIncomingMessagesNow\(\{ stickToLatest: true \}\);[\s\S]*scrollToLatest\('instant', \{ flushReadReceipt: true \}\);[\s\S]*await fetchLatestGapWithRecoveryTimeout\(sinceId\);[\s\S]*await scrollToLatestAfterLayout\(\{ flushReadReceipt: true, fillHistory: true \}\);/);
+			assert.match(roomSource, /const sinceId = findNewestPersistedMessageId\(\);[\s\S]*await syncLatestMessages\(\{ stickToLatest: true, flushReadReceipt: true, sinceId, reconcileLatestWindow: true \}\);[\s\S]*await scrollToLatestAfterLayout\(\{ flushReadReceipt: true, fillHistory: true \}\);/);
 	});
 
 	test('keeps initial latest scrolling isolated from history observers', () => {
+		assert.match(roomSource, /const INITIAL_LATEST_EDGE_LOCK_MS = 2500;/);
+		assert.match(roomSource, /let latestEdgeLockUntil = 0;/);
+		assert.match(roomSource, /function lockLatestEdgeDuringInitialRender\(\)/);
+		assert.match(roomSource, /function clearLatestEdgeInitialLock\(\)/);
+		assert.match(roomSource, /function isLatestEdgeInitialLockActive\(\)/);
+		assert.match(roomSource, /if \(isLatestEdgeInitialLockActive\(\)\) return true;/);
+		assert.match(roomSource, /const markUserScrollInteraction = \(\) => \{[\s\S]*clearLatestEdgeInitialLock\(\);[\s\S]*autoScrollState\.markUserInteraction\(\);[\s\S]*\};/);
+		assert.match(roomSource, /async function scrollToLatestAfterLayout\(options\?: \{ flushReadReceipt\?: boolean; fillHistory\?: boolean \}\) \{[\s\S]*if \(!isContextMode\.value\) \{[\s\S]*lockLatestEdgeDuringInitialRender\(\);/);
 		assert.match(roomSource, /async function scrollToLatestAfterLayout\(options\?: \{ flushReadReceipt\?: boolean; fillHistory\?: boolean \}\) \{[\s\S]*beginScrollRestoration\(\);[\s\S]*try \{[\s\S]*scrollToLatest\('instant'\);[\s\S]*await fillInitialScrollableHistory\(\);[\s\S]*\} finally \{[\s\S]*endScrollRestoration\(\);[\s\S]*\}/);
 		assert.match(roomSource, /if \(!isRestoringHistoryScroll\.value && canFetchMore\.value && !moreFetching\.value && messages\.value\.length > 0 && historyFetchArmed && historyDistance < SCROLL_HISTORY_THRESHOLD\) \{/);
 		assert.match(roomSource, /if \(!isRestoringHistoryScroll\.value && canFetchNewer\.value && !newerFetching\.value && messages\.value\.length > 0 && newerFetchArmed && latestDistance < SCROLL_TAIL_THRESHOLD\) \{/);
@@ -173,7 +184,7 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /async function syncLatestMessages\(options\?: \{ stickToLatest\?: boolean; flushReadReceipt\?: boolean; sinceId\?: string; reconcileLatestWindow\?: boolean \}\)/);
 		assert.match(roomSource, /const syncPromise = \(latestSyncPromise \?\? Promise\.resolve\(\)\)\.then\(run, run\);/);
 		assert.match(roomSource, /async function showLatestMessages\(behavior: ScrollBehavior = 'smooth'\)/);
-		assert.match(roomSource, /await reconcileLatestTimelineWindow\(\);[\s\S]*scrollToLatest\(behavior, \{ flushReadReceipt: true \}\);[\s\S]*await syncLatestMessages\(\{ stickToLatest: true, flushReadReceipt: true, reconcileLatestWindow: false \}\);/);
+		assert.match(roomSource, /await syncLatestMessages\(\{ stickToLatest: true, flushReadReceipt: false, reconcileLatestWindow: true \}\);[\s\S]*scrollToLatest\(behavior, \{ flushReadReceipt: true \}\);/);
 		assert.match(roomSource, /function onIndicatorClick\(\) \{[\s\S]*void showLatestMessages\('smooth'\);/);
 	});
 
@@ -182,7 +193,7 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /const STREAM_RECOVERY_POLL_INTERVAL_MS = 1000 \* 60 \* 5;/);
 		assert.match(roomSource, /const STREAM_RECOVERY_ERROR_RETRY_MS = 5000;/);
 		assert.match(roomSource, /const STREAM_RECOVERY_STALE_MS = 60000;/);
-		assert.match(roomSource, /const STREAM_LATEST_GAP_MAX_PAGES = 5;/);
+		assert.match(roomSource, /const STREAM_LATEST_GAP_MAX_PAGES = 3;/);
 		assert.match(roomSource, /let streamRecoveryTimer: number \| null = null;/);
 		assert.match(roomSource, /let streamRecoveryPollingTimer: number \| null = null;/);
 		assert.match(roomSource, /let streamRecoverySinceId: string \| undefined;/);
@@ -262,6 +273,25 @@ describe('chat room scroll state', () => {
 		assert.ok(!mentionedBubbleRule.groups.body.includes('border:'));
 		assert.ok(!mentionedBubbleRule.groups.body.includes('0 0 0 3px'));
 		assert.ok(mentionedBubbleRule.groups.body.includes('filter: drop-shadow('));
+	});
+
+	test('expands media chat bubbles while keeping text bubbles compact', async () => {
+		const source = await import('@/pages/chat/XMessage.vue?raw').then(module => module.default);
+
+		assert.match(source, /const hasFile = computed\(\(\) => props\.message\.file != null\);/);
+		assert.match(source, /const hasVideoFile = computed\(\(\) => props\.message\.file\?\.type\.startsWith\('video'\) === true\);/);
+		assert.match(source, /\[\$style\.mediaBubble\]: hasFile/);
+		assert.match(source, /\[\$style\.videoBubble\]: hasVideoFile/);
+		assert.match(source, /\.mediaBubble\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/);
+		assert.match(source, /\.file\s*\{[\s\S]*width:\s*100%;[\s\S]*min-width:\s*min\(100%,\s*320px\);/);
+		assert.match(source, /\.videoBubble\s*\{[\s\S]*\.file\s*\{[\s\S]*min-width:\s*min\(100%,\s*420px\);/);
+	});
+
+	test('gives single video media a readable responsive size', () => {
+		assert.match(mediaListSource, /const hasSingleVideo = computed\(\(\) => previewableMediaList\.value\.length === 1 && previewableMediaList\.value\[0\]\?\.type\.startsWith\('video'\) === true\);/);
+		assert.match(mediaListSource, /\[\$style\.singleVideo\]: hasSingleVideo/);
+		assert.match(mediaListSource, /\.singleVideo\s*\{[\s\S]*aspect-ratio:\s*16 \/ 9;[\s\S]*min-height:\s*clamp\(220px,\s*32vw,\s*420px\);[\s\S]*max-height:\s*min\(70vh,\s*560px\);/);
+		assert.match(mediaListSource, /\.singleVideo\s*>\s*\.media\s*\{[\s\S]*min-height:\s*inherit;/);
 	});
 
 	test('keeps overflowing room tabs reachable with scroll buttons', () => {
@@ -375,7 +405,7 @@ describe('chat room scroll state', () => {
 
 	test('reconciles deleted unread messages before revealing latest after background recovery', () => {
 		assert.match(roomSource, /async function fetchLatestTimelineWindow\(signal\?: AbortSignal\): Promise<Misskey\.entities\.ChatMessageLite\[\]>/);
-		assert.match(roomSource, /const TIMELINE_RECONCILE_LIMIT = 100;/);
+		assert.match(roomSource, /const TIMELINE_RECONCILE_LIMIT = 50;/);
 		assert.match(roomSource, /const CHAT_RECONCILE_TIMEOUT_MS = 5000;/);
 		assert.match(roomSource, /const CHAT_RECOVERY_FETCH_TIMEOUT_MS = 10000;/);
 		assert.match(roomSource, /limit: TIMELINE_RECONCILE_LIMIT/);
@@ -385,10 +415,9 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /findMissingChatMessageIdsInLatestWindow\(detachedIncomingMessages, latestWindow, \{[\s\S]*limit: TIMELINE_RECONCILE_LIMIT/);
 		assert.match(roomSource, /const initialSinceId = options\?\.sinceId \?\? findNewestPersistedMessageId\(\);/);
 		assert.match(roomSource, /const sinceId = options\?\.sinceId \?\? findNewestPersistedMessageId\(\) \?\? initialSinceId;/);
-		assert.match(roomSource, /if \(options\?\.reconcileLatestWindow !== false\) \{[\s\S]*await reconcileLatestTimelineWindow\(\);/);
-		assert.match(roomSource, /await reconcileLatestTimelineWindow\(\);[\s\S]*scrollToLatest\(behavior, \{ flushReadReceipt: true \}\);/);
-		assert.match(roomSource, /await syncLatestMessages\(\{ stickToLatest: true, flushReadReceipt: true, reconcileLatestWindow: false \}\);/);
-		assert.match(roomSource, /async function ensureLatestOnChatTabReturn\(generation: number\) \{[\s\S]*await reconcileLatestTimelineWindow\(\);[\s\S]*flushIncomingMessagesNow\(\{ stickToLatest: true \}\);/);
+		assert.match(roomSource, /if \(options\?\.reconcileLatestWindow === true\) \{[\s\S]*await reconcileLatestTimelineWindow\(\);/);
+		assert.match(roomSource, /await syncLatestMessages\(\{ stickToLatest: true, flushReadReceipt: false, reconcileLatestWindow: true \}\);[\s\S]*scrollToLatest\(behavior, \{ flushReadReceipt: true \}\);/);
+		assert.match(roomSource, /async function ensureLatestOnChatTabReturn\(generation: number\) \{[\s\S]*await syncLatestMessages\(\{ stickToLatest: true, flushReadReceipt: true, sinceId, reconcileLatestWindow: true \}\);/);
 		assert.match(roomSource, /const controller = new AbortController\(\);[\s\S]*const timeoutId = window\.setTimeout\(\(\) => controller\.abort\(\), CHAT_RECONCILE_TIMEOUT_MS\);[\s\S]*await fetchLatestTimelineWindow\(controller\.signal\);[\s\S]*window\.clearTimeout\(timeoutId\);/);
 		assert.match(roomSource, /misskeyApi\('chat\/messages\/room-timeline'[\s\S]*undefined, signal\);/);
 		assert.match(roomSource, /misskeyApi\('chat\/messages\/user-timeline'[\s\S]*undefined, signal\);/);
@@ -396,7 +425,6 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /window\.setTimeout\(\(\) => controller\.abort\(\), CHAT_RECOVERY_FETCH_TIMEOUT_MS\)/);
 		assert.match(roomSource, /return await fetchLatestGap\(sinceId, \{[\s\S]*signal: controller\.signal/);
 		assert.match(roomSource, /newVisibleMessages = await fetchLatestGapWithRecoveryTimeout\(sinceId, \{ maxPages: STREAM_LATEST_GAP_MAX_PAGES, bufferOnly: !shouldStickToLatest \}\);/);
-		assert.match(roomSource, /await fetchLatestGapWithRecoveryTimeout\(sinceId\);/);
 		assert.match(roomSource, /scheduleStreamRecovery\('visible'\);/);
 		assert.match(roomSource, /scheduleStreamRecovery\('connected'\);/);
 	});

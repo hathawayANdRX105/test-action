@@ -134,25 +134,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-if="tab === 'members'" :class="$style.tabPane">
-		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: min(100%, 840px);">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 100%;">
 			<XMembers v-if="room != null" :room="room" :refreshKey="membersRefreshKey" @inviteUser="inviteUser"/>
 		</div>
 	</div>
 
 	<div v-if="tab === 'mutedUsers'" :class="$style.tabPane">
-		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: min(100%, 840px);">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 100%;">
 			<XMutedUsers v-if="room != null" :room="room" :refreshKey="mutedUsersRefreshKey" @unmuted="onRoomUserUnmuted"/>
 		</div>
 	</div>
 
 	<div v-if="tab === 'info'" :class="$style.tabPane">
-		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: min(100%, 840px);">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 100%;">
 			<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated"/>
 		</div>
 	</div>
 
 	<div v-if="tab === 'management'" :class="$style.tabPane">
-		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: min(100%, 840px);">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 100%;">
 			<XManagement v-if="room != null && room.canManage" :room="room" @updated="onRoomUpdated" @cleared="onCleared"/>
 		</div>
 	</div>
@@ -273,6 +273,7 @@ const SCROLL_AUTO_STICK_THRESHOLD = 4;
 const SCROLL_HISTORY_THRESHOLD = 480;
 const SCROLL_TAIL_THRESHOLD = 480;
 const USER_SCROLL_INTERACTION_LOCK_MS = 1200;
+const INITIAL_LATEST_EDGE_LOCK_MS = 2500;
 const TIMELINE_LIMIT = 20;
 const TIMELINE_RECONCILE_LIMIT = 50;
 const CONTEXT_LIMIT = 30;
@@ -329,6 +330,7 @@ let streamHadDisconnect = false;
 let historyFetchArmed = true;
 let newerFetchArmed = true;
 let scrollRestorationDepth = 0;
+let latestEdgeLockUntil = 0;
 let suppressNextMessageIdClearInitialize = false;
 let chatTabLatestReturnGeneration = 0;
 const isRestoringHistoryScroll = ref(false);
@@ -375,7 +377,21 @@ function rememberLatestScrollMetrics(metrics: ScrollMetricsSnapshot) {
 	latestScrollMetricsSnapshot = metrics;
 }
 
+function lockLatestEdgeDuringInitialRender() {
+	latestEdgeLockUntil = Date.now() + INITIAL_LATEST_EDGE_LOCK_MS;
+	autoScrollState.markLatest();
+}
+
+function clearLatestEdgeInitialLock() {
+	latestEdgeLockUntil = 0;
+}
+
+function isLatestEdgeInitialLockActive() {
+	return Date.now() <= latestEdgeLockUntil;
+}
+
 function shouldStickToLatestAfterLayoutShift(metrics: ScrollMetricsSnapshot): boolean {
+	if (isLatestEdgeInitialLockActive()) return true;
 	if (autoScrollState.shouldStickToLatest(metrics.latestDistance, SCROLL_AUTO_STICK_THRESHOLD)) return true;
 	if (autoScrollState.isUserInteracting()) return false;
 	if (latestScrollMetricsSnapshot == null) return false;
@@ -558,6 +574,7 @@ function setupTimelineScrollListener() {
 	if (scrollContainer == null) return;
 
 	const markUserScrollInteraction = () => {
+		clearLatestEdgeInitialLock();
 		autoScrollState.markUserInteraction();
 	};
 
@@ -1688,6 +1705,9 @@ async function finishInitializeRender() {
 }
 
 async function scrollToLatestAfterLayout(options?: { flushReadReceipt?: boolean; fillHistory?: boolean }) {
+	if (!isContextMode.value) {
+		lockLatestEdgeDuringInitialRender();
+	}
 	beginScrollRestoration();
 
 	try {
@@ -2585,6 +2605,9 @@ definePage(computed(() => {
 	position: relative;
 	container-type: inline-size;
 	height: 100%;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
 	min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px) + var(--MI-visualViewportBottom, 0px)));
 	overflow: hidden;
 	display: grid;
@@ -2685,10 +2708,8 @@ definePage(computed(() => {
 	position: relative;
 	z-index: 1000;
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	grid-template-areas:
-		"title menu"
-		"tabs tabs";
+	grid-template-columns: minmax(120px, auto) minmax(0, 1fr) auto;
+	grid-template-areas: "title tabs menu";
 	align-items: center;
 	gap: 0 8px;
 	width: 100%;
@@ -2741,7 +2762,7 @@ definePage(computed(() => {
 	width: 100%;
 	max-width: 100%;
 	min-width: 0;
-	border-top: solid 1px color-mix(in srgb, var(--chat-room-header-fg) 10%, transparent);
+	border-top: none;
 }
 
 .localTabsShellScrollable {
@@ -2837,7 +2858,15 @@ definePage(computed(() => {
 
 @container (max-width: 520px) {
 	.localHeader {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			"title menu"
+			"tabs tabs";
 		padding: 0 12px 2px;
+	}
+
+	.localTabsShell {
+		border-top: solid 1px color-mix(in srgb, var(--chat-room-header-fg) 10%, transparent);
 	}
 
 	.localTitle {
@@ -2888,7 +2917,8 @@ definePage(computed(() => {
 .chatPane {
 	height: 100%;
 	min-height: 0;
-	width: min(100%, var(--layout-main-column-width, 100%));
+	width: 100%;
+	max-width: 100%;
 	margin: 0 auto;
 	padding: 14px 18px;
 	box-sizing: border-box;
@@ -2922,6 +2952,8 @@ definePage(computed(() => {
 
 .searchPane {
 	height: 100%;
+	width: 100%;
+	max-width: 100%;
 	min-height: 0;
 	max-height: 100%;
 	overflow: hidden;
@@ -2940,6 +2972,8 @@ definePage(computed(() => {
 
 .tabPane {
 	height: 100%;
+	width: 100%;
+	max-width: 100%;
 	min-height: 0;
 	max-height: 100%;
 	display: flex;
@@ -2954,6 +2988,8 @@ definePage(computed(() => {
 
 .tabPaneInner {
 	flex: 1 1 auto;
+	width: 100%;
+	max-width: 100%;
 	height: 100%;
 	min-height: 0;
 	max-height: 100%;
@@ -3014,6 +3050,7 @@ definePage(computed(() => {
 	position: relative;
 	z-index: 3;
 	width: 100%;
+	max-width: 100%;
 	padding: 6px 12px max(8px, env(safe-area-inset-bottom));
 	box-sizing: border-box;
 	background: var(--chat-room-surface);
@@ -3081,7 +3118,7 @@ definePage(computed(() => {
 .form {
 	margin: 0 auto;
 	width: 100%;
-	max-width: var(--layout-main-column-width, 100%);
+	max-width: 100%;
 }
 
 .fade-enter-active, .fade-leave-active {

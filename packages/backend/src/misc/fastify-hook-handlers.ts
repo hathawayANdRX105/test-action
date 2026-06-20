@@ -8,6 +8,7 @@ import type { onRequestHookHandler } from 'fastify';
 export const handleRequestRedirectToOmitSearch: onRequestHookHandler = (request, reply, done) => {
 	const index = request.url.indexOf('?');
 	if (~index) {
+		if (/^gridCover=[A-Za-z0-9_-]+$/.test(request.url.slice(index + 1))) return done();
 		reply.redirect(request.url.slice(0, index), 301);
 	}
 	done();

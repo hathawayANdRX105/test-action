@@ -217,7 +217,7 @@ export const PREF_DEF = {
 	showGapBetweenNotesInTimeline: {
 		default: false,
 	},
-	// 全局帖子流浏览样式:twitter=推特(SkNote大卡)/ forum=Discourse论坛风窄列表 / masonry=小红书风2~3列瀑布流
+	// 全局帖子流浏览样式:twitter=X 风格(SkNote大卡)/ forum=Discourse 风格窄列表 / masonry=网格瀑布流
 	timelineViewMode: {
 		default: 'twitter' as 'twitter' | 'forum' | 'masonry',
 	},

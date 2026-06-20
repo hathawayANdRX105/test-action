@@ -2874,8 +2874,8 @@ _categories:
   pinned: "已置顶"
   scopeLabel: "范围"
 _viewMode:
-  twitter: "推特"
-  forum: "论坛"
+  twitter: "X 风格"
+  forum: "Discourse 风格"
   masonry: "网格"
 viewMode: "浏览方式"
 _autoTranslate:

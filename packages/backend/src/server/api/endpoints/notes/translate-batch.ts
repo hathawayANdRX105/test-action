@@ -12,7 +12,7 @@ import { NoteVisibilityService } from '@/core/NoteVisibilityService.js';
 import { ApiError } from '@/server/api/error.js';
 import { NoteTranslationService, type CachedTranslation } from './translate-common.js';
 
-const TRANSLATE_BATCH_CONCURRENCY = 2;
+const TRANSLATE_BATCH_CONCURRENCY = 1;
 
 export const meta = {
 	tags: ['notes'],

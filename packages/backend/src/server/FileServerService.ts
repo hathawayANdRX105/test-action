@@ -567,6 +567,26 @@ export class FileServerService {
 		const path = this.internalStorageService.resolvePath(key);
 
 		if (isThumbnail || isWebpublic) {
+			if (!await this.isReadableStoredInternalFile(path)) {
+				const originalPath = file.accessKey ? this.internalStorageService.resolvePath(file.accessKey) : null;
+				if (originalPath && await this.isReadableStoredInternalFile(originalPath)) {
+					this.logger.warn(`Stored internal ${isThumbnail ? 'thumbnail' : 'webpublic'} file is missing: ${path}; falling back to original file ${file.id}`);
+					return {
+						state: 'stored_internal',
+						fileRole: 'original',
+						file,
+						filename: file.name,
+						// 古いファイルは修正前のmimeを持っているのでできるだけ修正してあげる
+						mime: this.fileInfoService.fixMime(file.type),
+						ext: null,
+						path: originalPath,
+					};
+				}
+
+				this.logger.warn(`Stored internal ${isThumbnail ? 'thumbnail' : 'webpublic'} file is missing: ${path}; original is unavailable for file ${file.id}`);
+				return '404';
+			}
+
 			const { mime, ext } = await this.fileInfoService.detectType(path);
 			return {
 				state: 'stored_internal',
@@ -576,6 +596,11 @@ export class FileServerService {
 				mime, ext,
 				path,
 			};
+		}
+
+		if (!await this.isReadableStoredInternalFile(path)) {
+			this.logger.warn(`Stored internal original file is missing: ${path}; original is unavailable for file ${file.id}`);
+			return '404';
 		}
 
 		return {
@@ -588,6 +613,17 @@ export class FileServerService {
 			ext: null,
 			path,
 		};
+	}
+
+	private async isReadableStoredInternalFile(path: string): Promise<boolean> {
+		try {
+			await fs.promises.access(path, fs.constants.R_OK);
+			return true;
+		} catch (error) {
+			const code = (error as { code?: unknown }).code;
+			if (code === 'ENOENT' || code === 'ENOTDIR') return false;
+			throw error;
+		}
 	}
 
 	// Based on ApiCallService

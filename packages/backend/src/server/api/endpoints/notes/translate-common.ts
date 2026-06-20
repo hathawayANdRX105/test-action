@@ -23,6 +23,8 @@ interface CachedTranslationEntity {
 	u?: number;
 }
 
+const LIBRE_TRANSLATE_ATTEMPTS = 2;
+
 @Injectable()
 export class NoteTranslationService {
 	private readonly translationsCache: ManagedRedisKVCache<CachedTranslationEntity>;
@@ -143,41 +145,92 @@ export class NoteTranslationService {
 			}
 
 			if (this.serverSettings.libreTranslateURL) {
-				const res = await this.httpRequestService.send(this.serverSettings.libreTranslateURL, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						Accept: 'application/json, */*',
-					},
-					body: JSON.stringify({
-						q: note.text,
-						source: 'auto',
-						target: targetLang,
-						format: 'text',
-						api_key: this.serverSettings.libreTranslateKey ?? '',
-					}),
-					timeout: this.serverSettings.translationTimeout,
-				});
-
-				const json = (await res.json()) as {
-					alternatives: string[],
-					detectedLanguage: { [key: string]: string | number },
-					translatedText: string,
-				};
-
-				const languageNames = new Intl.DisplayNames(['en'], {
-					type: 'language',
-				});
-
-				return {
-					sourceLang: languageNames.of(json.detectedLanguage.language as string),
-					text: json.translatedText,
-				};
+				return await this.fetchLibreTranslation(note, targetLang);
 			}
 		} catch (e) {
 			this.loggerService.logger.error('Unhandled error from translation API: ', { e });
 		}
 
 		return null;
+	}
+
+	private async fetchLibreTranslation(note: MiNote & { text: string }, targetLang: string): Promise<CachedTranslation | null> {
+		for (const libreTargetLang of this.getLibreTranslateTargetLangCandidates(targetLang)) {
+			for (let attempt = 1; attempt <= LIBRE_TRANSLATE_ATTEMPTS; attempt++) {
+				try {
+					const res = await this.httpRequestService.send(this.serverSettings.libreTranslateURL!, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Accept: 'application/json, */*',
+						},
+						body: JSON.stringify({
+							q: note.text,
+							source: 'auto',
+							target: libreTargetLang,
+							format: 'text',
+							api_key: this.serverSettings.libreTranslateKey ?? '',
+						}),
+						timeout: this.serverSettings.translationTimeout,
+					}, {
+						throwErrorWhenResponseNotOk: false,
+					});
+
+					const body = await res.text();
+					if (!res.ok) {
+						this.loggerService.logger.warn(`LibreTranslate returned ${res.status} ${res.statusText} for target=${libreTargetLang}: ${body.slice(0, 300)}`);
+						continue;
+					}
+
+					const json = JSON.parse(body) as {
+						alternatives?: string[],
+						detectedLanguage?: { [key: string]: string | number },
+						translatedText?: string,
+					};
+					if (!json.translatedText) {
+						this.loggerService.logger.warn(`LibreTranslate response did not include translatedText for target=${libreTargetLang}: ${body.slice(0, 300)}`);
+						continue;
+					}
+
+					return {
+						sourceLang: this.getLanguageDisplayName(json.detectedLanguage?.language),
+						text: json.translatedText,
+					};
+				} catch (e) {
+					this.loggerService.logger.warn(`LibreTranslate attempt ${attempt}/${LIBRE_TRANSLATE_ATTEMPTS} failed for target=${libreTargetLang}: ${e instanceof Error ? e.message : String(e)}`);
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private getLibreTranslateTargetLangCandidates(targetLang: string): string[] {
+		return [...new Set([
+			this.normalizeLibreTranslateTargetLang(targetLang),
+			targetLang,
+			this.normalizeTargetLang(targetLang),
+		].filter(lang => lang.length > 0))];
+	}
+
+	private normalizeLibreTranslateTargetLang(targetLang: string): string {
+		const normalized = targetLang.trim();
+		const lower = normalized.toLowerCase();
+		if (lower === 'zh' || lower === 'zh-cn' || lower === 'zh-hans') return 'zh-Hans';
+		if (lower === 'zh-tw' || lower === 'zh-hant' || lower === 'zh-hk') return 'zh-Hant';
+		if (lower === 'pt-br') return 'pt-BR';
+		return this.normalizeTargetLang(normalized);
+	}
+
+	private getLanguageDisplayName(language: string | number | undefined): string | undefined {
+		if (typeof language !== 'string' || language.length === 0) return undefined;
+		try {
+			const languageNames = new Intl.DisplayNames(['en'], {
+				type: 'language',
+			});
+			return languageNames.of(language);
+		} catch {
+			return language;
+		}
 	}
 }

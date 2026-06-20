@@ -400,11 +400,11 @@ onBeforeUnmount(() => {
 
 .inner {
 	width: 100%;
-	max-width: min(var(--layout-main-column-width, 840px), calc(100% - 24px));
+	max-width: 100%;
 	min-height: 100%;
 	height: max-content;
 	margin: 0 auto;
-	padding: 16px 0 max(32px, calc(env(safe-area-inset-bottom) + var(--MI-stickyBottom, 0px) + var(--MI-visualViewportBottom, 0px) + 24px));
+	padding: 16px 12px max(32px, calc(env(safe-area-inset-bottom) + var(--MI-stickyBottom, 0px) + var(--MI-visualViewportBottom, 0px) + 24px));
 	box-sizing: border-box;
 }
 

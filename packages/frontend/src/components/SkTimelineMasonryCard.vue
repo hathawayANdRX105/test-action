@@ -11,14 +11,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <a :class="$style.card" :href="`/notes/${note.id}`" @click.prevent="goNote">
 	<!-- 顶部图片或纯色文字块 -->
-	<div v-if="firstImage" :class="$style.imageWrap">
-		<img v-if="cardImageUrl" :src="cardImageUrl" :alt="firstImage.comment ?? ''" :class="$style.image" loading="lazy" decoding="async" referrerpolicy="no-referrer"/>
+	<div v-if="firstImage && cardImageUrl" :class="$style.imageWrap">
+		<img :src="cardImageUrl" :alt="firstImage.comment ?? ''" :class="$style.image" loading="lazy" decoding="async" referrerpolicy="no-referrer" @error="onImageError"/>
 		<span v-if="filesCount > 1" :class="$style.imageBadge">×{{ filesCount }}</span>
 		<span v-if="firstImage.type?.startsWith('video')" :class="$style.playBadge"><i class="ph-play ph-bold ph-lg"></i></span>
 	</div>
 	<div v-else :class="$style.textCard" :style="{ background: textBg }">
 		<div :class="$style.textCardInner">
-			<span v-if="note.cw" :class="$style.textCw">[CW] {{ note.cw }}</span>
+			<span v-if="appearNote.cw" :class="$style.textCw">[CW] {{ appearNote.cw }}</span>
 			<span v-else>{{ textPreview }}</span>
 		</div>
 	</div>
@@ -45,39 +45,43 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkAvatar from '@/components/global/MkAvatar.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
 import { useRouter } from '@/router.js';
 import { getStaticImageUrl } from '@/utility/media-proxy.js';
 import { useTimelinePreviewTranslation } from '@/composables/use-timeline-preview-translation.js';
+import { getAppearNote } from '@/utility/get-appear-note.js';
 
 const props = defineProps<{
 	note: Misskey.entities.Note;
 }>();
 
 const router = useRouter();
-const noteRef = computed(() => props.note);
+const imageLoadFailed = ref(false);
+const appearNote = computed(() => getAppearNote(props.note));
+const translationNoteRef = computed(() => appearNote.value);
 const {
 	previewTranslationText,
 	translatedPreview,
 	shouldReplacePreviewText,
-} = useTimelinePreviewTranslation(noteRef);
+} = useTimelinePreviewTranslation(translationNoteRef);
 
 // 找第一张图(或有封面的短视频),作为卡片主体
 const firstImage = computed(() => {
-	const files = props.note.files ?? [];
+	const files = appearNote.value.files ?? [];
 	return files.find(f => f.type?.startsWith('image') || (f.type?.startsWith('video') && f.thumbnailUrl)) ?? null;
 });
 
-const filesCount = computed(() => (props.note.files ?? []).length);
+const filesCount = computed(() => (appearNote.value.files ?? []).length);
 
 const cardImageUrl = computed(() => {
+	if (imageLoadFailed.value) return '';
 	const image = firstImage.value;
 	if (!image) return '';
 	if (image.thumbnailUrl) return safeCardImageUrl(image.thumbnailUrl);
-	if (image.type?.startsWith('image') && image.url) return getStaticImageUrl(image.url);
+	if (image.type?.startsWith('image') && image.url) return safeCardImageUrl(image.url);
 	return '';
 });
 
@@ -85,23 +89,46 @@ function safeCardImageUrl(source: string): string {
 	if (!source) return '';
 	try {
 		const url = new URL(source, window.location.href);
-		if (url.origin === window.location.origin || url.pathname.startsWith('/proxy/')) return source;
+		if (isSameOriginUrl(url)) return withGridCoverCacheKey(url);
 		return getStaticImageUrl(source);
 	} catch {
 		return source;
 	}
 }
 
+function isSameOriginUrl(url: URL): boolean {
+	return url.origin === window.location.origin;
+}
+
+function withGridCoverCacheKey(url: URL): string {
+	url.searchParams.set('gridCover', '20260620');
+	return url.href;
+}
+
+watch(() => props.note.id, () => {
+	imageLoadFailed.value = false;
+});
+
+function onImageError(): void {
+	imageLoadFailed.value = true;
+}
+
 function shrinkText(text: string, max: number): string {
 	return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
+const isRenotePreview = computed(() => appearNote.value.id !== props.note.id);
+const sourcePreviewText = computed(() => {
+	const t = shouldReplacePreviewText.value ? translatedPreview.value : (appearNote.value.text ?? '').replace(/\s+/g, ' ').trim();
+	if (!t) return '';
+	return isRenotePreview.value ? `RN: ${t}` : t;
+});
+
 // 纯文字摘要(给纯文字帖用,最多 80 字)
 const textPreview = computed(() => {
-	const t = shouldReplacePreviewText.value ? translatedPreview.value : (props.note.text ?? '').replace(/\s+/g, ' ').trim();
+	const t = sourcePreviewText.value;
 	if (!t) {
-		if (props.note.poll) return '📊 投票';
-		if (props.note.renote) return `RN: ${(props.note.renote.text ?? '').slice(0, 60)}`;
+		if (appearNote.value.poll) return '📊 投票';
 		return '';
 	}
 	return shrinkText(t, 80);
@@ -109,13 +136,13 @@ const textPreview = computed(() => {
 
 // 底部 caption(给图帖用,1 行截断)
 const captionShort = computed(() => {
-	const t = shouldReplacePreviewText.value ? translatedPreview.value : (props.note.text ?? '').replace(/\s+/g, ' ').trim();
-	return shrinkText(t, 40);
+	return shrinkText(sourcePreviewText.value, 40);
 });
 
 const previewTranslationLine = computed(() => {
 	if (shouldReplacePreviewText.value || !previewTranslationText.value) return '';
-	return shrinkText(previewTranslationText.value, 72);
+	const t = isRenotePreview.value ? `RN: ${previewTranslationText.value}` : previewTranslationText.value;
+	return shrinkText(t, 72);
 });
 
 // 反应数总和
@@ -169,14 +196,15 @@ function goNote(ev: MouseEvent) {
 .imageWrap {
 	position: relative;
 	width: 100%;
-	aspect-ratio: auto;
+	aspect-ratio: 4 / 3;
 	background: var(--MI_THEME-panelHighlight);
+	overflow: hidden;
 }
 
 .image {
 	display: block;
 	width: 100%;
-	height: auto;
+	height: 100%;
 	max-height: 480px;
 	object-fit: cover;
 	object-position: center;

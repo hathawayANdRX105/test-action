@@ -8,6 +8,8 @@
 import { assert, describe, test } from 'vitest';
 import defaultConfigSource from '../../../.config/default.yml?raw';
 import chatIndexSource from '@/pages/chat/index.vue?raw';
+import chatRoomSource from '@/pages/chat/room.vue?raw';
+import chatRoomSearchSource from '@/pages/chat/room.search.vue?raw';
 import exploreSource from '@/pages/explore.vue?raw';
 import timelineSource from '@/pages/timeline.vue?raw';
 import navbarSource from '@/ui/_common_/navbar.vue?raw';
@@ -53,6 +55,14 @@ describe('wide layout sizing', () => {
 		assert.notMatch(exploreSource, /--explore-main-width:/);
 		assert.match(chatIndexSource, /needWideArea:\s*true,[\s\S]*keepWidgets:\s*false,/);
 		assert.notMatch(chatIndexSource, /bustLayoutCap:\s*true/);
+		assert.match(chatIndexSource, /\.root\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;/);
+		assert.match(chatIndexSource, /\.wide\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;[\s\S]*grid-template-columns:\s*minmax\(220px,\s*260px\)\s*minmax\(0,\s*1fr\);/);
+		assert.match(chatIndexSource, /\.main\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;/);
+		assert.match(chatRoomSource, /\.chatPane\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/);
+		assert.match(chatRoomSource, /\.form\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/);
+		assert.notMatch(chatRoomSource, /\.chatPane\s*\{[\s\S]*var\(--layout-main-column-width/);
+		assert.notMatch(chatRoomSource, /\.form\s*\{[\s\S]*var\(--layout-main-column-width/);
+		assert.match(chatRoomSearchSource, /\.inner\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/);
 
 		assert.match(timelineSource, /needWideArea:\s*true,[\s\S]*bustLayoutCap:\s*true,/);
 		assert.match(timelineSource, /--timeline-rail-width:\s*clamp\(280px,\s*22%,\s*420px\);/);

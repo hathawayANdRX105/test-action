@@ -22,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</button>
 			</header>
 
-			<!-- scope 切换:全部 / 本地 / 联合 —— 所有 tab 都展示 -->
+			<!-- scope 切换:本地+联邦 / 本地服务器 / 联邦服务器 —— 所有 tab 都展示 -->
 			<nav :class="$style.subTabs" role="tablist" :aria-label="i18n.ts._categories?.scopeLabel ?? '范围'">
 				<button
 					v-for="s in scopeTabs"
@@ -421,18 +421,18 @@ const homeTabs = computed(() => [{
 		icon: 'ti-message-circle-2',
 	}]);
 
-// 新统一 scope tabs (全部 / 本地 / 联合),默认全部
+// 新统一 scope tabs (本地+联邦 / 本地服务器 / 联邦服务器),默认混合流
 const scopeTabs = computed(() => [{
 	key: 'all' as const,
-	title: i18n.ts._categories?.all ?? '全部',
+	title: '本地+联邦',
 	icon: 'ti-circle-dot',
 }, {
 	key: 'local' as const,
-	title: i18n.ts._timelines.local,
+	title: '本地服务器',
 	icon: 'ti-home',
 }, {
 	key: 'global' as const,
-	title: i18n.ts._timelines.global,
+	title: '联邦服务器',
 	icon: 'ti-world',
 }]);
 

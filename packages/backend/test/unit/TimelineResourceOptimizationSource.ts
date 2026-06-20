@@ -12,6 +12,7 @@ const urlPreviewSource = readFileSync(new URL('../../src/server/web/UrlPreviewSe
 const endpointsModuleSource = readFileSync(new URL('../../src/server/api/EndpointsModule.ts', import.meta.url), 'utf8');
 const translateBatchSource = readFileSync(new URL('../../src/server/api/endpoints/notes/translate-batch.ts', import.meta.url), 'utf8');
 const translateCommonSource = readFileSync(new URL('../../src/server/api/endpoints/notes/translate-common.ts', import.meta.url), 'utf8');
+const fastifyHookHandlersSource = readFileSync(new URL('../../src/misc/fastify-hook-handlers.ts', import.meta.url), 'utf8');
 
 const chatReadEndpointPaths = [
 	'../../src/server/api/endpoints/chat/history.ts',
@@ -26,12 +27,16 @@ describe('timeline resource optimization source', () => {
 	test('registers batched note translation endpoint with bounded input and concurrency', () => {
 		assert.match(endpointListSource, /export \* as 'notes\/translate-batch'/);
 		assert.match(translateBatchSource, /maxItems:\s*20/);
-		assert.match(translateBatchSource, /const TRANSLATE_BATCH_CONCURRENCY = 2;/);
+		assert.match(translateBatchSource, /const TRANSLATE_BATCH_CONCURRENCY = 1;/);
 		assert.match(translateBatchSource, /translations:\s*\{\s*type:\s*'object'/);
 		assert.match(translateBatchSource, /noteVisibilityService\.checkNoteVisibilityAsync/);
 		assert.match(translateBatchSource, /getCachedTranslation/);
 		assert.match(endpointsModuleSource, /NoteTranslationService/);
 		assert.match(translateCommonSource, /setCachedTranslation/);
+		assert.match(translateCommonSource, /normalizeLibreTranslateTargetLang/);
+		assert.match(translateCommonSource, /fetchLibreTranslation/);
+		assert.match(translateCommonSource, /throwErrorWhenResponseNotOk:\s*false/);
+		assert.match(translateCommonSource, /LIBRE_TRANSLATE_ATTEMPTS/);
 		assert.doesNotMatch(translateBatchSource, /new NoteTranslation/);
 	});
 
@@ -41,6 +46,11 @@ describe('timeline resource optimization source', () => {
 		assert.match(fileServerSource, /checkSharedLimit\(reply,\s*actor,\s*group\)/);
 		assert.match(fileServerSource, /size:\s*7200/);
 		assert.match(fileServerSource, /dripRate:\s*1000/);
+		assert.match(fileServerSource, /isReadableStoredInternalFile/);
+		assert.match(fileServerSource, /falling back to original file/);
+		assert.match(fileServerSource, /original is unavailable/);
+		assert.match(fastifyHookHandlersSource, /\^gridCover=/);
+		assert.match(fastifyHookHandlersSource, /return done\(\);/);
 
 		assert.match(urlPreviewSource, /const URL_PREVIEW_ERROR_CACHE_SECONDS = 300;/);
 		assert.match(urlPreviewSource, /size:\s*100/);

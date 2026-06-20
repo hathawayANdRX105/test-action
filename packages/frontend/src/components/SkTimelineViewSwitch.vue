@@ -2,7 +2,7 @@
 SPDX-FileCopyrightText: lpHex
 SPDX-License-Identifier: AGPL-3.0-only
 
-3 段切换:推特(默认大卡) / 论坛(Discourse 风) / 网格(小红书风)
+3 段切换:X 风格(默认大卡) / Discourse 风格 / 网格
 读写全局 pref timelineViewMode。
 -->
 
@@ -35,8 +35,8 @@ type Mode = 'twitter' | 'forum' | 'masonry';
 const current = computed(() => prefer.r.timelineViewMode.value);
 
 const modes: { value: Mode; label: string; icon: string }[] = [
-	{ value: 'twitter', label: i18n.ts._viewMode?.twitter ?? '推特', icon: 'ph-list-bullets ph-bold ph-lg' },
-	{ value: 'forum', label: i18n.ts._viewMode?.forum ?? '论坛', icon: 'ph-rows ph-bold ph-lg' },
+	{ value: 'twitter', label: i18n.ts._viewMode?.twitter ?? 'X 风格', icon: 'ph-list-bullets ph-bold ph-lg' },
+	{ value: 'forum', label: i18n.ts._viewMode?.forum ?? 'Discourse 风格', icon: 'ph-rows ph-bold ph-lg' },
 	{ value: 'masonry', label: i18n.ts._viewMode?.masonry ?? '网格', icon: 'ph-squares-four ph-bold ph-lg' },
 ];
 

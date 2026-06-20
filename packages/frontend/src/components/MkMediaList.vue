@@ -5,12 +5,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.root">
-	<XBanner v-for="media in mediaList.filter(media => !previewable(media))" :key="media.id" :media="media"/>
-	<div v-if="mediaList.filter(media => previewable(media)).length > 0" :class="$style.container">
+	<XBanner v-for="media in bannerMediaList" :key="media.id" :media="media"/>
+	<div v-if="previewableMediaList.length > 0" :class="$style.container">
 		<div
 			ref="gallery"
 			:class="[
 				$style.medias,
+				{ [$style.singleVideo]: hasSingleVideo },
 				count === 1 ? [$style.n1, {
 					[$style.n116_9]: prefer.s.mediaListWithOneImageAppearance === '16_9',
 					[$style.n11_1]: prefer.s.mediaListWithOneImageAppearance === '1_1',
@@ -18,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				}] : count === 2 ? $style.n2 : count === 3 ? $style.n3 : count === 4 ? $style.n4 : $style.nMany,
 			]"
 		>
-			<template v-for="media in mediaList.filter(media => previewable(media))">
+			<template v-for="media in previewableMediaList">
 				<XVideo v-if="media.type.startsWith('video')" :key="`video:${media.id}`" :class="$style.media" :video="media"/>
 				<XImage v-else-if="media.type.startsWith('image')" :key="`image:${media.id}`" :class="$style.media" class="image" :data-id="media.id" :image="media" :raw="raw"/>
 				<XModPlayer v-else-if="isModule(media)" :key="`module:${media.id}`" :class="$style.media" :module="media"/>
@@ -53,7 +54,10 @@ const props = defineProps<{
 const gallery = useTemplateRef('gallery');
 const pswpZIndex = os.claimZIndex('middle');
 window.document.documentElement.style.setProperty('--mk-pswp-root-z-index', pswpZIndex.toString());
-const count = computed(() => props.mediaList.filter(media => previewable(media)).length);
+const previewableMediaList = computed(() => props.mediaList.filter(media => previewable(media)));
+const bannerMediaList = computed(() => props.mediaList.filter(media => !previewable(media)));
+const count = computed(() => previewableMediaList.value.length);
+const hasSingleVideo = computed(() => previewableMediaList.value.length === 1 && previewableMediaList.value[0]?.type.startsWith('video') === true);
 let lightbox: PhotoSwipeLightbox | null = null;
 
 let activeEl: HTMLElement | null = null;
@@ -67,9 +71,9 @@ const popstateHandler = (): void => {
 async function calcAspectRatio() {
 	if (!gallery.value) return;
 
-	const img = props.mediaList[0];
+	const img = previewableMediaList.value[0];
 
-	if (props.mediaList.length !== 1 || !(img.properties.width && img.properties.height)) {
+	if (previewableMediaList.value.length !== 1 || img == null || !img.type.startsWith('image') || !(img.properties.width && img.properties.height)) {
 		gallery.value.style.aspectRatio = '';
 		return;
 	}
@@ -129,7 +133,7 @@ onMounted(() => {
 				}
 				return item;
 			}),
-		gallery: gallery.value,
+		gallery: gallery.value ?? undefined,
 		mainClass: 'pswp',
 		children: '.image',
 		thumbSelector: '.image',
@@ -334,6 +338,18 @@ defineExpose({
 			aspect-ratio: 16/9;
 		}
 	}
+
+	&.singleVideo {
+		height: auto;
+		aspect-ratio: 16 / 9;
+		min-height: clamp(220px, 32vw, 420px);
+		max-height: min(70vh, 560px);
+	}
+}
+
+.singleVideo > .media {
+	min-height: inherit;
+	max-height: inherit;
 }
 
 .media {
