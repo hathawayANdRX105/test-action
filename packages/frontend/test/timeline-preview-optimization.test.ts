@@ -12,6 +12,7 @@ import skNoteSource from '@/components/SkNote.vue?raw';
 import skNoteSubSource from '@/components/SkNoteSub.vue?raw';
 import forumCardSource from '@/components/SkTimelineForumItem.vue?raw';
 import masonryCardSource from '@/components/SkTimelineMasonryCard.vue?raw';
+import autoTranslateSwitchSource from '@/components/SkAutoTranslateSwitch.vue?raw';
 import viewSwitchSource from '@/components/SkTimelineViewSwitch.vue?raw';
 import previewTranslationSource from '@/composables/use-timeline-preview-translation.ts?raw';
 import timelineSource from '@/pages/timeline.vue?raw';
@@ -72,6 +73,13 @@ describe('timeline preview optimization', () => {
 		assert.match(masonryCardSource, /referrerpolicy="no-referrer"/);
 		assert.notMatch(masonryCardSource, /firstImage\.thumbnailUrl \?\? firstImage\.url/);
 		assert.notMatch(masonryCardSource, /<video\b/);
+	});
+
+	test('auto-translate popup stays within the mobile viewport without becoming a bottom sheet', () => {
+		assert.match(autoTranslateSwitchSource, /\.cacheStats\s*\{[\s\S]*min-width:\s*0;[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;/);
+		assert.match(autoTranslateSwitchSource, /\.cacheRow\s*\{[\s\S]*flex-wrap:\s*wrap;[\s\S]*gap:\s*8px;/);
+		assert.match(autoTranslateSwitchSource, /@media \(max-width: 700px\) \{[\s\S]*position:\s*absolute;[\s\S]*top:\s*calc\(100% \+ 8px\);[\s\S]*bottom:\s*auto;[\s\S]*width:\s*min\(320px,\s*calc\(100vw - 24px\)\);[\s\S]*max-height:\s*min\(52vh,\s*360px\);/);
+		assert.notMatch(autoTranslateSwitchSource, /bottom:\s*16px;/);
 	});
 
 	test('normal note translation is bound to the displayed appearNote', () => {

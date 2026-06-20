@@ -69,15 +69,23 @@ const replace = computed(() => prefer.r.autoTranslateReplaceOriginal.value);
 const translatorAvailable = computed(() => !!instance.translatorAvailable);
 
 const cacheSize = ref(getCacheStats().size);
-function refreshCacheStats() { cacheSize.value = getCacheStats().size; }
+
+function refreshCacheStats() {
+	cacheSize.value = getCacheStats().size;
+}
 
 function toggle(): void {
 	open.value = !open.value;
 	if (open.value) refreshCacheStats();
 }
 
-function toggleEnabled(v: boolean) { prefer.commit('autoTranslateNotes', v); }
-function toggleReplace(v: boolean) { prefer.commit('autoTranslateReplaceOriginal', v); }
+function toggleEnabled(v: boolean) {
+	prefer.commit('autoTranslateNotes', v);
+}
+
+function toggleReplace(v: boolean) {
+	prefer.commit('autoTranslateReplaceOriginal', v);
+}
 
 function onClearCache() {
 	clearTranslationCache();
@@ -91,8 +99,9 @@ function onDocClick(ev: MouseEvent) {
 	if (popupEl.value?.contains(t)) return;
 	open.value = false;
 }
-onMounted(() => document.addEventListener('click', onDocClick));
-onUnmounted(() => document.removeEventListener('click', onDocClick));
+
+onMounted(() => window.document.addEventListener('click', onDocClick));
+onUnmounted(() => window.document.removeEventListener('click', onDocClick));
 </script>
 
 <style lang="scss" module>
@@ -148,18 +157,20 @@ onUnmounted(() => document.removeEventListener('click', onDocClick));
 	flex-direction: column;
 	gap: 12px;
 
-	// 移动端:从屏幕右侧改成居中固定面板,避免超出窗口
+	// 移动端保持跟随按钮的紧凑弹层,避免固定到底部挡住时间线。
 	@media (max-width: 700px) {
-		position: fixed;
-		top: auto;
-		bottom: 16px;
-		left: 12px;
-		right: 12px;
+		position: absolute;
+		top: calc(100% + 8px);
+		right: 0;
+		bottom: auto;
+		left: auto;
+		width: min(320px, calc(100vw - 24px));
 		min-width: 0;
-		max-width: none;
-		border-radius: 14px;
-		max-height: 70vh;
+		max-width: calc(100vw - 24px);
+		border-radius: 12px;
+		max-height: min(52vh, 360px);
 		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 }
 
@@ -190,13 +201,23 @@ onUnmounted(() => document.removeEventListener('click', onDocClick));
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 8px;
 	padding-top: 8px;
 	border-top: solid 0.5px var(--MI_THEME-divider);
 	font-size: 0.82em;
 	color: var(--MI_THEME-fgTransparentWeak);
 }
 
+.cacheStats {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .cacheClear {
+	flex-shrink: 0;
 	color: var(--MI_THEME-error, #e74c3c);
 	font-size: 0.85em;
 	padding: 3px 8px;
