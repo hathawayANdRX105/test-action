@@ -27,8 +27,8 @@ interface CachedTranslationEntity {
 }
 
 const LIBRE_TRANSLATE_ATTEMPTS = 1;
-const LIBRE_TRANSLATE_MIN_INTERVAL_MS = 900;
-const LIBRE_TRANSLATE_RATE_LIMIT_COOLDOWN_MS = 1000 * 12;
+const LIBRE_TRANSLATE_MIN_INTERVAL_MS = 5_500;
+const LIBRE_TRANSLATE_RATE_LIMIT_COOLDOWN_MS = 1000 * 65;
 const LIBRE_TRANSLATE_SLOT_KEY = 'translation:libreTranslate:nextSlot';
 const LIBRE_TRANSLATE_SLOT_TTL_MS = 1000 * 60;
 
@@ -184,6 +184,7 @@ export class NoteTranslationService {
 							api_key: this.serverSettings.libreTranslateKey ?? '',
 						}),
 						timeout: this.serverSettings.translationTimeout,
+						bypassProxy: true,
 					}, {
 						throwErrorWhenResponseNotOk: false,
 					});

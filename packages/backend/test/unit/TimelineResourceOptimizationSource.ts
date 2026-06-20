@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 
 const endpointListSource = readFileSync(new URL('../../src/server/api/endpoint-list.ts', import.meta.url), 'utf8');
 const fileServerSource = readFileSync(new URL('../../src/server/FileServerService.ts', import.meta.url), 'utf8');
+const httpRequestServiceSource = readFileSync(new URL('../../src/core/HttpRequestService.ts', import.meta.url), 'utf8');
 const urlPreviewSource = readFileSync(new URL('../../src/server/web/UrlPreviewService.ts', import.meta.url), 'utf8');
 const endpointsModuleSource = readFileSync(new URL('../../src/server/api/EndpointsModule.ts', import.meta.url), 'utf8');
 const translateBatchSource = readFileSync(new URL('../../src/server/api/endpoints/notes/translate-batch.ts', import.meta.url), 'utf8');
@@ -37,11 +38,14 @@ describe('timeline resource optimization source', () => {
 		assert.match(translateCommonSource, /fetchLibreTranslation/);
 		assert.match(translateCommonSource, /throwErrorWhenResponseNotOk:\s*false/);
 		assert.match(translateCommonSource, /const LIBRE_TRANSLATE_ATTEMPTS = 1;/);
-		assert.match(translateCommonSource, /const LIBRE_TRANSLATE_MIN_INTERVAL_MS = 900;/);
-		assert.match(translateCommonSource, /const LIBRE_TRANSLATE_RATE_LIMIT_COOLDOWN_MS = 1000 \* 12;/);
+		assert.match(translateCommonSource, /const LIBRE_TRANSLATE_MIN_INTERVAL_MS = 5_500;/);
+		assert.match(translateCommonSource, /const LIBRE_TRANSLATE_RATE_LIMIT_COOLDOWN_MS = 1000 \* 65;/);
 		assert.match(translateCommonSource, /private async reserveLibreTranslateSlot/);
 		assert.match(translateCommonSource, /this\.redisClient\.eval/);
 		assert.match(translateCommonSource, /res\.status === 403 \|\| res\.status === 429/);
+		assert.match(httpRequestServiceSource, /bypassProxy\?: boolean/);
+		assert.match(httpRequestServiceSource, /agent:\s*args\.bypassProxy === true\s*\?\s*undefined\s*:\s*\(url\) => this\.getAgentByUrl\(url,\s*false,\s*isLocalAddressAllowed\)/);
+		assert.match(translateCommonSource, /bypassProxy:\s*true/);
 		assert.doesNotMatch(translateBatchSource, /new NoteTranslation/);
 	});
 

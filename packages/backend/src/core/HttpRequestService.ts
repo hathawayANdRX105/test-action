@@ -338,6 +338,7 @@ export class HttpRequestService {
 			size?: number,
 			isLocalAddressAllowed?: boolean,
 			allowHttp?: boolean,
+			bypassProxy?: boolean,
 		} = {},
 		extra: HttpRequestSendOptions = {
 			throwErrorWhenResponseNotOk: true,
@@ -367,7 +368,7 @@ export class HttpRequestService {
 				},
 				body: args.body,
 				size: args.size ?? 10 * 1024 * 1024,
-				agent: (url) => this.getAgentByUrl(url, false, isLocalAddressAllowed),
+				agent: args.bypassProxy === true ? undefined : (url) => this.getAgentByUrl(url, false, isLocalAddressAllowed),
 				signal: controller.signal,
 			});
 

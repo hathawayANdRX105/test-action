@@ -12,9 +12,9 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { getCachedTranslation, setCachedTranslation } from '@/utility/note-translation-cache.js';
 
 const MIN_LEN = 2;
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 4;
 const FLUSH_DELAY_MS = 200;
-const FAILURE_RETRY_DELAY_MS = 12_000;
+const FAILURE_RETRY_DELAY_MS = 70_000;
 const MAX_FAILURE_RETRIES = 2;
 
 type BatchTranslationResponse = {
