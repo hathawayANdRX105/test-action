@@ -23,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span v-if="enabled" :class="$style.badge">{{ i18n.ts._autoTranslate?.on ?? '开' }}</span>
 	</button>
 
-	<div v-if="open" ref="popupEl" :class="$style.popup" @click.stop>
+	<div v-if="open" ref="popupEl" :class="$style.popup" :style="popupStyle" @click.stop>
 		<div :class="$style.row">
 			<label :class="$style.label">
 				<input type="checkbox" :checked="enabled" @change="toggleEnabled(($event.target as HTMLInputElement).checked)"/>
@@ -54,7 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { prefer } from '@/preferences.js';
 import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
@@ -63,20 +63,30 @@ import { clearTranslationCache, getCacheStats } from '@/utility/note-translation
 const open = ref(false);
 const btnEl = ref<HTMLElement | null>(null);
 const popupEl = ref<HTMLElement | null>(null);
+const popupStyle = ref<Record<string, string>>({});
 
 const enabled = computed(() => prefer.r.autoTranslateNotes.value);
 const replace = computed(() => prefer.r.autoTranslateReplaceOriginal.value);
 const translatorAvailable = computed(() => !!instance.translatorAvailable);
 
 const cacheSize = ref(getCacheStats().size);
+const MOBILE_BREAKPOINT = 700;
+const MOBILE_MARGIN = 12;
+const MOBILE_POPUP_MAX_WIDTH = 320;
 
 function refreshCacheStats() {
 	cacheSize.value = getCacheStats().size;
 }
 
-function toggle(): void {
+async function toggle(): Promise<void> {
 	open.value = !open.value;
-	if (open.value) refreshCacheStats();
+	if (open.value) {
+		refreshCacheStats();
+		await nextTick();
+		updatePopupPosition();
+	} else {
+		popupStyle.value = {};
+	}
 }
 
 function toggleEnabled(v: boolean) {
@@ -97,11 +107,45 @@ function onDocClick(ev: MouseEvent) {
 	const t = ev.target as Node;
 	if (btnEl.value?.contains(t)) return;
 	if (popupEl.value?.contains(t)) return;
+	popupStyle.value = {};
 	open.value = false;
 }
 
-onMounted(() => window.document.addEventListener('click', onDocClick));
-onUnmounted(() => window.document.removeEventListener('click', onDocClick));
+function updatePopupPosition(): void {
+	if (!open.value || !btnEl.value || window.innerWidth > MOBILE_BREAKPOINT) {
+		popupStyle.value = {};
+		return;
+	}
+
+	const rect = btnEl.value.getBoundingClientRect();
+	const width = Math.min(MOBILE_POPUP_MAX_WIDTH, window.innerWidth - (MOBILE_MARGIN * 2));
+	const maxLeft = Math.max(MOBILE_MARGIN, window.innerWidth - width - MOBILE_MARGIN);
+	const left = Math.min(Math.max(MOBILE_MARGIN, rect.right - width), maxLeft);
+	const top = rect.bottom + 8;
+	const maxHeight = Math.min(360, Math.max(160, window.innerHeight - top - MOBILE_MARGIN));
+
+	popupStyle.value = {
+		position: 'fixed',
+		top: `${Math.round(top)}px`,
+		right: 'auto',
+		bottom: 'auto',
+		left: `${Math.round(left)}px`,
+		width: `${Math.round(width)}px`,
+		maxHeight: `${Math.round(maxHeight)}px`,
+	};
+}
+
+onMounted(() => {
+	window.document.addEventListener('click', onDocClick);
+	window.addEventListener('resize', updatePopupPosition);
+	window.addEventListener('scroll', updatePopupPosition, true);
+});
+
+onUnmounted(() => {
+	window.document.removeEventListener('click', onDocClick);
+	window.removeEventListener('resize', updatePopupPosition);
+	window.removeEventListener('scroll', updatePopupPosition, true);
+});
 </script>
 
 <style lang="scss" module>
@@ -159,11 +203,11 @@ onUnmounted(() => window.document.removeEventListener('click', onDocClick));
 
 	// 移动端保持跟随按钮的紧凑弹层,避免固定到底部挡住时间线。
 	@media (max-width: 700px) {
-		position: absolute;
-		top: calc(100% + 8px);
-		right: 0;
+		position: fixed;
+		top: 0;
+		right: auto;
 		bottom: auto;
-		left: auto;
+		left: 12px;
 		width: min(320px, calc(100vw - 24px));
 		min-width: 0;
 		max-width: calc(100vw - 24px);

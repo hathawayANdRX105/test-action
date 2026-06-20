@@ -76,10 +76,20 @@ describe('timeline preview optimization', () => {
 	});
 
 	test('auto-translate popup stays within the mobile viewport without becoming a bottom sheet', () => {
+		assert.match(autoTranslateSwitchSource, /:style="popupStyle"/);
+		assert.match(autoTranslateSwitchSource, /function updatePopupPosition\(\): void/);
+		assert.match(autoTranslateSwitchSource, /getBoundingClientRect\(\)/);
+		assert.match(autoTranslateSwitchSource, /Math\.max\(MOBILE_MARGIN/);
 		assert.match(autoTranslateSwitchSource, /\.cacheStats\s*\{[\s\S]*min-width:\s*0;[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;/);
 		assert.match(autoTranslateSwitchSource, /\.cacheRow\s*\{[\s\S]*flex-wrap:\s*wrap;[\s\S]*gap:\s*8px;/);
-		assert.match(autoTranslateSwitchSource, /@media \(max-width: 700px\) \{[\s\S]*position:\s*absolute;[\s\S]*top:\s*calc\(100% \+ 8px\);[\s\S]*bottom:\s*auto;[\s\S]*width:\s*min\(320px,\s*calc\(100vw - 24px\)\);[\s\S]*max-height:\s*min\(52vh,\s*360px\);/);
+		assert.match(autoTranslateSwitchSource, /@media \(max-width: 700px\) \{[\s\S]*position:\s*fixed;[\s\S]*right:\s*auto;[\s\S]*bottom:\s*auto;[\s\S]*width:\s*min\(320px,\s*calc\(100vw - 24px\)\);/);
 		assert.notMatch(autoTranslateSwitchSource, /bottom:\s*16px;/);
+	});
+
+	test('mobile hashtag chips wrap instead of forcing horizontal scrolling', () => {
+		assert.match(timelineSource, /@media \(max-width: 700px\) \{[\s\S]*\.tagChips\s*\{[\s\S]*flex-wrap:\s*wrap;[\s\S]*overflow-x:\s*hidden;[\s\S]*overflow-y:\s*auto;/);
+		assert.match(timelineSource, /\.tagChip,\s*\.tagChipMore\s*\{[\s\S]*flex:\s*0 1 auto;[\s\S]*max-width:\s*calc\(50vw - 16px\);/);
+		assert.notMatch(timelineSource, /flex-wrap:\s*nowrap;[\s\S]*overflow-x:\s*auto;[\s\S]*scrollbar-width:\s*none;/);
 	});
 
 	test('normal note translation is bound to the displayed appearNote', () => {

@@ -1240,20 +1240,30 @@ definePage(() => ({
 		margin-left: 0;
 	}
 
-	// 标签 chip 行:横向滚动而不是换行(更像 X / 小红书)
+	// 标签 chip 行:移动端自动换行,避免横向滚动时看不到后面的分类。
 	.tagChips {
 		padding: 8px 8px;
 		gap: 5px;
-		flex-wrap: nowrap;
-		overflow-x: auto;
-		scrollbar-width: none;
-		&::-webkit-scrollbar { display: none; }
+		flex-wrap: wrap;
+		align-content: flex-start;
+		max-height: 116px;
+		overflow-x: hidden;
+		overflow-y: auto;
+		scrollbar-width: thin;
 	}
 
 	.tagChip, .tagChipMore {
-		flex-shrink: 0;
+		flex: 0 1 auto;
+		max-width: calc(50vw - 16px);
 		font-size: 0.8em;
 		padding: 4px 10px;
+
+		span {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
 	}
 
 	// composer 边到边,无 margin
