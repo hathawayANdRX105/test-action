@@ -153,6 +153,13 @@ $widgets-hide-threshold: 1600px;
 	max-width: 82vw;
 	margin-inline: auto;
 	align-self: center;
+
+	// 移动端:撑满整屏,不留左右 9vw 留白(设置/个人资料/控制面板等没声明 needWideArea 的页都受影响)
+	@media (max-width: 700px) {
+		width: 100%;
+		max-width: 100%;
+		margin-inline: 0;
+	}
 }
 
 // timeline.vue 等、ページ自身で2カラムを描画するページ用。
