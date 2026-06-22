@@ -273,12 +273,18 @@ const SCROLL_AUTO_STICK_THRESHOLD = 4;
 const SCROLL_HISTORY_THRESHOLD = 480;
 const SCROLL_TAIL_THRESHOLD = 480;
 const USER_SCROLL_INTERACTION_LOCK_MS = 1200;
-const INITIAL_LATEST_EDGE_LOCK_MS = 2500;
+// 锁定 8s,覆盖移动端 avatar/图片慢加载;期间 ResizeObserver 会持续把视图重锚到底部
+const INITIAL_LATEST_EDGE_LOCK_MS = 8000;
 const TIMELINE_LIMIT = 20;
 const TIMELINE_RECONCILE_LIMIT = 50;
 const CONTEXT_LIMIT = 30;
 const INITIAL_HISTORY_FILL_LIMIT = 6;
 const MAX_ROOM_MESSAGES = 240;
+const MAX_ROOM_MESSAGES_MOBILE = 80;
+// 移动端 240 条 DOM 节点(avatar/MFM/reactions)非常卡;窄屏窗口剪到 80,往上翻历史时 fetchMore 会按需补
+function maxRoomMessagesForViewport(): number {
+	return (typeof window !== 'undefined' && window.innerWidth <= 700) ? MAX_ROOM_MESSAGES_MOBILE : MAX_ROOM_MESSAGES;
+}
 const MAX_CONTEXT_MESSAGES = 120;
 const STREAM_CONNECT_TIMEOUT = 5000;
 const CHAT_RECONCILE_TIMEOUT_MS = 5000;
@@ -310,6 +316,8 @@ const readReceiptBatcher = new ChatReadReceiptBatcher({
 let removeTimelineScrollListener: (() => void) | null = null;
 let timelineResizeObserver: ResizeObserver | null = null;
 let pendingStickToLatestFrame: number | null = null;
+// 进群后陆续撑高(avatar/图片晚到)的兜底定时器,卸载和切群时清掉
+let lateInitialRescrollTimers: number[] = [];
 let pendingIncomingMessageFrame: number | null = null;
 let pendingIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
 let pendingIncomingShouldStickToLatest = false;
@@ -384,6 +392,37 @@ function lockLatestEdgeDuringInitialRender() {
 
 function clearLatestEdgeInitialLock() {
 	latestEdgeLockUntil = 0;
+}
+
+function clearLateInitialRescrollTimers() {
+	for (const id of lateInitialRescrollTimers) window.clearTimeout(id);
+	lateInitialRescrollTimers = [];
+}
+
+// 进群 / 切群之后 avatar、图片可能在帧循环结束后才加载完撑高内容,
+// 这里按递增时间点重新锚到底部;只在初始锁定窗口内有效,用户一旦手动滑过就不会再触发。
+function scheduleLateInitialRescrolls() {
+	clearLateInitialRescrollTimers();
+	if (isContextMode.value) return;
+	const delays = [400, 1200, 2800, 5000, 7500];
+	for (const delay of delays) {
+		const id = window.setTimeout(() => {
+			lateInitialRescrollTimers = lateInitialRescrollTimers.filter(v => v !== id);
+			if (!isLatestEdgeInitialLockActive()) return;
+			if (!canUseChatScrollMetrics()) return;
+			if (autoScrollState.isUserInteracting()) return;
+			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
+			if (scrollContainer == null) return;
+			const metrics = getChatScrollMetrics(scrollContainer);
+			if (metrics.latestDistance <= 0) {
+				rememberLatestScrollMetrics(metrics);
+				return;
+			}
+			scrollContainer.scrollTo({ top: metrics.maxScrollTop, behavior: 'instant' });
+			rememberLatestScrollMetrics({ ...metrics, scrollTop: metrics.maxScrollTop, latestDistance: 0 });
+		}, delay);
+		lateInitialRescrollTimers.push(id);
+	}
 }
 
 function isLatestEdgeInitialLockActive() {
@@ -1041,7 +1080,7 @@ function findOldestPersistedMessageId(): string | undefined {
 
 function messageLimit(): number | undefined {
 	if (isContextMode.value) return MAX_CONTEXT_MESSAGES;
-	return isRoomChat.value ? MAX_ROOM_MESSAGES : undefined;
+	return isRoomChat.value ? maxRoomMessagesForViewport() : undefined;
 }
 
 function mergeMessages(first: NormalizedChatMessage[] | { keep?: 'newest' | 'oldest' }, ...rest: NormalizedChatMessage[][]): NormalizedChatMessage[] {
@@ -1746,6 +1785,8 @@ async function scrollToLatestAfterLayout(options?: { flushReadReceipt?: boolean;
 		if (options?.fillHistory === true) {
 			await fillInitialScrollableHistory();
 		}
+		// avatar/图片晚加载会撑高内容把视图顶离底部:在锁定期内分批兜底重锚
+		scheduleLateInitialRescrolls();
 	} finally {
 		endScrollRestoration();
 	}
@@ -1759,6 +1800,11 @@ async function initialize() {
 	joinRequiredRoom.value = null;
 	canFetchMore.value = false;
 	canFetchNewer.value = false;
+	// 切群时上一房间的滚动 snapshot 必须清掉,否则 ResizeObserver
+	// 触发的"是否吸底"判断会拿旧 maxScrollTop 比对新房间,新房进群停在错误位置(经常停在中间/顶部)。
+	latestScrollMetricsSnapshot = null;
+	clearLateInitialRescrollTimers();
+	autoScrollState.markLatest();
 	messages.value = [];
 	readReceiptBatcher.flush({ force: true });
 	connection.value?.dispose();
@@ -2359,6 +2405,7 @@ onBeforeUnmount(() => {
 		window.cancelAnimationFrame(pendingStickToLatestFrame);
 		pendingStickToLatestFrame = null;
 	}
+	clearLateInitialRescrollTimers();
 	if (pendingUserRefreshTimer != null) {
 		window.clearTimeout(pendingUserRefreshTimer);
 		pendingUserRefreshTimer = null;
