@@ -29,6 +29,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 						{{ item.title }}
 					</button>
 				</nav>
+
+				<!-- 与首页同款的 scope + 视图切换 + 自动翻译;chip 风格统一 -->
+				<nav :class="$style.scopeRow" role="tablist" aria-label="范围">
+					<button
+						v-for="s in exploreScopeTabs"
+						:key="s.key"
+						class="_button"
+						:class="[$style.scopeChip, { [$style.scopeChipActive]: exploreScope === s.key }]"
+						role="tab"
+						:aria-selected="exploreScope === s.key"
+						@click="exploreScope = s.key"
+					>
+						<i :class="['ti', s.icon, $style.scopeChipIcon]"></i>
+						<span>{{ s.title }}</span>
+					</button>
+					<div :class="$style.scopeRowRight">
+						<SkAutoTranslateSwitch/>
+						<SkTimelineViewSwitch/>
+					</div>
+				</nav>
 			</header>
 
 			<section v-if="searchHistoryRows.length > 0" :class="$style.searchShortcutPanel">
@@ -310,6 +330,8 @@ import { miLocalStorage } from '@/local-storage.js';
 import { iAmAdmin } from '@/i.js';
 import * as os from '@/os.js';
 import { buildSearchTrendRows } from '@/utility/search-trends.js';
+import SkAutoTranslateSwitch from '@/components/SkAutoTranslateSwitch.vue';
+import SkTimelineViewSwitch from '@/components/SkTimelineViewSwitch.vue';
 
 provide('shouldOmitHeaderTitle', true);
 
@@ -337,6 +359,21 @@ let rightRailMaxOffset = 0;
 let rightRailOffsetInitialized = false;
 
 const tab = ref<ExploreTab>(normalizeTab(props.initialTab));
+
+// 与首页一致的范围筛选;localStorage 共享同一 key 避免在两页之间反复切换。
+type Scope = 'all' | 'local' | 'global';
+const EXPLORE_SCOPE_KEY = 'home:scope';
+const exploreScope = ref<Scope>(((): Scope => {
+	const v = miLocalStorage.getItem(EXPLORE_SCOPE_KEY) as Scope | null;
+	if (v === 'all' || v === 'local' || v === 'global') return v;
+	return 'local';
+})());
+watch(exploreScope, v => miLocalStorage.setItem(EXPLORE_SCOPE_KEY, v));
+const exploreScopeTabs = [
+	{ key: 'all' as const, title: '全部', icon: 'ti-circle-dot' },
+	{ key: 'local' as const, title: '本地服务器', icon: 'ti-home' },
+	{ key: 'global' as const, title: '联邦服务器', icon: 'ti-world' },
+];
 const searchQuery = ref(props.query ?? '');
 const submittedQuery = ref('');
 const searchLoading = ref(false);
@@ -859,6 +896,56 @@ definePage(() => ({
 	grid-template-columns: repeat(5, minmax(max-content, 1fr));
 	min-height: 50px;
 	overflow-x: auto;
+}
+
+/* 与 timeline.vue 同款 scope 行;复用首页观感 */
+.scopeRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 16px;
+	flex-wrap: wrap;
+	border-bottom: solid 1px var(--MI_THEME-divider);
+}
+
+.scopeChip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 14px;
+	border-radius: 999px;
+	background: var(--MI_THEME-buttonBg);
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.88em;
+	white-space: nowrap;
+	cursor: pointer;
+
+	&:hover { background: var(--MI_THEME-panelHighlight); }
+}
+
+.scopeChipIcon {
+	font-size: 1em;
+}
+
+.scopeChipActive {
+	background: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent, #fff);
+
+	&:hover { background: var(--MI_THEME-accent); }
+}
+
+.scopeRowRight {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+	.scopeRow { padding: 8px 10px; gap: 6px; }
+	.scopeChip { padding: 5px 10px; font-size: 0.85em; }
+	.scopeRowRight { width: 100%; margin-left: 0; }
 }
 
 .exploreTab {

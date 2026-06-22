@@ -29,6 +29,10 @@ type RecommendationCategory = typeof categoryValues[number];
 type RecommendationSort = typeof sortValues[number];
 type RecommendationRankMode = typeof rankModeValues[number];
 const CANDIDATE_WINDOW = 1000 * 60 * 60 * 24 * 7;
+// 当 offset 深(用户已经滑过几百条)或者 sort 不是个性化时,把窗口往前延一档,
+// 让长尾滚动还能继续吃到数据,而不是 7 天范围吃光后突然"到头"。
+const CANDIDATE_WINDOW_DEEP = 1000 * 60 * 60 * 24 * 30;  // 30 天
+const CANDIDATE_WINDOW_FALLBACK = 1000 * 60 * 60 * 24 * 180; // 6 个月,真兜底
 const FRESH_PRIORITY_HOURS = 48;
 const OLD_CONTENT_HOURS = 72;
 const OLD_CONTENT_MAX_SCORE = 58;
@@ -109,7 +113,9 @@ export const paramDef = {
 		withRenotes: { type: 'boolean', default: true },
 		withBots: { type: 'boolean', default: false },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
-		offset: { type: 'integer', minimum: 0, maximum: 1000, default: 0 },
+		// offset 之前上限 1000,实际推荐窗口又是 7 天 ~ 1k 帖子,用户滑到 ~500 就硬撞顶。
+		// 抬到 10000,配合下面按 sort 拉长 CANDIDATE_WINDOW,长尾滑动也能继续拿到数据。
+		offset: { type: 'integer', minimum: 0, maximum: 10000, default: 0 },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },
 		sinceDate: { type: 'integer' },
@@ -152,7 +158,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate) : null);
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate) : null);
-			const rankingSinceId = this.idService.gen(this.timeService.now - CANDIDATE_WINDOW);
+			// sort 不在"个性化"时窗口直接拉到 30 天;offset>500 时不管什么 sort 都用 30 天 →
+			// offset>2000 时(真长尾)用 6 个月。这样用户滑多久都不会突然"没有更多了"。
+			const sortValue = ps.sort as RecommendationSort;
+			const deepOffset = ps.offset > 500;
+			const veryDeepOffset = ps.offset > 2000;
+			const window = veryDeepOffset ? CANDIDATE_WINDOW_FALLBACK
+				: (deepOffset || sortValue !== 'personalized') ? CANDIDATE_WINDOW_DEEP
+				: CANDIDATE_WINDOW;
+			const rankingSinceId = this.idService.gen(this.timeService.now - window);
 			const floorSinceId = sinceId && sinceId > rankingSinceId ? sinceId : rankingSinceId;
 
 			const query = this.notesRepository.createQueryBuilder('note')
