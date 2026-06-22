@@ -73,13 +73,18 @@ class ChatRoomChannel extends Channel {
 		try {
 			const me = this.user;
 			if (me == null) return;
-			const [packedRoom, messages, mutedRoomUserIds] = await Promise.all([
+			const [packedRoom, messages, mutedRoomUserIds, memberships] = await Promise.all([
 				this.chatRoomsRepository.findOne({ where: { id: this.roomId } })
 					.then(r => r ? this.chatEntityService.packRoom(r, me) : null),
 				this.chatService.packedRoomTimeline(me.id, this.roomId, 30),
 				this.chatService.getMutedRoomUserIds(me.id, this.roomId),
+				this.chatService.getRoomMembershipsWithPagination(this.roomId, 30),
 			]);
 			if (packedRoom == null) return;
+			const members = await this.chatEntityService.packRoomMemberships(memberships, me, {
+				populateUser: true,
+				populateRoom: false,
+			});
 			// connection 可能已关:isActive 由底层 send 检查
 			this.connection.sendSerializedMessageToWsFast(
 				serializeChatChannelEventForWs(this.id, {
@@ -88,6 +93,7 @@ class ChatRoomChannel extends Channel {
 						room: packedRoom,
 						messages,
 						mutedRoomUserIds: [...mutedRoomUserIds],
+						members,
 					},
 				}),
 				{ compress: true },  // bootstrap 体积大,压缩划算

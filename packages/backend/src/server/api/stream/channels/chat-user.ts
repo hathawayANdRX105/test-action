@@ -9,6 +9,7 @@ import { bindThis } from '@/decorators.js';
 import type { ChatEventPayload } from '@/core/GlobalEventService.js';
 import type { JsonObject } from '@/misc/json-value.js';
 import { ChatService } from '@/core/ChatService.js';
+import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
 import type { UsersRepository } from '@/models/_.js';
 import { Channel, type MiChannelService } from '../channel.js';
 import { serializeChatChannelEventForWs } from './chat-channel-serialization.js';
@@ -28,6 +29,7 @@ class ChatUserChannel extends Channel {
 
 		private usersRepository: UsersRepository,
 		private chatService: ChatService,
+		private chatEntityService: ChatEntityService,
 	) {
 		super(id, connection);
 		this.readReceiptBatcher = new ChatReadReceiptBatcher({
@@ -56,7 +58,30 @@ class ChatUserChannel extends Channel {
 
 		this.subscriber.on(`chatUserStream:${this.user.id}-${this.otherId}`, this.onEvent);
 
+		// 异步推 bootstrap:替代 chat/messages/user-timeline 初次 HTTP。
+		void this.sendBootstrap();
+
 		return true;
+	}
+
+	@bindThis
+	private async sendBootstrap(): Promise<void> {
+		try {
+			if (!this.user) return;
+			const raw = await this.chatService.userTimeline(this.user.id, this.otherId, 30);
+			const messages = await this.chatEntityService.packMessagesLiteFor1on1(raw);
+			// ChatMessageLiteFor1on1 跟 ChatMessageLite 在 ChatEventTypes.bootstrap 中没分;
+			// 序列化层只 JSON.stringify,not 类型敏感,直接 as any 简化
+			this.connection.sendSerializedMessageToWsFast(
+				serializeChatChannelEventForWs(this.id, {
+					type: 'bootstrap',
+					body: { messages } as any,
+				}),
+				{ compress: true },
+			);
+		} catch (err) {
+			console.error('[chatUser bootstrap] failed:', err);
+		}
 	}
 
 	@bindThis
@@ -93,6 +118,7 @@ export class ChatUserChannelService implements MiChannelService<true> {
 		private readonly usersRepository: UsersRepository,
 
 		private chatService: ChatService,
+		private chatEntityService: ChatEntityService,
 	) {
 	}
 
@@ -103,6 +129,7 @@ export class ChatUserChannelService implements MiChannelService<true> {
 			connection,
 			this.usersRepository,
 			this.chatService,
+			this.chatEntityService,
 		);
 	}
 }

@@ -2,7 +2,9 @@ import type {
 	Antenna,
 	ChatMessage,
 	ChatMessageLite,
+	ChatMessageLiteFor1on1,
 	ChatRoom,
+	ChatRoomMembership,
 	DriveFile,
 	DriveFolder,
 	Note,
@@ -272,6 +274,10 @@ export type Channels = {
 				user?: UserLite;
 				messageId: ChatMessageLite['id'];
 			}) => void;
+			// 1on1 进入聊天时服务端直推:替代 chat/messages/user-timeline 初次 HTTP
+			bootstrap: (payload: {
+				messages: ChatMessageLiteFor1on1[];
+			}) => void;
 		};
 		receives: {
 			read: {
@@ -327,11 +333,13 @@ export type Channels = {
 				| { type: 'react'; body: { reaction: string; user?: UserLite; messageId: ChatMessageLite['id'] } }
 				| { type: 'unreact'; body: { reaction: string; user?: UserLite; messageId: ChatMessageLite['id'] } }
 			>) => void;
-			// 连上 chatRoom 通道后服务端直推的初始数据,客户端拿到就能渲染,不用再发 chat/rooms/show + chat/messages/room-timeline 两个 HTTP。
+			// 连上 chatRoom 通道后服务端直推的初始数据,客户端拿到就能渲染,
+			// 替代 chat/rooms/show + chat/messages/room-timeline + chat/rooms/user-mutes/list + chat/rooms/members 四个 HTTP。
 			bootstrap: (payload: {
 				room: ChatRoom;
 				messages: ChatMessageLite[];
 				mutedRoomUserIds: string[];
+				members: ChatRoomMembership[];
 			}) => void;
 		};
 		receives: {
