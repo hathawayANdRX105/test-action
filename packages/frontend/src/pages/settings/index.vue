@@ -5,20 +5,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <PageWithHeader :tabs="headerTabs" :actions="headerActions">
-	<div class="_spacer" style="--MI_SPACER-w: 900px; --MI_SPACER-min: 20px; --MI_SPACER-max: 32px;">
-		<div ref="el" class="vvcocwet" :class="{ wide: !narrow }">
+	<!-- dashboard 风格:进 /settings 整中柱大方格瓷砖,子页才铺主内容 -->
+	<div class="_spacer" style="--MI_SPACER-w: 1100px; --MI_SPACER-min: 20px; --MI_SPACER-max: 32px;">
+		<div ref="el" class="vvcocwet">
 			<div class="body">
-				<div v-if="!narrow || currentPage?.route.name == null" class="nav">
+				<div v-if="currentPage?.route.name == null" class="nav">
 					<div class="_gaps_s">
 						<MkInfo v-if="emailNotConfigured" warn class="info">{{ i18n.ts.emailNotConfiguredWarning }} <MkA to="/settings/email" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
 						<MkInfo v-if="!store.r.enablePreferencesAutoCloudBackup.value && store.r.showPreferencesAutoCloudBackupSuggestion.value" class="info">
 							<div>{{ i18n.ts._preferencesBackup.autoPreferencesBackupIsNotEnabledForThisDevice }}</div>
 							<div><button class="_textButton" @click="enableAutoBackup">{{ i18n.ts.enable }}</button> | <button class="_textButton" @click="skipAutoBackup">{{ i18n.ts.skip }}</button></div>
 						</MkInfo>
-						<MkSuperMenu :def="menuDef" :grid="narrow" :searchIndex="SETTING_INDEX"></MkSuperMenu>
+						<MkSuperMenu :def="menuDef" :grid="true" :searchIndex="SETTING_INDEX"></MkSuperMenu>
 					</div>
 				</div>
-				<div v-if="!(narrow && currentPage?.route.name == null)" class="main">
+				<div v-else class="main">
 					<div style="container-type: inline-size;">
 						<NestedRouterView/>
 					</div>
@@ -187,32 +188,15 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 	}],
 }]);
 
+// dashboard 模式:进 /settings 不自动跳到 /settings/profile,显示方格菜单。
 onMounted(() => {
-	ro.observe(el.value);
-
-	narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
-
-	if (!narrow.value && currentPage.value?.route.name == null) {
-		router.replace('/settings/profile');
-	}
+	if (el.value != null) ro.observe(el.value);
 });
 
-onActivated(() => {
-	narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
-
-	if (!narrow.value && currentPage.value?.route.name == null) {
-		router.replace('/settings/profile');
-	}
-});
+onActivated(() => {});
 
 onUnmounted(() => {
 	ro.disconnect();
-});
-
-watch(router.currentRef, (to) => {
-	if (to.route.name === 'settings' && to.child?.route.name == null && !narrow.value) {
-		router.replace('/settings/profile');
-	}
 });
 
 const emailNotConfigured = computed(() => instance.enableEmail && ($i.email == null || !$i.emailVerified));
@@ -239,22 +223,8 @@ definePage(() => INFO.value);
 
 <style lang="scss" scoped>
 .vvcocwet {
-	&.wide {
-		> .body {
-			display: flex;
-			height: 100%;
-
-			> .nav {
-				width: 34%;
-				padding-right: 32px;
-				box-sizing: border-box;
-			}
-
-			> .main {
-				flex: 1;
-				min-width: 0;
-			}
-		}
+	> .body > .main {
+		min-width: 0;
 	}
 }
 </style>

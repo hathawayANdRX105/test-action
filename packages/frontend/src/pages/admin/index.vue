@@ -4,9 +4,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div ref="el" class="hiyeyicy" :class="{ wide: !narrow }">
-	<div v-if="!narrow || currentPage?.route.name == null" class="nav">
-		<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px;">
+<!-- dashboard 风格:进 /admin 时整个中间区域是大方格网格(无侧栏);进子页只显示子页内容。 -->
+<div ref="el" class="hiyeyicy">
+	<div v-if="currentPage?.route.name == null" class="dashboard">
+		<div class="_spacer" style="--MI_SPACER-w: 1100px; --MI_SPACER-min: 16px;">
 			<div class="lxpfedzu _gaps">
 				<div class="banner">
 					<img :src="instance.iconUrl || '/favicon.ico'" alt="" class="icon"/>
@@ -22,11 +23,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo v-if="hasLegacyAuthFetchSetting" warn class="info">{{ i18n.ts.authorizedFetchLegacyWarning }}</MkInfo>
 				</div>
 
-				<MkSuperMenu :def="menuDef" :grid="narrow"></MkSuperMenu>
+				<MkSuperMenu :def="menuDef" :grid="true"></MkSuperMenu>
 			</div>
 		</div>
 	</div>
-	<div v-if="!(narrow && currentPage?.route.name == null)" class="main _pageContainer" style="height: 100%;">
+	<div v-else class="main _pageContainer" style="height: 100%;">
 		<NestedRouterView/>
 	</div>
 </div>
@@ -290,33 +291,15 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 	}],
 }]);
 
+// dashboard 模式:进 /admin 不自动跳到 /admin/overview,直接显示方格菜单。点 tile 才进子页。
 onMounted(() => {
-	if (el.value != null) {
-		ro.observe(el.value);
-		narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
-	}
-	if (currentPage.value?.route.name == null && !narrow.value) {
-		router.replace('/admin/overview');
-	}
+	if (el.value != null) ro.observe(el.value);
 });
 
-onActivated(() => {
-	if (el.value != null) {
-		narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
-	}
-	if (currentPage.value?.route.name == null && !narrow.value) {
-		router.replace('/admin/overview');
-	}
-});
+onActivated(() => {});
 
 onUnmounted(() => {
 	ro.disconnect();
-});
-
-watch(router.currentRef, (to) => {
-	if (to.route.path === '/admin' && to.child?.route.name == null && !narrow.value) {
-		router.replace('/admin/overview');
-	}
 });
 
 provideMetadataReceiver((metadataGetter) => {
@@ -389,28 +372,7 @@ defineExpose({
 .hiyeyicy {
 	height: 100%;
 
-	&.wide {
-		display: flex;
-		margin: 0 auto;
-
-		> .nav {
-			position: sticky;
-			top: 0;
-			width: 32%;
-			max-width: 280px;
-			box-sizing: border-box;
-			border-right: solid 0.5px var(--MI_THEME-divider);
-			overflow: auto;
-			height: 100cqh;
-		}
-
-		> .main {
-			flex: 1;
-			min-width: 0;
-		}
-	}
-
-	> .nav {
+	> .dashboard {
 		.lxpfedzu {
 			> .banner {
 				margin: 16px;
