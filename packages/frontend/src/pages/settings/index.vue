@@ -15,7 +15,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div>{{ i18n.ts._preferencesBackup.autoPreferencesBackupIsNotEnabledForThisDevice }}</div>
 							<div><button class="_textButton" @click="enableAutoBackup">{{ i18n.ts.enable }}</button> | <button class="_textButton" @click="skipAutoBackup">{{ i18n.ts.skip }}</button></div>
 						</MkInfo>
-						<MkSuperMenu :def="menuDef" :grid="narrow" :searchIndex="SETTING_INDEX"></MkSuperMenu>
+						<!-- grid 模式始终开着:菜单方块瓷砖,跟控制面板对齐,不再退回旧的纯文字列表 -->
+						<MkSuperMenu :def="menuDef" :grid="true" :searchIndex="SETTING_INDEX"></MkSuperMenu>
 					</div>
 				</div>
 				<div v-if="!(narrow && currentPage?.route.name == null)" class="main">

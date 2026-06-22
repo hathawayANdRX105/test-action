@@ -22,7 +22,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo v-if="hasLegacyAuthFetchSetting" warn class="info">{{ i18n.ts.authorizedFetchLegacyWarning }}</MkInfo>
 				</div>
 
-				<MkSuperMenu :def="menuDef" :grid="narrow"></MkSuperMenu>
+				<!-- grid 模式始终开着:菜单以方块瓷砖渲染,跟首页/控制面板的现代风格一致;
+				     窄屏(narrow)下原本就显示这种 grid,宽屏下也保持一致,不再切回旧的纯文字列表。 -->
+				<MkSuperMenu :def="menuDef" :grid="true"></MkSuperMenu>
 			</div>
 		</div>
 	</div>
