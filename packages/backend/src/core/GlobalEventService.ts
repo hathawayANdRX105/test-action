@@ -21,6 +21,7 @@ import type { EmptyObject, Serialized } from '@/types.js';
 import { bindThis } from '@/decorators.js';
 import type { InternalEventTypes } from '@/global/InternalEventService.js';
 import { ChatRoomEventBatcher, type ChatBatchEventEntry } from '@/core/ChatRoomEventBatcher.js';
+import { ChatRoomShardRouter } from '@/core/ChatRoomShardRouter.js';
 import type * as Redis from 'ioredis';
 import type * as Reversi from 'misskey-reversi';
 
@@ -347,6 +348,7 @@ export class GlobalEventService {
 		private redisForPub: Redis.Redis,
 
 		private readonly chatRoomEventBatcher: ChatRoomEventBatcher,
+		private readonly chatRoomShardRouter: ChatRoomShardRouter,
 	) {
 	}
 
@@ -414,7 +416,8 @@ export class GlobalEventService {
 
 	@bindThis
 	public async publishChatRoomStream<Id extends MiChatRoom['id'], Type extends GlobalEventTypes<`chatRoomStream:${Id}`>>(chatRoomId: Id, type: Type, value: GlobalEventBody<`chatRoomStream:${Id}`, Type>): Promise<void> {
-		await this.publish(`chatRoomStream:${chatRoomId}`, type, value);
+		// shard 路由:SHARKEY_CHAT_SHARDS=1 时 channel 跟旧版完全相同;>1 时加 s${shard} 前缀
+		await this.publish(this.chatRoomShardRouter.channelFor(chatRoomId) as `chatRoomStream:${Id}`, type, value);
 	}
 
 	/**

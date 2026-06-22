@@ -9,6 +9,7 @@ import { bindThis } from '@/decorators.js';
 import type { ChatEventPayload } from '@/core/GlobalEventService.js';
 import type { JsonObject } from '@/misc/json-value.js';
 import { ChatService } from '@/core/ChatService.js';
+import { ChatRoomShardRouter } from '@/core/ChatRoomShardRouter.js';
 import type { ChatRoomsRepository } from '@/models/_.js';
 import { Channel, type MiChannelService } from '../channel.js';
 import { serializeChatChannelEventForWs } from './chat-channel-serialization.js';
@@ -28,6 +29,7 @@ class ChatRoomChannel extends Channel {
 
 		private chatRoomsRepository: ChatRoomsRepository,
 		private chatService: ChatService,
+		private shardRouter: ChatRoomShardRouter,
 	) {
 		super(id, connection);
 		this.readReceiptBatcher = new ChatReadReceiptBatcher({
@@ -55,21 +57,25 @@ class ChatRoomChannel extends Channel {
 		if (room == null) return false;
 		if (!await this.chatService.hasPermissionToViewRoomTimeline(this.user!, room)) return false;
 
-		this.subscriber.on(`chatRoomStream:${this.roomId}`, this.onEvent);
+		this.subscriber.on(this.shardRouter.channelFor(this.roomId), this.onEvent);
 
 		return true;
 	}
 
 	@bindThis
 	private onEvent(data: ChatEventPayload) {
+		// batch 事件(多条 message/react/unreact 合并的包)体积明显大;开 permessage-deflate
+		// 比省下 CPU 更划算(单条 message 维持 compress:false,避免小帧压缩反亏)。
+		const compress = data.type === 'batch';
+
 		// 自分がキック/BANされた場合は、そのイベントを通知した上で購読を解除し、
-		// 以降のメッセージ等が（クライアントが切断しない場合でも）届かないようにする
+		// 以降のメッセージ等が(クライアントが切断しない場合でも)届かないようにする
 		if (data.type === 'memberKicked' && data.body.userId === this.user?.id) {
 			this.connection.sendSerializedMessageToWsFast(serializeChatChannelEventForWs(this.id, data), { compress: false });
-			this.subscriber.off(`chatRoomStream:${this.roomId}`, this.onEvent);
+			this.subscriber.off(this.shardRouter.channelFor(this.roomId), this.onEvent);
 			return;
 		}
-		this.connection.sendSerializedMessageToWsFast(serializeChatChannelEventForWs(this.id, data), { compress: false });
+		this.connection.sendSerializedMessageToWsFast(serializeChatChannelEventForWs(this.id, data), { compress });
 	}
 
 	@bindThis
@@ -86,7 +92,7 @@ class ChatRoomChannel extends Channel {
 	@bindThis
 	public dispose() {
 		this.readReceiptBatcher.flush();
-		this.subscriber.off(`chatRoomStream:${this.roomId}`, this.onEvent);
+		this.subscriber.off(this.shardRouter.channelFor(this.roomId), this.onEvent);
 	}
 }
 
@@ -101,6 +107,7 @@ export class ChatRoomChannelService implements MiChannelService<true> {
 		private readonly chatRoomsRepository: ChatRoomsRepository,
 
 		private readonly chatService: ChatService,
+		private readonly shardRouter: ChatRoomShardRouter,
 	) {
 	}
 
@@ -111,6 +118,7 @@ export class ChatRoomChannelService implements MiChannelService<true> {
 			connection,
 			this.chatRoomsRepository,
 			this.chatService,
+			this.shardRouter,
 		);
 	}
 }

@@ -101,7 +101,7 @@ export class FileServerService {
 			fastify.get('/files/app-default.jpg', (request, reply) => {
 				const file = fs.createReadStream(`${_dirname}/assets/dummy.png`);
 				reply.header('Content-Type', 'image/jpeg');
-				reply.header('Cache-Control', 'max-age=31536000, immutable');
+				reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 				return reply.send(file);
 			});
 
@@ -174,13 +174,13 @@ export class FileServerService {
 
 		if (file === '404') {
 			reply.code(404);
-			reply.header('Cache-Control', 'max-age=86400');
+			reply.header('Cache-Control', 'public, max-age=86400');
 			return reply.sendFile('/dummy.png', assets);
 		}
 
 		if (file === '204') {
 			reply.code(204);
-			reply.header('Cache-Control', 'max-age=86400');
+			reply.header('Cache-Control', 'public, max-age=86400');
 			return;
 		}
 
@@ -190,7 +190,7 @@ export class FileServerService {
 
 				if (file.fileRole === 'thumbnail') {
 					if (isMimeImage(file.mime, 'sharp-convertible-image-with-bmp')) {
-						reply.header('Cache-Control', 'max-age=31536000, immutable');
+						reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 
 						const url = new URL(`${this.config.mediaProxy}/static.webp`);
 						url.searchParams.set('url', file.url);
@@ -211,7 +211,7 @@ export class FileServerService {
 
 				if (file.fileRole === 'webpublic') {
 					if (['image/svg+xml'].includes(file.mime)) {
-						reply.header('Cache-Control', 'max-age=31536000, immutable');
+						reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 
 						const url = new URL(`${this.config.mediaProxy}/svg.webp`);
 						url.searchParams.set('url', file.url);
@@ -252,7 +252,7 @@ export class FileServerService {
 				}
 
 				reply.header('Content-Type', FILE_TYPE_BROWSERSAFE.includes(image.type) ? image.type : 'application/octet-stream');
-				reply.header('Cache-Control', 'max-age=31536000, immutable');
+				reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 				reply.header('Content-Disposition',
 					contentDisposition(
 						'inline',
@@ -269,7 +269,7 @@ export class FileServerService {
 				});
 
 				reply.header('Content-Type', FILE_TYPE_BROWSERSAFE.includes(file.mime) ? file.mime : 'application/octet-stream');
-				reply.header('Cache-Control', 'max-age=31536000, immutable');
+				reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 				reply.header('Content-Disposition', contentDisposition('inline', filename));
 
 				if (file.file.size > 0) {
@@ -280,7 +280,7 @@ export class FileServerService {
 			} else {
 				reply.header('Content-Type', FILE_TYPE_BROWSERSAFE.includes(file.file.type) ? file.file.type : 'application/octet-stream');
 				reply.header('Content-Length', file.file.size);
-				reply.header('Cache-Control', 'max-age=31536000, immutable');
+				reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 				reply.header('Content-Disposition', contentDisposition('inline', file.filename));
 
 				if (file.file.size > 0) {
@@ -335,13 +335,13 @@ export class FileServerService {
 		const file = await this.getStreamAndTypeFromUrl(url, { useUrlPreviewProxy });
 		if (file === '404') {
 			reply.code(404);
-			reply.header('Cache-Control', 'max-age=86400');
+			reply.header('Cache-Control', 'public, max-age=86400');
 			return reply.sendFile('/dummy.png', assets);
 		}
 
 		if (file === '204') {
 			reply.code(204);
-			reply.header('Cache-Control', 'max-age=86400');
+			reply.header('Cache-Control', 'public, max-age=86400');
 			return;
 		}
 
@@ -456,7 +456,7 @@ export class FileServerService {
 			}
 
 			reply.header('Content-Type', image.type);
-			reply.header('Cache-Control', 'max-age=31536000, immutable');
+			reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 			reply.header('Content-Disposition',
 				contentDisposition(
 					'inline',

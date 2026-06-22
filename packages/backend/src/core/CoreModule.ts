@@ -41,6 +41,7 @@ import { EmailService } from './EmailService.js';
 import { FederatedInstanceService } from './FederatedInstanceService.js';
 import { FetchInstanceMetadataService } from './FetchInstanceMetadataService.js';
 import { ChatRoomEventBatcher } from './ChatRoomEventBatcher.js';
+import { ChatRoomShardRouter } from './ChatRoomShardRouter.js';
 import { GlobalEventService } from './GlobalEventService.js';
 import { HashtagService } from './HashtagService.js';
 import { HttpRequestService } from './HttpRequestService.js';
@@ -364,6 +365,7 @@ const $Imports = [
 		FederatedInstanceService,
 		FetchInstanceMetadataService,
 		ChatRoomEventBatcher,
+		ChatRoomShardRouter,
 		GlobalEventService,
 		HashtagService,
 		HttpRequestService,
@@ -696,6 +698,7 @@ const $Imports = [
 		FederatedInstanceService,
 		FetchInstanceMetadataService,
 		ChatRoomEventBatcher,
+		ChatRoomShardRouter,
 		GlobalEventService,
 		HashtagService,
 		HttpRequestService,

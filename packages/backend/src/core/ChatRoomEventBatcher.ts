@@ -10,6 +10,7 @@ import type { Config } from '@/config.js';
 import type { Packed } from '@/misc/json-schema.js';
 import type { MiChatMessage, MiChatRoom } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
+import { ChatRoomShardRouter } from '@/core/ChatRoomShardRouter.js';
 
 // Batcher 合并的高频事件类型(与 GlobalEventService.ChatEventTypes.batch 元素对应)
 export type ChatBatchEventEntry =
@@ -39,6 +40,7 @@ export class ChatRoomEventBatcher implements OnApplicationShutdown {
 		private readonly config: Config,
 		@Inject(DI.redisForPub)
 		private readonly redisForPub: Redis.Redis,
+		private readonly shardRouter: ChatRoomShardRouter,
 	) {}
 
 	@bindThis
@@ -70,7 +72,7 @@ export class ChatRoomEventBatcher implements OnApplicationShutdown {
 		// GlobalEventService.publish 保持完全一致,这样订阅侧(Connection.ts onRedisGlobalEvent)
 		// 不需要额外分支。
 		const payload = JSON.stringify({
-			channel: `chatRoomStream:${roomId}`,
+			channel: this.shardRouter.channelFor(roomId),
 			message: { type: 'batch', body: events },
 		});
 		// fire-and-forget;publish 失败由 ioredis 自己 log,不阻塞调用方
