@@ -289,7 +289,7 @@ export class ChatService {
 	}
 
 	@bindThis
-	private async getMutedRoomUserIds(userId: MiUser['id'] | null, roomId: MiChatRoom['id']): Promise<Set<MiUser['id']>> {
+	public async getMutedRoomUserIds(userId: MiUser['id'] | null, roomId: MiChatRoom['id']): Promise<Set<MiUser['id']>> {
 		if (userId == null) return new Set();
 
 		const cacheKey = this.roomTimelineMutedUsersCacheKey(roomId, userId);

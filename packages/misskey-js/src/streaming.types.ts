@@ -2,6 +2,7 @@ import type {
 	Antenna,
 	ChatMessage,
 	ChatMessageLite,
+	ChatRoom,
 	DriveFile,
 	DriveFolder,
 	Note,
@@ -326,6 +327,12 @@ export type Channels = {
 				| { type: 'react'; body: { reaction: string; user?: UserLite; messageId: ChatMessageLite['id'] } }
 				| { type: 'unreact'; body: { reaction: string; user?: UserLite; messageId: ChatMessageLite['id'] } }
 			>) => void;
+			// 连上 chatRoom 通道后服务端直推的初始数据,客户端拿到就能渲染,不用再发 chat/rooms/show + chat/messages/room-timeline 两个 HTTP。
+			bootstrap: (payload: {
+				room: ChatRoom;
+				messages: ChatMessageLite[];
+				mutedRoomUserIds: string[];
+			}) => void;
 		};
 		receives: {
 			read: {

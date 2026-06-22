@@ -202,6 +202,13 @@ export interface ChatEventTypes {
 		| { type: 'react'; body: { reaction: string; user?: Packed<'UserLite'>; messageId: MiChatMessage['id'] } }
 		| { type: 'unreact'; body: { reaction: string; user?: Packed<'UserLite'>; messageId: MiChatMessage['id'] } }
 	>;
+	// 进入房间时 WS 端口直推的初始包,替代 chat/rooms/show + chat/messages/room-timeline 两次 HTTP
+	bootstrap: {
+		room: Packed<'ChatRoom'>;
+		// 最新 N 条(倒序,newest first),已应用用户的 muted 过滤
+		messages: Packed<'ChatMessageLite'>[];
+		mutedRoomUserIds: MiUser['id'][];
+	};
 }
 
 export interface ReversiEventTypes {

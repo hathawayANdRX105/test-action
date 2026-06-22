@@ -10,6 +10,7 @@ import type { ChatEventPayload } from '@/core/GlobalEventService.js';
 import type { JsonObject } from '@/misc/json-value.js';
 import { ChatService } from '@/core/ChatService.js';
 import { ChatRoomShardRouter } from '@/core/ChatRoomShardRouter.js';
+import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
 import type { ChatRoomsRepository } from '@/models/_.js';
 import { Channel, type MiChannelService } from '../channel.js';
 import { serializeChatChannelEventForWs } from './chat-channel-serialization.js';
@@ -30,6 +31,7 @@ class ChatRoomChannel extends Channel {
 		private chatRoomsRepository: ChatRoomsRepository,
 		private chatService: ChatService,
 		private shardRouter: ChatRoomShardRouter,
+		private chatEntityService: ChatEntityService,
 	) {
 		super(id, connection);
 		this.readReceiptBatcher = new ChatReadReceiptBatcher({
@@ -59,7 +61,40 @@ class ChatRoomChannel extends Channel {
 
 		this.subscriber.on(this.shardRouter.channelFor(this.roomId), this.onEvent);
 
+		// 异步推送 bootstrap:不阻塞 init 返回 true,但客户端基本能在 ~50ms 内拿到
+		// 完整的 room 元数据 + 最新 30 条消息 + muted 列表,替代两次 HTTP 请求。
+		void this.sendBootstrap();
+
 		return true;
+	}
+
+	@bindThis
+	private async sendBootstrap(): Promise<void> {
+		try {
+			const me = this.user;
+			if (me == null) return;
+			const [packedRoom, messages, mutedRoomUserIds] = await Promise.all([
+				this.chatRoomsRepository.findOne({ where: { id: this.roomId } })
+					.then(r => r ? this.chatEntityService.packRoom(r, me) : null),
+				this.chatService.packedRoomTimeline(me.id, this.roomId, 30),
+				this.chatService.getMutedRoomUserIds(me.id, this.roomId),
+			]);
+			if (packedRoom == null) return;
+			// connection 可能已关:isActive 由底层 send 检查
+			this.connection.sendSerializedMessageToWsFast(
+				serializeChatChannelEventForWs(this.id, {
+					type: 'bootstrap',
+					body: {
+						room: packedRoom,
+						messages,
+						mutedRoomUserIds: [...mutedRoomUserIds],
+					},
+				}),
+				{ compress: true },  // bootstrap 体积大,压缩划算
+			);
+		} catch (err) {
+			console.error('[chatRoom bootstrap] failed:', err);
+		}
 	}
 
 	@bindThis
@@ -108,6 +143,7 @@ export class ChatRoomChannelService implements MiChannelService<true> {
 
 		private readonly chatService: ChatService,
 		private readonly shardRouter: ChatRoomShardRouter,
+		private readonly chatEntityService: ChatEntityService,
 	) {
 	}
 
@@ -119,6 +155,7 @@ export class ChatRoomChannelService implements MiChannelService<true> {
 			this.chatRoomsRepository,
 			this.chatService,
 			this.shardRouter,
+			this.chatEntityService,
 		);
 	}
 }

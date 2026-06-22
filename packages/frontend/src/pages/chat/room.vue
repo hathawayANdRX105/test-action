@@ -1380,6 +1380,9 @@ function connectStream() {
 		roomConnection.on('memberMuted', onMemberMuted);
 		// B-light:后端把 60ms 窗口内同房间的 message/react/unreact 合并成一个 batch 事件
 		roomConnection.on('batch', onBatch);
+		// 进群时服务端立刻 push 完整初始包(room + latest 30 messages + mutes)
+		// 替代 chat/rooms/show + chat/messages/room-timeline + chat/rooms/user-mutes/list 三次 HTTP
+		roomConnection.on('bootstrap', onBootstrap);
 		connection.value = roomConnection;
 	} else {
 		connection.value = null;
@@ -1639,6 +1642,17 @@ async function initializeContextTimeline(messageId: string) {
 async function loadLatestTimeline() {
 	clearIncomingMessageQueue({ flushReadReceipt: true });
 	streamRecoverySinceId = undefined;
+	// 等 200ms 看 bootstrap 是不是先到了(典型 WS 接通后 ~50ms 就拿到);拿到就完全跳过 HTTP
+	if (!props.userId && room.value != null) {
+		const startWait = Date.now();
+		while (Date.now() - startWait < 200 && bootstrapAppliedAt === 0) {
+			await new Promise(r => window.setTimeout(r, 20));
+		}
+		if (bootstrapAppliedAt > 0) {
+			// bootstrap 已经填好 messages + canFetchMore,直接出
+			return;
+		}
+	}
 	messages.value = [];
 	canFetchMore.value = false;
 	canFetchNewer.value = false;
@@ -1668,6 +1682,9 @@ async function loadMutedRoomUsers() {
 		mutedRoomUserIds.value = new Set();
 		return;
 	}
+
+	// bootstrap 已应用过的话直接跳过 HTTP(mutedRoomUserIds 已被填好)
+	if (bootstrapAppliedAt > 0) return;
 
 	const res = await misskeyApi('chat/rooms/user-mutes/list', {
 		roomId: room.value.id,
@@ -1869,6 +1886,7 @@ async function initialize() {
 	// 切群时上一房间的滚动 snapshot 必须清掉,否则 ResizeObserver
 	// 触发的"是否吸底"判断会拿旧 maxScrollTop 比对新房间,新房进群停在错误位置(经常停在中间/顶部)。
 	latestScrollMetricsSnapshot = null;
+	bootstrapAppliedAt = 0;
 	clearLateInitialRescrollTimers();
 	autoScrollState.markLatest();
 	messages.value = [];
@@ -2268,6 +2286,25 @@ function onPruned(ctx: Parameters<Misskey.Channels['chatRoom']['events']['pruned
 		canFetchMore.value = false;
 		canFetchNewer.value = false;
 	}
+}
+
+// 进群 bootstrap:WS 端口直推的初始数据。把 messages + mutes 全套填进去,
+// 后续 loadLatestTimeline / loadMutedRoomUsers 看到 bootstrapAppliedAt 就直接跳过 HTTP。
+let bootstrapAppliedAt = 0;
+function onBootstrap(payload: Parameters<Misskey.Channels['chatRoom']['events']['bootstrap']>[0]) {
+	// room 信息:HTTP 已经在跑了,但 bootstrap 一般会更新——以 HTTP 为准时也接受 bootstrap 的 latest 字段
+	if (room.value == null) {
+		room.value = payload.room as Misskey.entities.ChatRoomsShowResponse;
+		rememberUser(payload.room.owner);
+	}
+	// muted list
+	mutedRoomUserIds.value = new Set(payload.mutedRoomUserIds);
+	// 消息:合并而非覆盖(HTTP 可能已经回来一部分;bootstrap 30 条通常更全)
+	if (payload.messages.length > 0) {
+		appendFetchedMessages(payload.messages);
+		canFetchMore.value = payload.messages.length === 30;
+	}
+	bootstrapAppliedAt = Date.now();
 }
 
 // B-light:后端 batcher 合并的高频事件包,这里按顺序解包后复用既有 onMessage/onReact/onUnreact 分发逻辑。
