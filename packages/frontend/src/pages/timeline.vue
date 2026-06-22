@@ -431,13 +431,14 @@ const mobileSearchQuery = ref('');
 function submitMobileSearch() {
 	const q = mobileSearchQuery.value.trim();
 	if (!q) return;
-	// 走站内搜索页;hashtag 直接进 tag 页,其余进 search
+	// hashtag 直接进 tag 页
 	if (q.startsWith('#')) {
 		const tag = q.slice(1);
 		if (tag) router.push(`/tags/${encodeURIComponent(tag)}`);
 		return;
 	}
-	router.push(`/search?q=${encodeURIComponent(q)}`);
+	// 文本搜索走 /explore?tab=messages&query=...,跟探索页的搜索同一条路径(/search 的帖子检索默认关闭)
+	router.push(`/explore?tab=messages&query=${encodeURIComponent(q)}`);
 }
 
 const searchTrends = ref<{
