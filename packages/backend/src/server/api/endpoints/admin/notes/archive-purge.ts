@@ -29,8 +29,8 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		// 指定 id 列表；不传或为空 + all=true 时清空全部
-		ids: { type: 'array', items: { type: 'string' }, nullable: true, default: null },
+		// 指定 id 列表;不传或为空 + all=true 时清空全部。同时接 number/string,跟 restore 一致
+		ids: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'integer' }] }, nullable: true, default: null },
 		all: { type: 'boolean', default: false },
 	},
 	required: [],
@@ -48,7 +48,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			let purged = 0;
 
 			if (ps.ids && ps.ids.length > 0) {
-				const res = await this.noteArchivesRepository.delete({ id: In(ps.ids) });
+				const ids = ps.ids.map(x => typeof x === 'number' ? String(x) : x);
+				const res = await this.noteArchivesRepository.delete({ id: In(ids) });
 				purged = res.affected ?? 0;
 			} else if (ps.all) {
 				const total = await this.noteArchivesRepository.count();

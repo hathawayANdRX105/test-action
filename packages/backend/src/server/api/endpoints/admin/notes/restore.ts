@@ -49,7 +49,10 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		id: { type: 'string' },
+		// note_archive.id 是 PrimaryGeneratedColumn(实际 PG bigserial),
+		// 前端从 admin/notes/archived-list 拿到的会是 JSON number,所以两种都接,
+		// 内部统一成 string 交给 TypeORM(PG 隐式 cast 没问题)
+		id: { anyOf: [{ type: 'string' }, { type: 'integer' }] },
 	},
 	required: ['id'],
 } as const;
@@ -70,7 +73,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private moderationLogService: ModerationLogService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			const archive = await this.noteArchivesRepository.findOneBy({ id: ps.id });
+			const archiveId = typeof ps.id === 'number' ? String(ps.id) : ps.id;
+			const archive = await this.noteArchivesRepository.findOneBy({ id: archiveId });
 			if (archive == null) throw new ApiError(meta.errors.noSuchArchive);
 
 			const exists = await this.notesRepository.countBy({ id: archive.noteId });
@@ -129,7 +133,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				await this.usersRepository.increment({ id: archive.userId }, 'notesCount', 1);
 			}
 			await this.searchService.indexNote(note).catch(() => { /* best-effort */ });
-			await this.noteArchivesRepository.delete({ id: archive.id });
+			await this.noteArchivesRepository.delete({ id: archiveId });
 
 			await this.moderationLogService.log(me, 'restoreNote', {
 				noteId: archive.noteId,
