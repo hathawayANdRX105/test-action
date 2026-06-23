@@ -282,7 +282,10 @@ const announcementExpanded = ref(false);
 const tab = ref('chat');
 
 const CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX = 'chatRoomAnnouncementExpanded:';
-const SCROLL_LATEST_THRESHOLD = 24;
+// 之前 24px。图片/反应等异步加载 + 用户手指动一下,latestDistance 经常飘到 30~70px,导致
+// "用户其实已经在底部附近、但新消息还是被塞进 detached 池子(看不到)"。给到 80px 容差,
+// 大多数"用户在底部区"的情况都能立刻 flush 新消息出来,不会被吞。
+const SCROLL_LATEST_THRESHOLD = 80;
 const SCROLL_AUTO_STICK_THRESHOLD = 4;
 const SCROLL_HISTORY_THRESHOLD = 480;
 const SCROLL_TAIL_THRESHOLD = 480;
@@ -304,7 +307,10 @@ const STREAM_CONNECT_TIMEOUT = 5000;
 const CHAT_RECONCILE_TIMEOUT_MS = 5000;
 const CHAT_RECOVERY_FETCH_TIMEOUT_MS = 10000;
 const STREAM_RECOVERY_DEBOUNCE_MS = 800;
-const STREAM_RECOVERY_POLL_INTERVAL_MS = 1000 * 60 * 5;
+// 之前 5 分钟才轮询一次,WS 漏一拍消息要等 5min 才能补回来,体感严重"没有立马加载出来"。
+// 砍到 30s:常规情况下 WS 健康(60s 内有事件 → 跳过 syncLatestMessages),无消耗;真漏拍时
+// 最多等半分钟就自动 sync 一次。
+const STREAM_RECOVERY_POLL_INTERVAL_MS = 1000 * 30;
 const STREAM_RECOVERY_ERROR_RETRY_MS = 5000;
 const STREAM_LATEST_GAP_MAX_PAGES = 3;
 const STREAM_RECOVERY_STALE_MS = 60000;
@@ -2421,7 +2427,10 @@ function onMemberMuted(ctx: Parameters<Misskey.Channels['chatRoom']['events']['m
 
 function onIndicatorClick() {
 	if (isContextMode.value) {
-		void exitContextToLatest();
+		// 之前调 exitContextToLatest → loadLatestTimeline,会等 bootstrap 1.5s 再 HTTP 兜底,
+		// 导致"点了跳到底部"看上去没反应。WS 已连着,直接走 finishContextAtLatest:
+		// 清 context 标记 + revealLatestMessagesAfterLayout + 同步最新,瞬时反馈。
+		void finishContextAtLatest();
 		return;
 	}
 
