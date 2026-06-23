@@ -624,7 +624,9 @@ onUnmounted(() => {
 	background-size: cover;
 	background-position: center;
 	pointer-events: none;
-	filter: var(--MI-blur, blur(10px)) opacity(0.6);
+	// 之前 blur(10) opacity(0.6) 把背景压得几乎看不见;现在轻虚化 + 高可见度,
+	// 让动图能真正看出动画,profile 卡片自己用 backdrop-filter 保证文字可读
+	filter: var(--MI-blur, blur(4px)) opacity(0.85);
 	inset: 0;
 	border-radius: inherit;
 }
@@ -688,7 +690,10 @@ onUnmounted(() => {
 			> .main {
 				position: relative;
 				overflow: clip;
-				background: color-mix(in srgb, var(--MI_THEME-panel) 65%, transparent);
+				// 卡片本身 ~55% panel,叠 backdrop blur 保证背景里的高光不会糊掉字
+				background: color-mix(in srgb, var(--MI_THEME-panel) 55%, transparent);
+				-webkit-backdrop-filter: blur(14px) saturate(115%);
+				backdrop-filter: blur(14px) saturate(115%);
 
 				> .banner-container {
 					position: relative;
