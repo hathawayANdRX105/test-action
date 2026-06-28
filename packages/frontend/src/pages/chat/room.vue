@@ -744,21 +744,20 @@ function setupTimelineScrollListener() {
 	// pointermove / pointerdown / touchstart 在桌面悬停或手机点击表情时都会触发,
 	// 会把进群8s兜底锁打掉导致进群没滚到底。只信"真的发生滚动"的信号:
 	// - wheel(桌面输入)
-	// - 滚动事件里检测到 scrollTop 向上移动(手机滑动 / 拖滚动条)
+	// - 滚动事件里检测到 scrollTop 向上移动,且 scrollHeight 未变(手机滑动 / 拖滚动条)
 	let lastUserDirectedScrollTop = scrollContainer.scrollTop;
-	// scroll 检测的阈值。layout shift(avatar/图片加载, scrollHeight 变化时浏览器 clamp scrollTop)
-	// 会产生几px到几十px 的"上滑"噪声;真正的鼠标滚轮/手指上滑通常 ≥30px。设 16px 既能识别
-	// 用户操作,又能滤掉 clamp 噪声。
+	let lastUserDirectedScrollHeight = scrollContainer.scrollHeight;
 	const USER_SCROLL_UP_DELTA_THRESHOLD = 16;
 
 	const onScroll = () => {
 		const metrics = getChatScrollMetrics(scrollContainer);
-		// 三道守卫:
-		// 1) 程序化恢复中(beginScrollRestoration)期间不算用户操作
-		// 2) 初始 8s 兜底锁窗口里完全跳过 scroll 检测——这窗口存在的意义就是"无视一切强行贴底",
-		//    layout shift clamp 不能把它打破(只有真实 wheel 事件才能)
-		// 3) 上滑增量必须 > 阈值,避免 clamp 噪声触发
+		const currentScrollHeight = scrollContainer.scrollHeight;
+		// scrollHeight 未变化 → scrollTop 的下移就是用户主动操作;
+		// scrollHeight 变小(消息被 trim / 折叠) → 浏览器会把 scrollTop clamp 到新 max,
+		// 这种"下移"不是用户行为,不应该打掉初始锁/触发 detached。
+		const scrollHeightUnchanged = currentScrollHeight === lastUserDirectedScrollHeight;
 		if (
+			scrollHeightUnchanged &&
 			!isRestoringHistoryScroll.value &&
 			!isLatestEdgeInitialLockActive() &&
 			metrics.scrollTop + USER_SCROLL_UP_DELTA_THRESHOLD < lastUserDirectedScrollTop
@@ -766,6 +765,7 @@ function setupTimelineScrollListener() {
 			markUserScrollInteraction();
 		}
 		lastUserDirectedScrollTop = metrics.scrollTop;
+		lastUserDirectedScrollHeight = currentScrollHeight;
 		rememberLatestScrollMetrics(metrics);
 		const { latestDistance, historyDistance } = metrics;
 		autoScrollState.updateFromScroll(latestDistance);
