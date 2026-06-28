@@ -746,11 +746,23 @@ function setupTimelineScrollListener() {
 	// - wheel(桌面输入)
 	// - 滚动事件里检测到 scrollTop 向上移动(手机滑动 / 拖滚动条)
 	let lastUserDirectedScrollTop = scrollContainer.scrollTop;
+	// scroll 检测的阈值。layout shift(avatar/图片加载, scrollHeight 变化时浏览器 clamp scrollTop)
+	// 会产生几px到几十px 的"上滑"噪声;真正的鼠标滚轮/手指上滑通常 ≥30px。设 16px 既能识别
+	// 用户操作,又能滤掉 clamp 噪声。
+	const USER_SCROLL_UP_DELTA_THRESHOLD = 16;
 
 	const onScroll = () => {
 		const metrics = getChatScrollMetrics(scrollContainer);
-		// 真实上滑(scrollTop 变小)且非程序化恢复 → 视为用户操作
-		if (!isRestoringHistoryScroll.value && metrics.scrollTop + 2 < lastUserDirectedScrollTop) {
+		// 三道守卫:
+		// 1) 程序化恢复中(beginScrollRestoration)期间不算用户操作
+		// 2) 初始 8s 兜底锁窗口里完全跳过 scroll 检测——这窗口存在的意义就是"无视一切强行贴底",
+		//    layout shift clamp 不能把它打破(只有真实 wheel 事件才能)
+		// 3) 上滑增量必须 > 阈值,避免 clamp 噪声触发
+		if (
+			!isRestoringHistoryScroll.value &&
+			!isLatestEdgeInitialLockActive() &&
+			metrics.scrollTop + USER_SCROLL_UP_DELTA_THRESHOLD < lastUserDirectedScrollTop
+		) {
 			markUserScrollInteraction();
 		}
 		lastUserDirectedScrollTop = metrics.scrollTop;
