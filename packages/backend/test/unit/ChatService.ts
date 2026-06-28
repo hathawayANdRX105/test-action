@@ -109,6 +109,11 @@ describe('ChatService large room fast path', () => {
 			delete: jest.fn(async () => ({ affected: 1 })),
 			update: jest.fn(async () => ({ affected: 1 })),
 		};
+		const chatRoomUserSettingsRepository: any = {
+			findOneBy: jest.fn(async () => null),
+			upsert: jest.fn(async () => ({ identifiers: [] })),
+			delete: jest.fn(async () => ({ affected: 1 })),
+		};
 		const chatMessagesQueryBuilder: any = {
 			alias: 'message',
 			update: jest.fn(function (this: any) { return this; }),
@@ -208,6 +213,7 @@ describe('ChatService large room fast path', () => {
 		const globalEventService: any = {
 			publishChatUserStream: jest.fn(),
 			publishChatRoomStream: jest.fn(),
+			publishChatRoomStreamBatched: jest.fn(),
 			publishMainStream: jest.fn(),
 		};
 		const pushNotificationService: any = {
@@ -220,7 +226,22 @@ describe('ChatService large room fast path', () => {
 		const idService: any = {
 			gen: jest.fn(() => 'message-id'),
 		};
+		const meta: any = {
+			id: 'meta',
+			chatRoomDefaultMemberLimit: 10000,
+			chatMessageRetentionDays: 0,
+			chatBannedKeywords: [],
+		};
+		const metasRepository: any = {
+			findOneByOrFail: jest.fn(async () => meta),
+		};
 		const chatRoomsRepository: any = {
+			findOneBy: jest.fn(async () => ({
+				id: 'room',
+				ownerId: 'owner',
+				joinMode: 'open',
+				memberLimitOverride: null,
+			})),
 			findOneByOrFail: jest.fn(async () => ({
 				id: 'room',
 				ownerId: 'owner',
@@ -266,13 +287,15 @@ describe('ChatService large room fast path', () => {
 		const service = new ChatService(
 			{} as never,
 			redisClient as never,
-			{ chatRoomDefaultMemberLimit: 10000 } as never,
+			meta as never,
 			{} as never,
+			metasRepository as never,
 			chatMessagesRepository as never,
 			{} as never,
 			chatRoomsRepository as never,
 			chatRoomInvitationsRepository as never,
 			chatRoomMembershipsRepository as never,
+			chatRoomUserSettingsRepository as never,
 			chatRoomUserMutingsRepository as never,
 			chatRoomBanningsRepository as never,
 			{} as never,
@@ -308,6 +331,7 @@ describe('ChatService large room fast path', () => {
 			chatRoomMembershipsRepository,
 			chatRoomInvitationsRepository,
 			chatRoomsRepository,
+			metasRepository,
 			chatRoomUserMutingsRepository,
 			chatRoomUserMutingQueryBuilder,
 			chatRoomBanningsRepository,
@@ -377,6 +401,28 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.chatEntityService.packMessagesLiteForRoom).not.toHaveBeenCalled();
 	});
 
+	test('packed room timeline refreshes redis cache when the latest room marker is newer', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		const cached = [
+			{ id: 'm3', fromUserId: 'u3', fromUser: { id: 'u3' }, toRoomId: 'room', text: 'three', fileId: null, file: null, replyId: null, reply: null, quoteId: null, quote: null, mentionedUserIds: [], reactions: [] },
+			{ id: 'm2', fromUserId: 'u2', fromUser: { id: 'u2' }, toRoomId: 'room', text: 'two', fileId: null, file: null, replyId: null, reply: null, quoteId: null, quote: null, mentionedUserIds: [], reactions: [] },
+		];
+		const freshRows = [
+			{ id: 'm4', fromUserId: 'u4', toRoomId: 'room', text: 'four' },
+			{ id: 'm3', fromUserId: 'u3', toRoomId: 'room', text: 'three' },
+		];
+		ctx.redisState.set('chat:room:room:timeline:v1', cached.map(message => JSON.stringify(message)));
+		ctx.redisState.set('chat:room:room:timeline:v1:meta', JSON.stringify({ warmedAt: 1, complete: true }));
+		ctx.redisState.set('latestRoomChatMessage:room', 'm4');
+		ctx.chatMessagesRepository.createQueryBuilder.mockReturnValueOnce(createMessageQueryBuilder(freshRows));
+
+		const result = await ctx.service.packedRoomTimeline('reader', 'room', 2);
+
+		expect(result.map(message => message.id)).toEqual(['m4', 'm3']);
+		expect(ctx.chatMessagesRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+		expect(ctx.chatEntityService.packMessagesLiteForRoom).toHaveBeenCalledTimes(1);
+	});
+
 	test('packed room timeline filters muted users from redis hot cache', async () => {
 		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
 		const cached = [
@@ -427,7 +473,7 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.timeService.startTimer).not.toHaveBeenCalled();
 		expect(ctx.pushNotificationService.pushNotification).not.toHaveBeenCalled();
 		expect(ctx.chatEntityService.packMessageLiteForRoom).toHaveBeenCalledWith(expect.objectContaining({ id: 'message-id' }), { mentionedUserIds: [] });
-		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledWith('room', 'message', expect.objectContaining({ id: 'message-id' }));
+		expect(ctx.globalEventService.publishChatRoomStreamBatched).toHaveBeenCalledWith('room', { type: 'message', body: expect.objectContaining({ id: 'message-id' }) });
 	});
 
 	test('small rooms keep existing unread fanout path', async () => {
@@ -467,7 +513,7 @@ describe('ChatService large room fast path', () => {
 			replyId: 'reply-id',
 			toRoomId: 'room',
 		}));
-		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledWith('room', 'message', expect.objectContaining({ id: 'message-id' }));
+		expect(ctx.globalEventService.publishChatRoomStreamBatched).toHaveBeenCalledWith('room', { type: 'message', body: expect.objectContaining({ id: 'message-id' }) });
 	});
 
 	test('room messages can send with only a quote reference', async () => {
@@ -482,7 +528,7 @@ describe('ChatService large room fast path', () => {
 			quoteId: 'quote-id',
 			toRoomId: 'room',
 		}));
-		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledWith('room', 'message', expect.objectContaining({ id: 'message-id' }));
+		expect(ctx.globalEventService.publishChatRoomStreamBatched).toHaveBeenCalledWith('room', { type: 'message', body: expect.objectContaining({ id: 'message-id' }) });
 	});
 
 	test('small multi-member rooms fan out reply-only messages', async () => {
@@ -561,6 +607,75 @@ describe('ChatService large room fast path', () => {
 		await expect(ctx.service.hasPermissionToManageRoom({ id: 'member' } as never, { ownerId: 'owner' } as never)).resolves.toBe(false);
 	});
 
+	test('room manager can moderate ordinary room members', async () => {
+		const ctx = createService(1);
+		ctx.chatRoomMembershipsRepository.findOne
+			.mockResolvedValueOnce({ role: 'manager' })
+			.mockResolvedValueOnce({ role: 'member' });
+
+		await expect(ctx.service.canModerateRoomMember({ id: 'manager' } as never, { id: 'room', ownerId: 'owner' } as never, 'member')).resolves.toBe(true);
+	});
+
+	test('room manager cannot moderate another room manager', async () => {
+		const ctx = createService(1);
+		ctx.chatRoomMembershipsRepository.findOne
+			.mockResolvedValueOnce({ role: 'manager' })
+			.mockResolvedValueOnce({ role: 'manager' });
+
+		await expect(ctx.service.canModerateRoomMember({ id: 'manager' } as never, { id: 'room', ownerId: 'owner' } as never, 'target-manager')).resolves.toBe(false);
+	});
+
+	test('room manager cannot moderate the room owner', async () => {
+		const ctx = createService(1);
+		ctx.chatRoomMembershipsRepository.findOne
+			.mockResolvedValueOnce({ role: 'manager' });
+		ctx.roleService.isModerator
+			.mockResolvedValueOnce(false)
+			.mockResolvedValueOnce(false)
+			.mockResolvedValueOnce(false);
+
+		await expect(ctx.service.canModerateRoomMember({ id: 'manager' } as never, { id: 'room', ownerId: 'owner' } as never, 'owner')).resolves.toBe(false);
+	});
+
+	test('room manager cannot moderate a site moderator', async () => {
+		const ctx = createService(1);
+		ctx.chatRoomMembershipsRepository.findOne
+			.mockResolvedValueOnce({ role: 'manager' });
+		ctx.roleService.isModerator
+			.mockResolvedValueOnce(false)
+			.mockResolvedValueOnce(true);
+
+		await expect(ctx.service.canModerateRoomMember({ id: 'manager' } as never, { id: 'room', ownerId: 'owner' } as never, 'moderator')).resolves.toBe(false);
+	});
+
+	test('room owner can moderate room managers', async () => {
+		const ctx = createService(1);
+		ctx.roleService.isModerator.mockResolvedValueOnce(false);
+
+		await expect(ctx.service.canModerateRoomMember({ id: 'owner' } as never, { id: 'room', ownerId: 'owner' } as never, 'target-manager')).resolves.toBe(true);
+	});
+
+	test('site moderator can moderate room managers', async () => {
+		const ctx = createService(1);
+		ctx.chatRoomMembershipsRepository.findOne
+			.mockResolvedValueOnce(null);
+		ctx.roleService.isModerator
+			.mockResolvedValueOnce(true)
+			.mockResolvedValueOnce(false)
+			.mockResolvedValueOnce(true);
+
+		await expect(ctx.service.canModerateRoomMember({ id: 'moderator' } as never, { id: 'room', ownerId: 'owner' } as never, 'target-manager')).resolves.toBe(true);
+	});
+
+	test('room manager cannot moderate users who are not current members', async () => {
+		const ctx = createService(1);
+		ctx.chatRoomMembershipsRepository.findOne
+			.mockResolvedValueOnce({ role: 'manager' })
+			.mockResolvedValueOnce(null);
+
+		await expect(ctx.service.canModerateRoomMember({ id: 'manager' } as never, { id: 'room', ownerId: 'owner' } as never, 'stranger')).resolves.toBe(false);
+	});
+
 	test('room sends cache resolved mention ids for later packing', async () => {
 		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
 		ctx.mfmService.extractMentions.mockReturnValueOnce([{ username: 'member2', host: null }]);
@@ -615,7 +730,7 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.chatRoomMembershipsRepository.countBy).toHaveBeenCalledTimes(1);
 		expect(ctx.chatRoomMembershipsRepository.findBy).not.toHaveBeenCalled();
 		expect(ctx.redisClient.set).toHaveBeenCalledWith('chatRoomMembersCount:room', String(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1), 'EX', 60);
-		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledTimes(3);
+		expect(ctx.globalEventService.publishChatRoomStreamBatched).toHaveBeenCalledTimes(3);
 	});
 
 	test('large room burst sends do not reintroduce member fanout', async () => {
@@ -633,7 +748,7 @@ describe('ChatService large room fast path', () => {
 		expect(ctx.redisClient.pipeline).toHaveBeenCalledTimes(burstSize);
 		expect(ctx.redisPipeline.sadd).not.toHaveBeenCalled();
 		expect(ctx.timeService.startTimer).not.toHaveBeenCalled();
-		expect(ctx.globalEventService.publishChatRoomStream).toHaveBeenCalledTimes(burstSize);
+		expect(ctx.globalEventService.publishChatRoomStreamBatched).toHaveBeenCalledTimes(burstSize);
 	});
 
 	test('non-members cannot send without scanning all members', async () => {
@@ -1024,7 +1139,7 @@ describe('ChatService large room fast path', () => {
 		ctx.chatRoomBanningsRepository.existsBy.mockResolvedValueOnce(true);
 		ctx.chatRoomMembershipsRepository.findOneBy.mockResolvedValueOnce(null);
 
-		await expect(ctx.service.createRoomInvitation('owner', 'room', 'banned-user')).rejects.toThrow('user is banned');
+		await expect(ctx.service.createRoomInvitation({ id: 'owner' } as never, 'room', 'banned-user')).rejects.toThrow('user is banned');
 	});
 
 	test('muting a member updates the membership and publishes memberMuted', async () => {

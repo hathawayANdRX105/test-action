@@ -6,7 +6,7 @@
 import { describe, expect, jest, test } from '@jest/globals';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
 
-describe('ChatEntityService chat message mention cache', () => {
+describe('ChatEntityService', () => {
 	function createService() {
 		const redisState = new Map<string, string>();
 		const redisClient: any = {
@@ -43,8 +43,12 @@ describe('ChatEntityService chat message mention cache', () => {
 			}))),
 		};
 		const driveFileEntityService: any = {
+			getPublicUrl: jest.fn(() => 'https://example.test/proxy/avatar.webp?url=file'),
 			pack: jest.fn(),
 			packMany: jest.fn(async () => []),
+		};
+		const driveFilesRepository: any = {
+			findBy: jest.fn(async () => []),
 		};
 		const chatRoomMembershipsQueryBuilder: any = {
 			select: jest.fn(function (this: any) { return this; }),
@@ -73,6 +77,14 @@ describe('ChatEntityService chat message mention cache', () => {
 		const chatRoomsRepository: any = {
 			find: jest.fn(async () => []),
 			findOneByOrFail: jest.fn(),
+			update: jest.fn(async () => ({ affected: 1 })),
+		};
+		const chatRoomUserSettingsRepository: any = {
+			find: jest.fn(async () => []),
+			findOneBy: jest.fn(async () => null),
+		};
+		const chatRoomBanningsRepository: any = {
+			findOneByOrFail: jest.fn(),
 		};
 		const roleService: any = {
 			isAdministrator: jest.fn(async () => false),
@@ -90,10 +102,12 @@ describe('ChatEntityService chat message mention cache', () => {
 		const service = new ChatEntityService(
 			{} as never,
 			chatRoomsRepository as never,
+			driveFilesRepository as never,
 			{} as never,
 			chatRoomMembershipsRepository as never,
+			chatRoomUserSettingsRepository as never,
 			chatRoomUserMutingsRepository as never,
-			{} as never,
+			chatRoomBanningsRepository as never,
 			{ chatRoomDefaultMemberLimit: 500 } as never,
 			redisClient as never,
 			userEntityService as never,
@@ -122,10 +136,13 @@ describe('ChatEntityService chat message mention cache', () => {
 			redisClient,
 			userEntityService,
 			driveFileEntityService,
+			driveFilesRepository,
 			chatRoomsRepository,
 			chatRoomMembershipsRepository,
 			chatRoomMembershipsQueryBuilder,
+			chatRoomUserSettingsRepository,
 			chatRoomUserMutingsRepository,
+			chatRoomBanningsRepository,
 			roleService,
 			mfmService,
 			remoteUserResolveService,
@@ -247,6 +264,41 @@ describe('ChatEntityService chat message mention cache', () => {
 		expect(packed.canManage).toBe(true);
 		expect(packed.messageRetentionDays).toBe(30);
 		expect(packed.isJoined).toBe(true);
+	});
+
+	test('repairs missing room avatar URLs while packing a room', async () => {
+		const ctx = createService();
+		ctx.driveFilesRepository.findBy.mockResolvedValueOnce([{
+			id: 'file-1',
+			url: 'https://example.test/files/file-1',
+			webpublicUrl: null,
+			uri: null,
+			userHost: null,
+			isLink: false,
+		}]);
+		ctx.driveFileEntityService.getPublicUrl.mockReturnValueOnce('https://example.test/proxy/avatar.webp?url=file-1');
+		const room = {
+			id: 'room-avatar',
+			name: 'avatar room',
+			description: null,
+			joinMode: 'open',
+			ownerId: 'owner',
+			owner: { id: 'owner' },
+			avatarId: 'file-1',
+			avatar: null,
+			avatarUrl: null,
+			memberLimitOverride: null,
+			messageRetentionDays: null,
+		};
+
+		const packed = await ctx.service.packRoom(room, { id: 'me' });
+
+		expect(packed.avatarUrl).toBe('https://example.test/proxy/avatar.webp?url=file-1');
+		expect(ctx.driveFilesRepository.findBy).toHaveBeenCalledTimes(1);
+		expect(ctx.driveFileEntityService.getPublicUrl).toHaveBeenCalledWith(expect.objectContaining({ id: 'file-1' }), 'avatar');
+		expect(ctx.chatRoomsRepository.update).toHaveBeenCalledWith('room-avatar', {
+			avatarUrl: 'https://example.test/proxy/avatar.webp?url=file-1',
+		});
 	});
 
 	test('packs moderator rooms as manageable even without membership', async () => {

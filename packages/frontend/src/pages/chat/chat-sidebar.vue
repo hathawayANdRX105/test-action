@@ -43,63 +43,78 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<span>{{ i18n.ts._chat.groupChats }}</span>
 			</div>
 			<div v-if="roomEntries.length === 0" :class="$style.empty">{{ i18n.ts._chat.noRooms }}</div>
-			<button
-				v-for="entry in roomEntries"
-				:key="`room:${entry.id}`"
-				v-memo="[entry.id === activeRoomId, entry.isRead, entry.hasUnreadMention, entry.lastMessage?.id, entry.room.name, entry.room.avatarUrl]"
-				class="_button"
-				:class="[$style.item, { [$style.itemActive]: entry.id === activeRoomId, [$style.itemUnread]: !entry.isRead }]"
-				@click="openRoom(entry)"
-			>
-				<XRoomAvatar :room="entry.room" :class="$style.itemAvatar"/>
-				<div :class="$style.itemBody">
-					<div :class="$style.itemHeader">
-						<span :class="$style.itemName">{{ entry.room.name }}</span>
-						<span v-if="entry.hasUnreadMention" :class="$style.mentionBadge">@</span>
-						<MkTime v-if="entry.lastMessage" :time="entry.lastMessage.createdAt" :class="$style.itemTime"/>
-					</div>
-					<div :class="$style.itemPreview">
-						<template v-if="entry.lastMessage">
-							<span v-if="entry.lastMessage.fromUserId === $i.id" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
-							{{ previewText(entry.lastMessage) }}
-						</template>
-						<template v-else>{{ entry.room.description || i18n.ts._chat.noMessagesYet }}</template>
-					</div>
+			<template v-for="group in groupedRoomEntries" :key="group.key">
+				<button class="_button" :class="[$style.sectionTitle, $style.sectionToggle, $style.roomGroupToggle]" @click="toggleRoomGroup(group.key)">
+					<i :class="group.key === UNGROUPED_ROOM_GROUP_KEY ? 'ti ti-folder' : 'ti ti-folder-filled'"></i>
+					<span>{{ group.label }} ({{ group.entries.length }})</span>
+					<i class="ti ti-chevron-down" :class="[$style.sectionChevron, { [$style.sectionChevronOpen]: isRoomGroupOpen(group.key) }]"></i>
+				</button>
+				<div
+					v-for="entry in group.entries"
+					v-show="isRoomGroupOpen(group.key)"
+					:key="`room:${entry.id}`"
+					v-memo="[isRoomGroupOpen(group.key), entry.id === activeRoomId, entry.isRead, entry.hasUnreadMention, entry.lastMessage?.id, entry.room.name, entry.room.myNickname, entry.room.myFolder, entry.room.avatarUrl]"
+					:class="[$style.item, $style.roomItem, { [$style.itemActive]: entry.id === activeRoomId, [$style.itemUnread]: !entry.isRead }]"
+				>
+					<button class="_button" :class="$style.roomOpenButton" @click="openRoom(entry)">
+						<XRoomAvatar :room="entry.room" :class="$style.itemAvatar"/>
+						<div :class="$style.itemBody">
+							<div :class="$style.itemHeader">
+								<span :class="$style.itemName" :title="roomDisplayName(entry.room)">{{ roomDisplayName(entry.room) }}</span>
+								<span v-if="hasRoomNickname(entry.room)" :class="$style.roomOriginalName" :title="`${i18n.ts._chat.originalRoomName}: ${entry.room.name}`">{{ entry.room.name }}</span>
+								<span v-if="entry.hasUnreadMention" :class="$style.mentionBadge">@</span>
+								<MkTime v-if="entry.lastMessage" :time="entry.lastMessage.createdAt" :class="$style.itemTime"/>
+							</div>
+							<div :class="$style.itemPreview">
+								<template v-if="entry.lastMessage">
+									<span v-if="entry.lastMessage.fromUserId === $i.id" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
+									{{ previewText(entry.lastMessage) }}
+								</template>
+								<template v-else>{{ entry.room.description || i18n.ts._chat.noMessagesYet }}</template>
+							</div>
+						</div>
+					</button>
+					<button class="_button" :class="$style.roomMenuButton" :title="i18n.ts._chat.organizeRoom" :aria-label="i18n.ts._chat.organizeRoom" @click.stop="openRoomMenu(entry, $event)">
+						<i class="ti ti-dots"></i>
+					</button>
 				</div>
-			</button>
+			</template>
 
 			<div :class="$style.sectionTitle">
 				<i class="ti ti-user"></i>
 				<span>{{ i18n.ts._chat.directMessages }}</span>
 			</div>
 			<div v-if="userEntries.length === 0" :class="$style.empty">{{ i18n.ts._chat.noHistory }}</div>
-			<button
+			<div
 				v-for="entry in userEntries"
 				:key="`user:${entry.id}`"
 				v-memo="[entry.id === activeUserId, entry.isRead, entry.isMe, entry.lastMessage.id, entry.other.name, entry.other.avatarUrl]"
-				class="_button"
-				:class="[$style.item, { [$style.itemActive]: entry.id === activeUserId, [$style.itemUnread]: !entry.isRead && !entry.isMe }]"
-				@click="openUser(entry)"
+				:class="[$style.item, $style.userItem, { [$style.itemActive]: entry.id === activeUserId, [$style.itemUnread]: !entry.isRead && !entry.isMe }]"
 			>
-				<MkAvatar :user="entry.other" :class="$style.itemAvatar" indicator :preview="false" :link="false"/>
-				<div :class="$style.itemBody">
-					<div :class="$style.itemHeader">
-						<MkUserName :user="entry.other" :class="$style.itemName"/>
-						<MkTime :time="entry.lastMessage.createdAt" :class="$style.itemTime"/>
+				<button class="_button" :class="$style.userOpenButton" @click="openUser(entry)">
+					<MkAvatar :user="entry.other" :class="$style.itemAvatar" indicator :preview="false" :link="false"/>
+					<div :class="$style.itemBody">
+						<div :class="$style.itemHeader">
+							<MkUserName :user="entry.other" :class="$style.itemName"/>
+							<MkTime :time="entry.lastMessage.createdAt" :class="$style.itemTime"/>
+						</div>
+						<div :class="$style.itemPreview">
+							<span v-if="entry.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
+							{{ previewText(entry.lastMessage) }}
+						</div>
 					</div>
-					<div :class="$style.itemPreview">
-						<span v-if="entry.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
-						{{ previewText(entry.lastMessage) }}
-					</div>
-				</div>
-			</button>
+				</button>
+				<button class="_button" :class="$style.conversationMenuButton" :title="i18n.ts._chat.deleteConversation" :aria-label="i18n.ts._chat.deleteConversation" @click.stop="openUserMenu(entry, $event)">
+					<i class="ti ti-dots"></i>
+				</button>
+			</div>
 		</template>
 	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import { useInterval } from '@@/js/use-interval.js';
 import XRoomAvatar from './XRoomAvatar.vue';
@@ -115,7 +130,7 @@ import { useStream } from '@/stream.js';
 const $i = ensureSignin();
 const router = useRouter();
 
-defineProps<{
+const props = defineProps<{
 	activeUserId?: string;
 	activeRoomId?: string;
 }>();
@@ -145,6 +160,12 @@ type UserEntry = {
 	isMe: boolean;
 };
 
+type RoomGroup = {
+	key: string;
+	label: string;
+	entries: RoomEntry[];
+};
+
 const initializing = ref(true);
 const fetching = ref(false);
 const roomEntries = ref<RoomEntry[]>([]);
@@ -153,12 +174,90 @@ const userEntries = ref<UserEntry[]>([]);
 const invitations = ref<Misskey.entities.ChatRoomInvitation[]>([]);
 // 邀请太多时可折叠收起（记住上次的展开/收起状态）。
 const invitationsOpen = ref(window.localStorage.getItem('chatInvitationsCollapsed') !== '1');
+const UNGROUPED_ROOM_GROUP_KEY = '__ungrouped__';
+const CHAT_ROOM_GROUPS_COLLAPSED_KEY = 'chatRoomGroupsCollapsed';
 const CHAT_SIDEBAR_FALLBACK_REFRESH_INTERVAL_MS = 1000 * 60;
 const CHAT_SIDEBAR_EVENT_REFRESH_DEBOUNCE_MS = 400;
+const collapsedRoomGroupKeys = ref(readCollapsedRoomGroupKeys());
 
 function toggleInvitations() {
 	invitationsOpen.value = !invitationsOpen.value;
 	window.localStorage.setItem('chatInvitationsCollapsed', invitationsOpen.value ? '0' : '1');
+}
+
+function readCollapsedRoomGroupKeys(): Set<string> {
+	try {
+		const parsed = JSON.parse(window.localStorage.getItem(CHAT_ROOM_GROUPS_COLLAPSED_KEY) ?? '[]') as unknown;
+		if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
+			return new Set(parsed);
+		}
+	} catch {
+		// Ignore stale storage.
+	}
+
+	return new Set();
+}
+
+function saveCollapsedRoomGroupKeys() {
+	window.localStorage.setItem(CHAT_ROOM_GROUPS_COLLAPSED_KEY, JSON.stringify([...collapsedRoomGroupKeys.value]));
+}
+
+function normalizedRoomFolder(room: Misskey.entities.ChatRoom): string {
+	return room.myFolder?.trim() ?? '';
+}
+
+function roomGroupKey(room: Misskey.entities.ChatRoom): string {
+	const folder = normalizedRoomFolder(room);
+	return folder === '' ? UNGROUPED_ROOM_GROUP_KEY : `folder:${folder}`;
+}
+
+function roomGroupLabel(room: Misskey.entities.ChatRoom): string {
+	const folder = normalizedRoomFolder(room);
+	return folder === '' ? i18n.ts._chat.ungroupedRooms : folder;
+}
+
+const groupedRoomEntries = computed<RoomGroup[]>(() => {
+	const groups = new Map<string, RoomGroup>();
+	for (const entry of roomEntries.value) {
+		const key = roomGroupKey(entry.room);
+		const group = groups.get(key) ?? {
+			key,
+			label: roomGroupLabel(entry.room),
+			entries: [],
+		};
+		group.entries.push(entry);
+		groups.set(key, group);
+	}
+
+	return [...groups.values()].toSorted((a, b) => {
+		if (a.key === UNGROUPED_ROOM_GROUP_KEY) return -1;
+		if (b.key === UNGROUPED_ROOM_GROUP_KEY) return 1;
+		return a.label.localeCompare(b.label);
+	});
+});
+
+function isRoomGroupOpen(key: string): boolean {
+	return !collapsedRoomGroupKeys.value.has(key);
+}
+
+function toggleRoomGroup(key: string) {
+	const next = new Set(collapsedRoomGroupKeys.value);
+	if (next.has(key)) {
+		next.delete(key);
+	} else {
+		next.add(key);
+	}
+	collapsedRoomGroupKeys.value = next;
+	saveCollapsedRoomGroupKeys();
+}
+
+function roomDisplayName(room: Misskey.entities.ChatRoom): string {
+	const nickname = room.myNickname?.trim();
+	return nickname != null && nickname !== '' ? nickname : room.name;
+}
+
+function hasRoomNickname(room: Misskey.entities.ChatRoom): boolean {
+	return roomDisplayName(room) !== room.name;
 }
 
 // 参加中/作成済みルーム（メッセージが無いルームの補完用）。変化が少ないためポーリングごとには取得しない。
@@ -355,6 +454,105 @@ async function ignoreInvitation(invitation: Misskey.entities.ChatRoomInvitation)
 
 function previewText(message: Misskey.entities.ChatMessage) {
 	return message.text ?? (message.fileId != null ? i18n.ts.file : '');
+}
+
+function applyUpdatedRoom(updated: Misskey.entities.ChatRoom) {
+	const nextKnownRooms = new Map(knownRooms.value);
+	nextKnownRooms.set(updated.id, updated);
+	knownRooms.value = nextKnownRooms;
+	roomEntries.value = roomEntries.value.map(entry => entry.id === updated.id ? {
+		...entry,
+		room: updated,
+	} : entry);
+}
+
+async function editRoomOrganization(entry: RoomEntry) {
+	const { canceled, result } = await os.form(i18n.ts._chat.organizeRoom, {
+		nickname: {
+			type: 'string',
+			required: false,
+			label: i18n.ts._chat.roomNickname,
+			default: entry.room.myNickname ?? '',
+		},
+		folder: {
+			type: 'string',
+			required: false,
+			label: i18n.ts._chat.roomFolder,
+			default: entry.room.myFolder ?? '',
+		},
+	});
+	if (canceled) return;
+
+	const nickname = (result.nickname ?? '').trim() || null;
+	const folder = (result.folder ?? '').trim() || null;
+	const updated = await os.apiWithDialog<Misskey.entities.ChatRoom>('chat/rooms/user-settings/update', {
+		roomId: entry.id,
+		nickname,
+		folder,
+	});
+	applyUpdatedRoom(updated);
+}
+
+async function clearRoomOrganization(entry: RoomEntry) {
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.ts.areYouSure,
+	});
+	if (canceled) return;
+
+	const updated = await os.apiWithDialog<Misskey.entities.ChatRoom>('chat/rooms/user-settings/update', {
+		roomId: entry.id,
+		nickname: null,
+		folder: null,
+	});
+	applyUpdatedRoom(updated);
+}
+
+function openRoomMenu(entry: RoomEntry, ev: MouseEvent) {
+	const hasOrganization = hasRoomNickname(entry.room) || normalizedRoomFolder(entry.room) !== '';
+	os.popupMenu([{
+		text: i18n.ts._chat.organizeRoom,
+		icon: 'ti ti-folder-cog',
+		action: () => {
+			editRoomOrganization(entry);
+		},
+	}, ...(hasOrganization ? [{
+		type: 'divider' as const,
+	}, {
+		text: i18n.ts._chat.clearRoomOrganization,
+		icon: 'ti ti-eraser',
+		danger: true,
+		action: () => {
+			clearRoomOrganization(entry);
+		},
+	}] : [])], ev.currentTarget ?? ev.target);
+}
+
+async function deleteUserConversation(entry: UserEntry) {
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.tsx._chat.deleteConversationConfirm({ name: entry.other.name ?? entry.other.username }),
+	});
+	if (canceled) return;
+
+	await os.apiWithDialog('chat/users/conversation/delete', {
+		userId: entry.id,
+	});
+	userEntries.value = userEntries.value.filter(userEntry => userEntry.id !== entry.id);
+	if (entry.id === props.activeUserId) {
+		router.push('/chat');
+	}
+}
+
+function openUserMenu(entry: UserEntry, ev: MouseEvent) {
+	os.popupMenu([{
+		text: i18n.ts._chat.deleteConversation,
+		icon: 'ti ti-trash',
+		danger: true,
+		action: () => {
+			deleteUserConversation(entry);
+		},
+	}], ev.currentTarget ?? ev.target);
 }
 
 function openRoom(entry: RoomEntry) {
@@ -555,6 +753,10 @@ onBeforeUnmount(() => {
 	transform: rotate(0deg);
 }
 
+.roomGroupToggle {
+	padding-left: 12px;
+}
+
 .empty {
 	padding: 8px;
 	color: color(from var(--MI_THEME-fg) srgb r g b / 0.55);
@@ -611,6 +813,56 @@ onBeforeUnmount(() => {
 	background-color: var(--MI_THEME-accent);
 }
 
+.roomItem {
+	gap: 0;
+	padding: 0;
+	overflow: hidden;
+
+	&.itemUnread::before {
+		right: 44px;
+	}
+}
+
+.roomOpenButton,
+.userOpenButton {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: 1 1 auto;
+	min-width: 0;
+	padding: 10px;
+	border-radius: inherit;
+	color: inherit;
+	text-align: left;
+}
+
+.userItem {
+	gap: 0;
+	padding: 0;
+	overflow: hidden;
+
+	&.itemUnread::before {
+		right: 44px;
+	}
+}
+
+.roomMenuButton,
+.conversationMenuButton {
+	display: grid;
+	place-items: center;
+	flex: 0 0 auto;
+	width: 36px;
+	height: 44px;
+	margin-right: 4px;
+	border-radius: 8px;
+	color: color(from var(--MI_THEME-fg) srgb r g b / 0.55);
+
+	&:hover {
+		color: var(--MI_THEME-fg);
+		background: color(from var(--MI_THEME-fg) srgb r g b / 0.08);
+	}
+}
+
 .itemAvatar {
 	flex: 0 0 auto;
 	width: 44px;
@@ -631,10 +883,21 @@ onBeforeUnmount(() => {
 }
 
 .itemName {
+	flex: 0 1 auto;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	font-weight: 700;
 	font-size: 0.95em;
+}
+
+.roomOriginalName {
+	flex: 1 1 auto;
+	min-width: 32px;
+	max-width: 42%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: color(from var(--MI_THEME-fg) srgb r g b / 0.5);
+	font-size: 0.78em;
 }
 
 .mentionBadge {

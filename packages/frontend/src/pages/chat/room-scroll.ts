@@ -13,10 +13,34 @@ export type ChatTimelineIdentifiableMessage = {
 };
 
 export type ChatTimelineWindowKeep = 'newest' | 'oldest';
+export type ChatTimelineWindowResult<T> = {
+	items: T[];
+	droppedNewest: boolean;
+	droppedOldest: boolean;
+};
 
-function limitChatTimelineWindow<T>(items: T[], limit: number | undefined, keep: ChatTimelineWindowKeep | undefined): T[] {
-	if (limit == null || items.length <= limit) return items;
-	return keep === 'oldest' ? items.slice(-limit) : items.slice(0, limit);
+function limitChatTimelineWindow<T>(items: T[], limit: number | undefined, keep: ChatTimelineWindowKeep | undefined): ChatTimelineWindowResult<T> {
+	if (limit == null || items.length <= limit) {
+		return {
+			items,
+			droppedNewest: false,
+			droppedOldest: false,
+		};
+	}
+
+	if (keep === 'oldest') {
+		return {
+			items: items.slice(-limit),
+			droppedNewest: true,
+			droppedOldest: false,
+		};
+	}
+
+	return {
+		items: items.slice(0, limit),
+		droppedNewest: false,
+		droppedOldest: true,
+	};
 }
 
 export function getChatScrollMetrics(scrollContainer: ChatScrollContainerMetrics): {
@@ -63,7 +87,7 @@ export function sortChatMessagesForTimeline<T extends ChatTimelineSortableMessag
 	});
 }
 
-export function mergeChatMessagesForTimeline<T extends ChatTimelineSortableMessage>(
+export function mergeChatMessagesWithWindowResult<T extends ChatTimelineSortableMessage>(
 	current: T[],
 	incoming: T[],
 	options?: {
@@ -71,9 +95,12 @@ export function mergeChatMessagesForTimeline<T extends ChatTimelineSortableMessa
 		preserveExistingOrder?: boolean;
 		keep?: ChatTimelineWindowKeep;
 	},
-): T[] {
+): ChatTimelineWindowResult<T> {
+	const limit = options?.limit;
+	const keep = options?.keep;
+
 	if (incoming.length === 0) {
-		return limitChatTimelineWindow(current, options?.limit, options?.keep);
+		return limitChatTimelineWindow(current, limit, keep);
 	}
 
 	const map = new Map<string, T>();
@@ -104,15 +131,27 @@ export function mergeChatMessagesForTimeline<T extends ChatTimelineSortableMessa
 			} else if (message.id < next[next.length - 1].id) {
 				next.push(message);
 			} else {
-				return limitChatTimelineWindow(sortChatMessagesForTimeline([...map.values()]), options?.limit, options?.keep);
+				return limitChatTimelineWindow(sortChatMessagesForTimeline([...map.values()]), limit, keep);
 			}
 		}
 
-		return limitChatTimelineWindow(next, options?.limit, options?.keep);
+		return limitChatTimelineWindow(next, limit, keep);
 	}
 
 	const merged = sortChatMessagesForTimeline([...map.values()]);
-	return limitChatTimelineWindow(merged, options?.limit, options?.keep);
+	return limitChatTimelineWindow(merged, limit, keep);
+}
+
+export function mergeChatMessagesForTimeline<T extends ChatTimelineSortableMessage>(
+	current: T[],
+	incoming: T[],
+	options?: {
+		limit?: number;
+		preserveExistingOrder?: boolean;
+		keep?: ChatTimelineWindowKeep;
+	},
+): T[] {
+	return mergeChatMessagesWithWindowResult(current, incoming, options).items;
 }
 
 export function prependChatMessageForTimeline<T extends ChatTimelineSortableMessage>(
@@ -189,7 +228,7 @@ export function findMissingChatMessageIdsInLatestWindow<T extends ChatTimelineId
 	return missingIds;
 }
 
-type ChatReadReceiptTimer = ReturnType<typeof setTimeout>;
+type ChatReadReceiptTimer = number;
 
 export class ChatReadReceiptBatcher {
 	private pendingMessageId: string | null = null;
@@ -214,8 +253,10 @@ export class ChatReadReceiptBatcher {
 		this.send = options.send;
 		this.canSend = options.canSend;
 		this.now = options.now ?? (() => Date.now());
-		this.setTimer = options.setTimer ?? ((callback, delay) => setTimeout(callback, delay));
-		this.clearTimer = options.clearTimer ?? (timer => clearTimeout(timer));
+		this.setTimer = options.setTimer ?? ((callback, delay): ChatReadReceiptTimer => window['setTimeout'](callback, delay));
+		this.clearTimer = options.clearTimer ?? ((timer): void => {
+			window['clearTimeout'](timer);
+		});
 		this.lastSentAt = this.now() - this.minIntervalMs;
 	}
 
@@ -307,10 +348,11 @@ export class ChatAutoScrollState {
 	}
 
 	public canAutoFollowLatest(latestDistance: number): boolean {
-		return latestDistance <= this.latestThreshold && !this.detachedFromLatest;
+		return latestDistance <= this.latestThreshold && !this.detachedFromLatest && !this.isUserInteracting();
 	}
 
 	public shouldStickToLatest(latestDistance: number, stickThreshold: number): boolean {
+		if (this.isUserInteracting()) return false;
 		if (latestDistance <= stickThreshold && !this.detachedFromLatest) return true;
 		return this.wasAtLatest && latestDistance <= this.latestThreshold && !this.detachedFromLatest;
 	}

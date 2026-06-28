@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-FileCopyrightText: Universe Federation contributors
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -8,12 +8,9 @@ import { id } from './util/id.js';
 import { MiUser } from './User.js';
 import { MiChatRoom } from './ChatRoom.js';
 
-export const chatRoomMembershipRoles = ['member', 'manager'] as const;
-export type ChatRoomMembershipRole = typeof chatRoomMembershipRoles[number];
-
-@Entity('chat_room_membership')
+@Entity('chat_room_user_setting')
 @Index(['userId', 'roomId'], { unique: true })
-export class MiChatRoomMembership {
+export class MiChatRoomUserSetting {
 	@PrimaryColumn(id())
 	public id: string;
 
@@ -41,20 +38,19 @@ export class MiChatRoomMembership {
 	@JoinColumn()
 	public room: MiChatRoom | null;
 
-	@Column('boolean', {
-		default: false,
+	@Column('varchar', {
+		length: 128,
+		nullable: true,
 	})
-	public isMuted: boolean;
+	public nickname: string | null;
 
 	@Index()
 	@Column('varchar', {
-		length: 16,
-		default: 'member',
-	})
-	public role: ChatRoomMembershipRole;
-
-	@Column('timestamp with time zone', {
+		length: 80,
 		nullable: true,
 	})
-	public mutedUntil: Date | null;
+	public folder: string | null;
+
+	@Column('timestamp with time zone')
+	public updatedAt: Date;
 }

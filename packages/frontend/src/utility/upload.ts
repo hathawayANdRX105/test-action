@@ -30,6 +30,9 @@ const mimeTypeMap = {
 	'image/png': 'png',
 } as const;
 
+const UPLOAD_TIMEOUT_MS = 3 * 60 * 1000;
+const UPLOAD_STALL_TIMEOUT_MS = 75 * 1000;
+
 export function uploadFile(
 	file: File,
 	folder?: string | Misskey.entities.DriveFolder | null,
@@ -60,7 +63,10 @@ export function uploadFile(
 		progressValue: undefined,
 		img: previewUrl,
 	});
+	let removed = false;
 	const removeUpload = () => {
+		if (removed) return;
+		removed = true;
 		uploads.value = uploads.value.filter(x => x.id !== id);
 		window.URL.revokeObjectURL(previewUrl);
 	};
@@ -98,12 +104,58 @@ export function uploadFile(
 			if (_folder) formData.append('folderId', _folder);
 
 			const xhr = new XMLHttpRequest();
+			let settled = false;
+			let stallTimer: number | undefined;
+
+			const cleanup = () => {
+				if (stallTimer != null) {
+					window.clearTimeout(stallTimer);
+					stallTimer = undefined;
+				}
+				removeUpload();
+			};
+
+			const showNetworkFailure = () => {
+				alert({
+					type: 'error',
+					title: i18n.ts.failedToUpload,
+					text: `${i18n.ts.network}: ${i18n.ts.tryAgain}`,
+				});
+			};
+
+			const fail = (reason?: unknown, options: { showNetworkFailure?: boolean } = {}) => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				if (options.showNetworkFailure) {
+					showNetworkFailure();
+				}
+				reject(reason instanceof Error ? reason : new Error('Upload failed'));
+			};
+
+			const succeed = (driveFile: Misskey.entities.DriveFile) => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				resolve(driveFile);
+			};
+
+			const resetStallTimer = () => {
+				if (settled) return;
+				if (stallTimer != null) {
+					window.clearTimeout(stallTimer);
+				}
+				stallTimer = window.setTimeout(() => {
+					fail(new Error('Upload stalled'), { showNetworkFailure: true });
+					xhr.abort();
+				}, UPLOAD_STALL_TIMEOUT_MS);
+			};
+
 			xhr.open('POST', apiUrl + '/drive/files/create', true);
+			xhr.timeout = UPLOAD_TIMEOUT_MS;
 			xhr.onload = ((ev: ProgressEvent<XMLHttpRequest>) => {
 				if (xhr.status !== 200 || ev.target == null || ev.target.response == null) {
 					// TODO: 消すのではなくて(ネットワーク的なエラーなら)再送できるようにしたい
-					removeUpload();
-
 					if (xhr.status === 413) {
 						alert({
 							type: 'error',
@@ -139,24 +191,67 @@ export function uploadFile(
 						});
 					}
 
-					reject();
+					fail();
 					return;
 				}
 
-				const driveFile = JSON.parse(ev.target.response);
-
-				resolve(driveFile);
-
-				removeUpload();
+				try {
+					const driveFile = JSON.parse(ev.target.response);
+					succeed(driveFile);
+				} catch (err) {
+					fail(err, { showNetworkFailure: true });
+				}
 			}) as (ev: ProgressEvent<EventTarget>) => any;
 
+			xhr.onerror = () => {
+				fail(new Error('Upload network error'), { showNetworkFailure: true });
+			};
+
+			xhr.ontimeout = () => {
+				fail(new Error('Upload timed out'), { showNetworkFailure: true });
+			};
+
+			xhr.onabort = () => {
+				fail(new Error('Upload aborted'), { showNetworkFailure: true });
+			};
+
+			xhr.onreadystatechange = () => {
+				resetStallTimer();
+			};
+
+			xhr.onloadstart = () => {
+				resetStallTimer();
+			};
+
+			xhr.onprogress = () => {
+				resetStallTimer();
+			};
+
+			xhr.upload.onloadstart = () => {
+				resetStallTimer();
+			};
+
 			xhr.upload.onprogress = ev => {
+				resetStallTimer();
 				if (ev.lengthComputable) {
 					ctx.progressMax = ev.total;
 					ctx.progressValue = ev.loaded;
 				}
 			};
 
+			xhr.upload.onload = () => {
+				resetStallTimer();
+			};
+
+			xhr.upload.onerror = () => {
+				fail(new Error('Upload network error'), { showNetworkFailure: true });
+			};
+
+			xhr.upload.onabort = () => {
+				fail(new Error('Upload aborted'), { showNetworkFailure: true });
+			};
+
+			resetStallTimer();
 			xhr.send(formData);
 		})().catch(err => {
 			removeUpload();

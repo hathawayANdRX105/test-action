@@ -89,6 +89,8 @@ import { MiUserMemo } from '@/models/UserMemo.js';
 import { MiChatMessage } from '@/models/ChatMessage.js';
 import { MiChatRoom } from '@/models/ChatRoom.js';
 import { MiChatRoomMembership } from '@/models/ChatRoomMembership.js';
+import { MiChatRoomUserSetting } from '@/models/ChatRoomUserSetting.js';
+import { MiChatUserConversationSetting } from '@/models/ChatUserConversationSetting.js';
 import { MiChatRoomInvitation } from '@/models/ChatRoomInvitation.js';
 import { MiChatRoomUserMuting } from '@/models/ChatRoomUserMuting.js';
 import { MiChatRoomBanning } from '@/models/ChatRoomBanning.js';
@@ -311,6 +313,8 @@ export const entities = [
 	MiChatMessage,
 	MiChatRoom,
 	MiChatRoomMembership,
+	MiChatRoomUserSetting,
+	MiChatUserConversationSetting,
 	MiChatRoomInvitation,
 	MiChatRoomUserMuting,
 	MiChatRoomBanning,

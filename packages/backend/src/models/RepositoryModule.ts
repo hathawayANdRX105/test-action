@@ -87,6 +87,8 @@ import {
 	MiChatMessage,
 	MiChatRoom,
 	MiChatRoomMembership,
+	MiChatRoomUserSetting,
+	MiChatUserConversationSetting,
 	MiChatRoomInvitation,
 	MiChatRoomUserMuting,
 	MiChatRoomBanning,
@@ -581,6 +583,18 @@ const $chatRoomMembershipsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $chatRoomUserSettingsRepository: Provider = {
+	provide: DI.chatRoomUserSettingsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChatRoomUserSetting).extend(miRepository as MiRepository<MiChatRoomUserSetting>),
+	inject: [DI.db],
+};
+
+const $chatUserConversationSettingsRepository: Provider = {
+	provide: DI.chatUserConversationSettingsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChatUserConversationSetting).extend(miRepository as MiRepository<MiChatUserConversationSetting>),
+	inject: [DI.db],
+};
+
 const $chatRoomInvitationsRepository: Provider = {
 	provide: DI.chatRoomInvitationsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiChatRoomInvitation).extend(miRepository as MiRepository<MiChatRoomInvitation>),
@@ -722,6 +736,8 @@ export const repositoryProviders: Provider[] = [
 		$chatMessagesRepository,
 		$chatRoomsRepository,
 		$chatRoomMembershipsRepository,
+		$chatRoomUserSettingsRepository,
+		$chatUserConversationSettingsRepository,
 		$chatRoomInvitationsRepository,
 		$chatRoomUserMutingsRepository,
 		$chatRoomBanningsRepository,

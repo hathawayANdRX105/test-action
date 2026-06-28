@@ -48,6 +48,36 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #caption>{{ i18n.ts._chat.keywordMuteDurationDescription }}</template>
 		</MkInput>
 		<MkButton primary :disabled="!keywordChanged" @click="saveKeywordFilter">{{ i18n.ts.save }}</MkButton>
+
+		<div :class="$style.keywordMuteLog">
+			<div :class="$style.titleRow">
+				<div :class="$style.subTitle">
+					<i class="ti ti-microphone-off"></i>
+					<span>{{ i18n.ts.chatMuteLog }}</span>
+				</div>
+				<button v-if="muteLog.length > 0" class="_button" :class="$style.clearLogButton" @click="clearMuteLog">{{ i18n.ts.chatClearMuteLog }}</button>
+			</div>
+
+			<MkInput v-model="muteLogSearchQuery" type="search" :placeholder="i18n.ts.search" debounce :class="$style.inlineSearchInput" data-chat-keyword-mute-log-search>
+				<template #prefix><i class="ti ti-search"></i></template>
+			</MkInput>
+
+			<MkLoading v-if="muteLogFetching && muteLog.length === 0"/>
+			<div v-else-if="filteredMuteLog.length === 0" :class="$style.caption">{{ i18n.ts.chatNoMuteLog }}</div>
+			<div v-else :class="[$style.muteLogList, $style.previewScrollList]" data-chat-keyword-mute-log-list>
+				<div v-for="(log, i) in filteredMuteLog" :key="`${log.createdAt}-${i}`" :class="$style.muteLogRow">
+					<MkA v-if="log.user" :class="$style.muteLogUserLink" :to="`${userPage(log.user)}`">
+						<MkUserCardMini :user="log.user" :withChart="false"/>
+					</MkA>
+					<div v-else :class="$style.unknownUser">{{ i18n.ts.unknown }}</div>
+					<div :class="$style.muteLogMeta">
+						<span v-if="isStillMuted(log.mutedUntil)" :class="$style.muteLogStatus"><i class="ti ti-microphone-off"></i> {{ i18n.ts.chatStillMuted }}</span>
+						<span :class="$style.muteLogKeyword">{{ i18n.tsx.chatMutedByKeyword({ keyword: log.keyword }) }}</span>
+						<span :class="$style.muteLogTime">{{ dateString(log.createdAt) }}</span>
+					</div>
+				</div>
+			</div>
+		</div>
 	</div>
 
 	<div :class="$style.section">
@@ -69,7 +99,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.title">{{ i18n.ts._chat.banList }}</div>
 		<MkLoading v-if="bansFetching"/>
 		<div v-else-if="bans.length === 0" :class="$style.caption">{{ i18n.ts._chat.noBannedUsers }}</div>
-		<div v-else :class="$style.banList">
+		<div v-else :class="[$style.banList, $style.banScrollList]">
 			<div v-for="ban in bans" :key="ban.id" :class="$style.banRow">
 				<MkA :class="$style.banRowLink" :to="`${userPage(ban.user)}`">
 					<MkUserCardMini :user="ban.user" :withChart="false"/>
@@ -109,7 +139,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</template>
 	</div>
 
-	<div :class="$style.section">
+	<div v-if="canManageRoomRoles" :class="$style.section">
 		<div :class="$style.title">{{ i18n.ts._chat.autoDeleteMessages }}</div>
 		<MkSwitch v-model="retentionEnabled">
 			<template #label>{{ i18n.ts._chat.enableAutoDeleteMessages }}</template>
@@ -122,7 +152,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkButton primary :disabled="!canSaveRetention" @click="saveRetention">{{ i18n.ts.save }}</MkButton>
 	</div>
 
-	<div :class="[$style.section, $style.dangerSection]">
+	<div v-if="canManageRoomRoles" :class="[$style.section, $style.dangerSection]">
 		<div :class="$style.title">{{ i18n.ts._chat.deleteAllMessages }}</div>
 		<div :class="$style.caption">{{ i18n.ts._chat.deleteAllMessagesDescription }}</div>
 		<MkButton danger @click="deleteAllMessages"><i class="ti ti-trash"></i> {{ i18n.ts._chat.deleteAllMessages }}</MkButton>
@@ -144,9 +174,12 @@ import { userPage } from '@/filters/user.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { ensureSignin } from '@/i.js';
 
 const MIN_RETENTION_DAYS = 1;
 const MAX_RETENTION_DAYS = 3650;
+const $i = ensureSignin();
+type ChatMuteLogEntry = { user: Misskey.entities.UserLite | null; keyword: string; mutedUntil: string | null; createdAt: string; };
 
 const props = defineProps<{
 	room: Misskey.entities.ChatRoom;
@@ -174,6 +207,10 @@ const bansCanFetchMore = ref(false);
 const BANS_LIMIT = 30;
 const mutedMembers = ref<Misskey.entities.ChatRoomMembership[]>([]);
 const mutedFetching = ref(true);
+const muteLog = ref<ChatMuteLogEntry[]>([]);
+const muteLogFetching = ref(false);
+const muteLogSearchQuery = ref('');
+const canManageRoomRoles = computed(() => props.room.canManageRoomRoles === true || props.room.ownerId === $i?.id || $i?.isAdmin === true || $i?.isModerator === true);
 
 const normalizedRetentionDays = computed(() => {
 	if (!retentionEnabled.value) return null;
@@ -202,8 +239,14 @@ const keywordChanged = computed(() => {
 	return keywordsDiffer || mute !== (props.room.keywordMuteSeconds ?? 0);
 });
 const maxDailyCount = computed(() => Math.max(1, ...(stats.value?.daily.map(item => item.count) ?? [0])));
+const normalizedMuteLogSearchQuery = computed(() => muteLogSearchQuery.value.trim().normalize('NFC').toLowerCase());
+const filteredMuteLog = computed(() => {
+	const query = normalizedMuteLogSearchQuery.value;
+	if (query === '') return muteLog.value;
+	return muteLog.value.filter(log => muteLogMatchesSearch(log, query));
+});
 
-watch(() => props.room, () => {
+watch(() => props.room, (room, oldRoom) => {
 	retentionEnabled.value = props.room.messageRetentionDays != null;
 	retentionDays.value = props.room.messageRetentionDays ?? 30;
 	isSilenced.value = props.room.isSilenced;
@@ -213,12 +256,19 @@ watch(() => props.room, () => {
 	announcement.value = props.room.announcement;
 	announcementPinned.value = props.room.announcementPinned;
 	loadStats();
+	if (oldRoom != null && oldRoom.id !== room.id) {
+		muteLogSearchQuery.value = '';
+		loadBans();
+		loadMutedMembers();
+		loadMuteLog();
+	}
 });
 
 onMounted(() => {
 	loadStats();
 	loadBans();
 	loadMutedMembers();
+	loadMuteLog();
 });
 
 function isMutedNow(membership: Misskey.entities.ChatRoomMembership) {
@@ -229,6 +279,44 @@ function mutedUntilText(membership: Misskey.entities.ChatRoomMembership) {
 	if (membership.mutedUntil == null) return '';
 	if (new Date(membership.mutedUntil).getFullYear() >= 9999) return i18n.ts._chat.mutedForever;
 	return i18n.tsx._chat.mutedUntil({ time: dateString(membership.mutedUntil) });
+}
+
+function isStillMuted(mutedUntil: string | null): boolean {
+	if (mutedUntil == null) return false;
+	return new Date(mutedUntil).getTime() > Date.now();
+}
+
+function muteLogMatchesSearch(log: ChatMuteLogEntry, query: string): boolean {
+	const user = log.user;
+	const userHandle = user == null ? '' : user.host == null ? `@${user.username}` : `@${user.username}@${user.host}`;
+	return [
+		log.keyword,
+		user?.id ?? '',
+		user?.username ?? '',
+		user?.name ?? '',
+		userHandle,
+	].some(value => value.toLowerCase().includes(query));
+}
+
+async function loadMuteLog() {
+	muteLogFetching.value = true;
+	try {
+		muteLog.value = await misskeyApi('chat/rooms/mute-log', {
+			roomId: props.room.id,
+			limit: 100,
+		});
+	} catch {
+		muteLog.value = [];
+	} finally {
+		muteLogFetching.value = false;
+	}
+}
+
+async function clearMuteLog() {
+	const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts.chatMuteLogClearConfirm });
+	if (canceled) return;
+	await os.apiWithDialog('chat/rooms/clear-mute-log', { roomId: props.room.id });
+	muteLog.value = [];
 }
 
 async function loadMutedMembers() {
@@ -397,9 +485,57 @@ async function deleteAllMessages() {
 	border-color: color(from var(--MI_THEME-error) srgb r g b / 0.35);
 }
 
-.title {
-	font-weight: 700;
-}
+	.title {
+		font-weight: 700;
+	}
+
+	.titleRow {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		min-width: 0;
+	}
+
+	.subTitle {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		color: color(from var(--MI_THEME-fg) srgb r g b / 0.78);
+		font-size: 0.9em;
+		font-weight: 700;
+
+		> span {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	.keywordMuteLog {
+		display: grid;
+		gap: 10px;
+		min-width: 0;
+		padding-top: 4px;
+	}
+
+	.inlineSearchInput {
+		min-width: 0;
+	}
+
+	.clearLogButton {
+		flex: 0 0 auto;
+		padding: 2px 10px;
+		border: solid 1px color(from var(--MI_THEME-error) srgb r g b / 0.5);
+		border-radius: 999px;
+		color: var(--MI_THEME-error);
+		font-size: 0.85em;
+
+		&:hover {
+			background: color(from var(--MI_THEME-error) srgb r g b / 0.1);
+		}
+	}
 
 .loading {
 	display: grid;
@@ -480,16 +616,100 @@ async function deleteAllMessages() {
 	background: linear-gradient(180deg, var(--MI_THEME-accent), color(from var(--MI_THEME-accent) srgb r g b / 0.62));
 }
 
-.caption {
-	color: color(from var(--MI_THEME-fg) srgb r g b / 0.75);
-	font-size: 0.9em;
-}
+	.caption {
+		color: color(from var(--MI_THEME-fg) srgb r g b / 0.75);
+		font-size: 0.9em;
+	}
+
+	.previewScrollList {
+		max-height: min(360px, 44dvh);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding-right: 4px;
+		scrollbar-gutter: stable;
+	}
+
+	.muteLogList {
+		display: grid;
+		gap: 10px;
+		min-width: 0;
+	}
+
+	.muteLogRow {
+		display: grid;
+		gap: 6px;
+		min-width: 0;
+		padding: 10px;
+		border-radius: var(--MI-radius-sm);
+		background: color(from var(--MI_THEME-bg) srgb r g b / 0.42);
+	}
+
+	.muteLogUserLink {
+		display: block;
+		min-width: 0;
+
+		&:hover {
+			text-decoration: none;
+		}
+	}
+
+	.unknownUser {
+		overflow: hidden;
+		color: color(from var(--MI_THEME-fg) srgb r g b / 0.7);
+		font-size: 0.9em;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.muteLogMeta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 10px;
+		min-width: 0;
+		color: color(from var(--MI_THEME-fg) srgb r g b / 0.72);
+		font-size: 0.84em;
+	}
+
+	.muteLogStatus {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		flex: 0 0 auto;
+		padding: 2px 8px;
+		border-radius: 999px;
+		background: color(from var(--MI_THEME-warn) srgb r g b / 0.14);
+		color: var(--MI_THEME-warn);
+		font-weight: 700;
+		white-space: nowrap;
+	}
+
+	.muteLogKeyword {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.muteLogTime {
+		margin-left: auto;
+		color: color(from var(--MI_THEME-fg) srgb r g b / 0.58);
+		white-space: nowrap;
+	}
 
 .banList {
 	display: grid;
 	gap: 10px;
 	min-width: 0;
 }
+
+	.banScrollList {
+		max-height: min(360px, 48dvh);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding-right: 4px;
+		scrollbar-gutter: stable;
+	}
 
 .banRow {
 	display: flex;
@@ -518,17 +738,27 @@ async function deleteAllMessages() {
 	white-space: nowrap;
 }
 
-@media (max-width: 600px) {
-	.statsGrid {
-		grid-template-columns: 1fr;
-	}
+	@media (max-width: 600px) {
+		.titleRow {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+
+		.statsGrid {
+			grid-template-columns: 1fr;
+		}
 
 	.chart {
 		gap: 4px;
 	}
 
-	.barWrap > span {
-		font-size: 0.65em;
+		.barWrap > span {
+			font-size: 0.65em;
+		}
+
+		.muteLogTime {
+			margin-left: 0;
+			width: 100%;
+		}
 	}
-}
 </style>

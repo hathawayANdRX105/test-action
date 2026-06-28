@@ -3,16 +3,23 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/// <reference types="vite/client" />
+
 import { afterEach, assert, describe, test, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/vue';
+import { nextTick } from 'vue';
+import createToUserEndpointSource from '../../backend/src/server/api/endpoints/chat/messages/create-to-user.ts?raw';
+import usersRelationEndpointSource from '../../backend/src/server/api/endpoints/users/relation.ts?raw';
+import userFollowingServiceSource from '../../backend/src/core/UserFollowingService.ts?raw';
 import type { RenderResult } from '@testing-library/vue';
 import type * as Misskey from 'misskey-js';
-import { nextTick } from 'vue';
 import XForm from '@/pages/chat/room.form.vue';
+import formSource from '@/pages/chat/room.form.vue?raw';
 import { misskeyApi } from '@/utility/misskey-api.js';
-import { selectFile } from '@/utility/select-file.js';
+import { selectFiles } from '@/utility/select-file.js';
+import { uploadFile } from '@/utility/upload.js';
 
-const { me, preferState } = vi.hoisted(() => ({
+const { me, preferState, uploadsRef } = vi.hoisted(() => ({
 	me: {
 		id: 'me',
 		username: 'me',
@@ -23,6 +30,9 @@ const { me, preferState } = vi.hoisted(() => ({
 	preferState: {
 		'chat.sendOnEnter': true,
 		uploadFolder: null,
+	},
+	uploadsRef: {
+		value: [],
 	},
 }));
 
@@ -50,6 +60,18 @@ vi.mock('@/i18n.js', () => ({
 			reply: 'Reply',
 			selectFile: 'Select file',
 			send: 'Send',
+			uploading: 'Uploading',
+			_chat: {
+				blockedByKeyword: 'Blocked by keyword',
+				cannotChatWithTheUser: 'Cannot start a chat with this user',
+				cannotChatWithTheUser_description: 'Chat is unavailable.',
+				slowMode: 'Slow mode',
+			},
+		},
+		tsx: {
+			_chat: {
+				slowModeActive: ({ n }: { n: number }) => `Slow mode ${n}`,
+			},
 		},
 	},
 }));
@@ -76,11 +98,12 @@ vi.mock('@/utility/emoji-picker.js', () => ({
 }));
 
 vi.mock('@/utility/select-file.js', () => ({
-	selectFile: vi.fn(),
+	selectFiles: vi.fn(),
 }));
 
 vi.mock('@/utility/upload.js', () => ({
 	uploadFile: vi.fn(),
+	uploads: uploadsRef,
 }));
 
 function deferred<T>() {
@@ -163,6 +186,38 @@ describe('chat room form', () => {
 		vi.clearAllMocks();
 		localStorage.clear();
 		preferState['chat.sendOnEnter'] = true;
+		uploadsRef.value = [];
+	});
+
+	test('keeps long attachment names from widening the mobile composer', () => {
+		assert.match(formSource, /\.root\s*\{[\s\S]*min-width:\s*0;[\s\S]*max-width:\s*100%;/);
+		assert.match(formSource, /\.composer\s*\{[\s\S]*min-width:\s*0;[\s\S]*max-width:\s*100%;[\s\S]*box-sizing:\s*border-box;/);
+		assert.match(formSource, /\.files\s*\{[\s\S]*min-width:\s*0;[\s\S]*max-width:\s*100%;[\s\S]*overflow-x:\s*hidden;/);
+		assert.match(formSource, /\.file,\s*\.uploadingFile\s*\{[\s\S]*min-width:\s*0;[\s\S]*box-sizing:\s*border-box;/);
+		assert.match(formSource, /\.file\s*\{[\s\S]*flex:\s*0 1 min\(420px,\s*100%\);[\s\S]*width:\s*auto;/);
+		assert.match(formSource, /\.file > \.fileName\s*\{[\s\S]*flex:\s*1 1 auto;/);
+		assert.match(formSource, /\.fileName\s*\{[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/);
+	});
+
+	test('maps direct-message permission failures to user-facing API errors instead of 500s', () => {
+		assert.match(createToUserEndpointSource, /recipientCannotChat: \{[\s\S]*code: 'RECIPIENT_CANNOT_CHAT'[\s\S]*kind: 'permission'/);
+		assert.match(createToUserEndpointSource, /recipientChatUnavailable: \{[\s\S]*code: 'RECIPIENT_CHAT_UNAVAILABLE'[\s\S]*kind: 'permission'/);
+		assert.match(createToUserEndpointSource, /chatUnavailable: \{[\s\S]*code: 'CHAT_UNAVAILABLE'[\s\S]*kind: 'permission'/);
+		assert.match(createToUserEndpointSource, /err\.message === 'recipient is cannot chat \(policy\)'[\s\S]*meta\.errors\.recipientChatUnavailable/);
+		assert.match(createToUserEndpointSource, /err\.message\.startsWith\('recipient is cannot chat \('/);
+		assert.match(createToUserEndpointSource, /throw new ApiError\(meta\.errors\.recipientCannotChat/);
+		assert.match(createToUserEndpointSource, /err\.message === 'blocked'[\s\S]*meta\.errors\.youHaveBeenBlocked/);
+		assert.match(formSource, /code === 'RECIPIENT_CANNOT_CHAT' \|\| code === 'RECIPIENT_CHAT_UNAVAILABLE'/);
+		assert.match(formSource, /title: i18n\.ts\._chat\.cannotChatWithTheUser/);
+	});
+
+	test('keeps user relation responses keyed by the requested target and verifies mutual follows directly', () => {
+		assert.match(usersRelationEndpointSource, /id: rel\.targetUserId/);
+		assert.strictEqual(/id: rel\.userId/.test(usersRelationEndpointSource), false);
+		assert.match(userFollowingServiceSource, /public async isMutual\(aUserId: MiUser\['id'\], bUserId: MiUser\['id'\]\): Promise<boolean> \{[\s\S]*followingsRepository\.createQueryBuilder\('following'\)/);
+		assert.match(userFollowingServiceSource, /following\.followerId = :aUserId[\s\S]*following\.followeeId = :bUserId/);
+		assert.match(userFollowingServiceSource, /following\.followerId = :bUserId[\s\S]*following\.followeeId = :aUserId/);
+		assert.match(userFollowingServiceSource, /return count >= 2;/);
 	});
 
 	test('clears the composer immediately and preserves newly typed text after send resolves', async () => {
@@ -216,8 +271,37 @@ describe('chat room form', () => {
 		await flushPromises();
 	});
 
+	test('does not send while IME composition is confirming text with Enter', async () => {
+		preferState['chat.sendOnEnter'] = true;
+		const request = deferred<Misskey.entities.ChatMessageLite>();
+		vi.mocked(misskeyApi).mockReturnValueOnce(request.promise as ReturnType<typeof misskeyApi>);
+		const form = renderForm();
+		const textarea = form.container.querySelector<HTMLTextAreaElement>('textarea');
+		assert.exists(textarea);
+
+		await fireEvent.update(textarea, 'pin');
+		await fireEvent.compositionStart(textarea);
+		await fireEvent.keyDown(textarea, { key: 'Enter', isComposing: true });
+		await fireEvent.keyDown(textarea, { key: 'Enter', keyCode: 229 });
+		await fireEvent.compositionEnd(textarea);
+		await fireEvent.keyDown(textarea, { key: 'Enter' });
+
+		assert.strictEqual(vi.mocked(misskeyApi).mock.calls.length, 0);
+		assert.strictEqual(textarea.value, 'pin');
+
+		await fireEvent.keyUp(textarea, { key: 'Enter' });
+		await fireEvent.keyDown(textarea, { key: 'Enter' });
+
+		assert.strictEqual(vi.mocked(misskeyApi).mock.calls.length, 1);
+		const createPayload = vi.mocked(misskeyApi).mock.calls[0]![1] as { text?: string };
+		assert.strictEqual(createPayload.text, 'pin');
+
+		request.resolve(createMessage('pin'));
+		await flushPromises();
+	});
+
 	test('shows an explicit remove button for an attached file', async () => {
-		vi.mocked(selectFile).mockResolvedValueOnce(createDriveFile('photo.png'));
+		vi.mocked(selectFiles).mockResolvedValueOnce([createDriveFile('photo.png')]);
 		const form = renderForm();
 
 		await fireEvent.click(form.getByTitle('Attach file'));
@@ -232,5 +316,68 @@ describe('chat room form', () => {
 
 		assert.strictEqual(form.container.querySelector('[data-chat-attached-file]'), null);
 		assert.strictEqual(form.queryByLabelText('Remove attachment'), null);
+	});
+
+	test('sends multiple attached files as ordered chat messages', async () => {
+		const firstFile = createDriveFile('one.png');
+		const secondFile = createDriveFile('two.png');
+		vi.mocked(selectFiles).mockResolvedValueOnce([firstFile, secondFile]);
+		vi.mocked(misskeyApi)
+			.mockResolvedValueOnce(createMessage('one') as never)
+			.mockResolvedValueOnce(createMessage('two') as never);
+		const onSending = vi.fn();
+		const onSent = vi.fn();
+		const form = renderForm({ onSending, onSent });
+		const textarea = form.container.querySelector<HTMLTextAreaElement>('textarea');
+		const sendButton = Array.from(form.container.querySelectorAll<HTMLButtonElement>('button')).at(-1);
+		assert.exists(textarea);
+		assert.exists(sendButton);
+
+		await fireEvent.click(form.getByTitle('Attach file'));
+		await flushPromises();
+		await fireEvent.update(textarea, 'album');
+		await fireEvent.click(sendButton);
+		await flushPromises();
+
+		assert.strictEqual(vi.mocked(misskeyApi).mock.calls.length, 2);
+		assert.strictEqual((vi.mocked(misskeyApi).mock.calls[0]![1] as { text?: string; fileId?: string }).text, 'album');
+		assert.strictEqual((vi.mocked(misskeyApi).mock.calls[0]![1] as { text?: string; fileId?: string }).fileId, firstFile.id);
+		assert.strictEqual((vi.mocked(misskeyApi).mock.calls[1]![1] as { text?: string; fileId?: string }).text, undefined);
+		assert.strictEqual((vi.mocked(misskeyApi).mock.calls[1]![1] as { text?: string; fileId?: string }).fileId, secondFile.id);
+		assert.strictEqual(onSending.mock.calls.length, 2);
+		assert.strictEqual(onSent.mock.calls.length, 2);
+	});
+
+	test('uploads every pasted file and attaches each completed upload', async () => {
+		const firstUpload = deferred<Misskey.entities.DriveFile>();
+		const secondUpload = deferred<Misskey.entities.DriveFile>();
+		vi.mocked(uploadFile)
+			.mockReturnValueOnce(Object.assign(firstUpload.promise, { id: 'upload-1' }) as ReturnType<typeof uploadFile>)
+			.mockReturnValueOnce(Object.assign(secondUpload.promise, { id: 'upload-2' }) as ReturnType<typeof uploadFile>);
+		const form = renderForm();
+		const textarea = form.container.querySelector<HTMLTextAreaElement>('textarea');
+		assert.exists(textarea);
+		const firstPastedFile = new File(['one'], 'one.png', { type: 'image/png', lastModified: 1000 });
+		const secondPastedFile = new File(['two'], 'two.png', { type: 'image/png', lastModified: 2000 });
+
+		await fireEvent.paste(textarea, {
+			clipboardData: {
+				items: [
+					{ kind: 'file', getAsFile: () => firstPastedFile },
+					{ kind: 'file', getAsFile: () => secondPastedFile },
+				],
+			},
+		});
+		await flushPromises();
+
+		assert.strictEqual(vi.mocked(uploadFile).mock.calls.length, 2);
+		firstUpload.resolve(createDriveFile('one.png'));
+		secondUpload.resolve(createDriveFile('two.png'));
+		await flushPromises();
+
+		const attachedFiles = form.container.querySelectorAll('[data-chat-attached-file]');
+		assert.strictEqual(attachedFiles.length, 2);
+		assert.ok(attachedFiles[0]?.textContent?.includes('one.png'));
+		assert.ok(attachedFiles[1]?.textContent?.includes('two.png'));
 	});
 });

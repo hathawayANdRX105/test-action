@@ -65,6 +65,22 @@ export const packedChatRoomSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		canModerateRoom: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		canManageRoomRoles: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		canEditRoomProfile: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		canDeleteRoom: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		messageRetentionDays: {
 			type: 'integer',
 			optional: true, nullable: true,
@@ -100,6 +116,14 @@ export const packedChatRoomSchema = {
 		myMutedUntil: {
 			type: 'string',
 			format: 'date-time',
+			optional: true, nullable: true,
+		},
+		myNickname: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		myFolder: {
+			type: 'string',
 			optional: true, nullable: true,
 		},
 	},

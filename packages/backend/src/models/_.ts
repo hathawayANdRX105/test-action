@@ -30,6 +30,8 @@ import { MiNoteRecommendation } from '@/models/NoteRecommendation.js';
 import { MiNoteSentiment } from '@/models/NoteSentiment.js';
 import { MiChatRoomInvitation } from '@/models/ChatRoomInvitation.js';
 import { MiChatRoomMembership } from '@/models/ChatRoomMembership.js';
+import { MiChatRoomUserSetting } from '@/models/ChatRoomUserSetting.js';
+import { MiChatUserConversationSetting } from '@/models/ChatUserConversationSetting.js';
 import { MiChatRoomUserMuting } from '@/models/ChatRoomUserMuting.js';
 import { MiClip } from '@/models/Clip.js';
 import { MiClipFavorite } from '@/models/ClipFavorite.js';
@@ -238,6 +240,8 @@ export {
 	MiChatMessage,
 	MiChatRoom,
 	MiChatRoomMembership,
+	MiChatRoomUserSetting,
+	MiChatUserConversationSetting,
 	MiChatRoomInvitation,
 	MiChatRoomUserMuting,
 	MiChatRoomBanning,
@@ -333,6 +337,8 @@ export type UserMemoRepository = UserMemosRepository;
 export type ChatMessagesRepository = Repository<MiChatMessage> & MiRepository<MiChatMessage>;
 export type ChatRoomsRepository = Repository<MiChatRoom> & MiRepository<MiChatRoom>;
 export type ChatRoomMembershipsRepository = Repository<MiChatRoomMembership> & MiRepository<MiChatRoomMembership>;
+export type ChatRoomUserSettingsRepository = Repository<MiChatRoomUserSetting> & MiRepository<MiChatRoomUserSetting>;
+export type ChatUserConversationSettingsRepository = Repository<MiChatUserConversationSetting> & MiRepository<MiChatUserConversationSetting>;
 export type ChatRoomInvitationsRepository = Repository<MiChatRoomInvitation> & MiRepository<MiChatRoomInvitation>;
 export type ChatRoomUserMutingsRepository = Repository<MiChatRoomUserMuting> & MiRepository<MiChatRoomUserMuting>;
 export type ChatRoomBanningsRepository = Repository<MiChatRoomBanning> & MiRepository<MiChatRoomBanning>;

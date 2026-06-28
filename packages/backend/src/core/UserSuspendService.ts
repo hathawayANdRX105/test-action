@@ -5,7 +5,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { Not, IsNull, type DataSource } from 'typeorm';
-import type { MiUser, FollowingsRepository, UsersRepository } from '@/models/_.js';
+import type { MiUser, ChatRoomBanningsRepository, FollowingsRepository, UsersRepository } from '@/models/_.js';
 import { QueueService } from '@/core/QueueService.js';
 import { DI } from '@/di-symbols.js';
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
@@ -25,6 +25,9 @@ export class UserSuspendService {
 		@Inject(DI.followingsRepository)
 		private followingsRepository: FollowingsRepository,
 
+		@Inject(DI.chatRoomBanningsRepository)
+		private chatRoomBanningsRepository: ChatRoomBanningsRepository,
+
 		@Inject(DI.db)
 		private db: DataSource,
 
@@ -42,6 +45,8 @@ export class UserSuspendService {
 		await this.usersRepository.update(user.id, {
 			isSuspended: true,
 		});
+
+		await this.chatRoomBanningsRepository.delete({ userId: user.id });
 
 		await this.internalEventService.emit(user.host == null ? 'localUserUpdated' : 'remoteUserUpdated', { id: user.id });
 

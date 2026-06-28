@@ -10,13 +10,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.summaryTitle">{{ i18n.ts._chat.members }}</div>
 			<div :class="$style.summarySub">{{ room.memberCount }} / {{ room.memberLimit }}</div>
 		</div>
-		<MkButton v-if="canManage" primary rounded @click="emit('inviteUser')"><i class="ti ti-plus"></i> {{ i18n.ts._chat.inviteUser }}</MkButton>
+		<MkButton v-if="canModerateRoom" primary rounded @click="emit('inviteUser')"><i class="ti ti-plus"></i> {{ i18n.ts._chat.inviteUser }}</MkButton>
 	</div>
 
-	<div :class="$style.section">
+	<div :class="$style.memberTools" data-chat-room-members-search>
+		<MkInput v-model="memberSearchQuery" type="search" :placeholder="i18n.ts.searchUser" debounce :class="$style.searchInput">
+			<template #prefix><i class="ti ti-search"></i></template>
+		</MkInput>
+		<button v-if="memberSearchActive" class="_button" :class="$style.clearSearchButton" :title="i18n.ts.reset" :aria-label="i18n.ts.reset" @click="memberSearchQuery = ''">
+			<i class="ti ti-x"></i>
+		</button>
+	</div>
+
+	<div v-if="showOwnerSection" :class="$style.section">
 		<div :class="$style.sectionTitle">
 			<i class="ti ti-crown"></i>
-			<span>{{ i18n.ts.administrator }}</span>
+			<span>{{ i18n.ts._chat.roomOwner }}</span>
 		</div>
 		<MkA :class="$style.userLink" :to="`${userPage(room.owner)}`">
 			<MkUserCardMini :user="room.owner" :withChart="false"/>
@@ -24,16 +33,55 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div :class="$style.section">
-		<div :class="$style.sectionTitle">
-			<i class="ti ti-users"></i>
-			<span>{{ i18n.ts._chat.members }}</span>
+		<div :class="$style.sectionHeader">
+			<div :class="$style.sectionTitle">
+				<i class="ti ti-shield-check"></i>
+				<span>{{ i18n.ts._chat.roomManagers }}</span>
+			</div>
+			<span :class="$style.sectionCount">{{ managerMemberships.length }}</span>
 		</div>
 
 		<MkLoading v-if="membersFetching"/>
 		<MkError v-else-if="membersError" @retry="initMembers"/>
-		<div v-else-if="visibleMemberships.length === 0" :class="$style.empty">{{ i18n.ts.noUsers }}</div>
-		<div v-else :class="$style.userList">
-			<div v-for="membership in visibleMemberships" :key="membership.id" :class="$style.memberRow">
+		<div v-else-if="managerMemberships.length === 0" :class="$style.empty">{{ memberSearchActive ? i18n.ts.noUsers : i18n.ts._chat.noRoomManagers }}</div>
+		<div v-else :class="[$style.userList, $style.scrollList]" data-chat-room-members-scroll-list>
+			<div v-for="membership in managerMemberships" :key="membership.id" :class="$style.memberRow">
+				<MkA :class="[$style.userLink, $style.memberRowLink]" :to="`${userPage(membership.user!)}`">
+					<MkUserCardMini :user="membership.user!" :withChart="false"/>
+				</MkA>
+				<div :class="$style.roleBadge">
+					<i class="ti ti-shield-check"></i>
+					<span>{{ i18n.ts._chat.roomManager }}</span>
+				</div>
+				<div v-if="isMemberMuted(membership)" :class="$style.mutedBadge" :title="mutedBadgeText(membership)">
+					<i class="ti ti-microphone-off"></i>
+					<span>{{ mutedBadgeText(membership) }}</span>
+				</div>
+				<MkButton v-if="canChangeMemberRole(membership)" rounded small :class="$style.roleActionButton" @click="updateMemberRole(membership, 'member')">
+					<i class="ti ti-shield-x"></i>
+					<span>{{ i18n.ts._chat.unsetRoomManager }}</span>
+				</MkButton>
+				<button v-if="canOpenMemberMenu(membership)" class="_button" :class="$style.memberMenuButton" :title="i18n.ts.menu" :aria-label="i18n.ts.menu" @click="openMemberMenu(membership, $event)">
+					<i class="ti ti-dots"></i>
+				</button>
+			</div>
+		</div>
+	</div>
+
+	<div :class="$style.section">
+		<div :class="$style.sectionHeader">
+			<div :class="$style.sectionTitle">
+				<i class="ti ti-users"></i>
+				<span>{{ i18n.ts._chat.members }}</span>
+			</div>
+			<span :class="$style.sectionCount">{{ memberMemberships.length }}</span>
+		</div>
+
+		<MkLoading v-if="membersFetching"/>
+		<MkError v-else-if="membersError" @retry="initMembers"/>
+		<div v-else-if="memberMemberships.length === 0" :class="$style.empty">{{ i18n.ts.noUsers }}</div>
+		<div v-else :class="[$style.userList, $style.scrollList]" data-chat-room-members-scroll-list>
+			<div v-for="membership in memberMemberships" :key="membership.id" :class="$style.memberRow">
 				<MkA :class="[$style.userLink, $style.memberRowLink]" :to="`${userPage(membership.user!)}`">
 					<MkUserCardMini :user="membership.user!" :withChart="false"/>
 				</MkA>
@@ -41,7 +89,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<i class="ti ti-microphone-off"></i>
 					<span>{{ mutedBadgeText(membership) }}</span>
 				</div>
-				<button v-if="canManageMember(membership)" class="_button" :class="$style.memberMenuButton" :title="i18n.ts.menu" :aria-label="i18n.ts.menu" @click="openMemberMenu(membership, $event)">
+				<MkButton v-if="canChangeMemberRole(membership)" primary rounded small :class="$style.roleActionButton" @click="updateMemberRole(membership, 'manager')">
+					<i class="ti ti-shield-check"></i>
+					<span>{{ i18n.ts._chat.setRoomManager }}</span>
+				</MkButton>
+				<button v-if="canOpenMemberMenu(membership)" class="_button" :class="$style.memberMenuButton" :title="i18n.ts.menu" :aria-label="i18n.ts.menu" @click="openMemberMenu(membership, $event)">
 					<i class="ti ti-dots"></i>
 				</button>
 			</div>
@@ -50,7 +102,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkButton v-if="membersCanFetchMore" rounded :wait="membersMoreFetching" :class="$style.moreButton" @click="fetchMoreMembers">{{ i18n.ts.loadMore }}</MkButton>
 	</div>
 
-	<div v-if="canManage" :class="$style.section">
+	<div v-if="canModerateRoom" :class="$style.section">
 		<div :class="$style.sectionTitle">
 			<i class="ti ti-mail-forward"></i>
 			<span>{{ i18n.ts._chat.sentInvitations }}</span>
@@ -68,28 +120,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkButton v-if="invitationsCanFetchMore" rounded :wait="invitationsMoreFetching" :class="$style.moreButton" @click="fetchMoreInvitations">{{ i18n.ts.loadMore }}</MkButton>
 	</div>
 
-	<div v-if="canManage" :class="$style.section">
-		<div :class="$style.sectionTitle">
-			<i class="ti ti-microphone-off"></i>
-			<span>{{ i18n.ts.chatMuteLog }}</span>
-			<button v-if="muteLog.length > 0" class="_button" :class="$style.clearLogButton" @click="clearMuteLog">{{ i18n.ts.chatClearMuteLog }}</button>
-		</div>
-
-		<MkLoading v-if="muteLogFetching && muteLog.length === 0"/>
-		<div v-else-if="muteLog.length === 0" :class="$style.empty">{{ i18n.ts.chatNoMuteLog }}</div>
-		<div v-else :class="$style.userList">
-			<div v-for="(log, i) in muteLog" :key="i" :class="$style.muteLogRow">
-				<MkA v-if="log.user" :class="[$style.userLink, $style.memberRowLink]" :to="`${userPage(log.user)}`">
-					<MkUserCardMini :user="log.user" :withChart="false"/>
-				</MkA>
-				<div :class="$style.muteLogMeta">
-					<span v-if="isStillMuted(log.mutedUntil)" :class="$style.mutedBadge"><i class="ti ti-microphone-off"></i> {{ i18n.ts.chatStillMuted }}</span>
-					<span>{{ i18n.tsx.chatMutedByKeyword({ keyword: log.keyword }) }}</span>
-					<span :class="$style.muteLogTime">{{ dateString(log.createdAt) }}</span>
-				</div>
-			</div>
-		</div>
-	</div>
 </div>
 </template>
 
@@ -98,6 +128,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { MenuItem } from '@/types/menu.js';
 import MkButton from '@/components/MkButton.vue';
+import MkInput from '@/components/MkInput.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -110,6 +141,7 @@ import { dateString } from '@/filters/date.js';
 
 const $i = ensureSignin();
 const LIMIT = 30;
+const MANAGER_LIMIT = 100;
 
 const props = defineProps<{
 	room: Misskey.entities.ChatRoom;
@@ -124,13 +156,30 @@ const isOwner = computed(() => {
 	return props.room.ownerId === $i.id;
 });
 
-// 房主或管理员/审核员都可邀请并查看邀请列表（room.canManage 已含 owner/moderator）。
-const canManage = computed(() => {
-	return (props.room.canManage ?? false) || isOwner.value;
-});
+const canModerateRoom = computed(() => (props.room.canModerateRoom ?? props.room.canManage ?? false) || isOwner.value);
+const canManageRoomRoles = computed(() => (props.room.canManageRoomRoles ?? false) || isOwner.value);
+const memberSearchQuery = ref('');
+const normalizedMemberSearchQuery = computed(() => memberSearchQuery.value.trim().normalize('NFC'));
+const memberSearchActive = computed(() => normalizedMemberSearchQuery.value !== '');
 
 // user が解決できない(削除/凍結など)メンバーは表示しない。ページングは元のmembershipsを使う
-const visibleMemberships = computed(() => memberships.value.filter(m => m.user != null));
+const visibleMemberships = computed(() => memberships.value
+	.filter(m => m.user != null)
+	.filter(m => userMatchesMemberSearch(m.user!)));
+const managerMemberships = computed(() => visibleMemberships.value.filter(m => m.role === 'manager'));
+const memberMemberships = computed(() => visibleMemberships.value.filter(m => m.role !== 'manager'));
+const showOwnerSection = computed(() => !memberSearchActive.value || userMatchesMemberSearch(props.room.owner));
+
+function userMatchesMemberSearch(user: Misskey.entities.UserLite): boolean {
+	const query = normalizedMemberSearchQuery.value.toLowerCase();
+	if (query === '') return true;
+	return [
+		user.id,
+		user.username,
+		user.name ?? '',
+		user.host == null ? `@${user.username}` : `@${user.username}@${user.host}`,
+	].some(value => value.toLowerCase().includes(query));
+}
 
 function isPermanentMute(mutedUntil: string) {
 	return new Date(mutedUntil).getFullYear() >= 9999;
@@ -146,8 +195,38 @@ function mutedBadgeText(membership: Misskey.entities.ChatRoomMembership) {
 	return i18n.tsx._chat.mutedUntil({ time: dateString(membership.mutedUntil) });
 }
 
-function canManageMember(membership: Misskey.entities.ChatRoomMembership) {
-	return (props.room.canManage ?? false) && membership.userId !== props.room.ownerId && membership.userId !== $i.id;
+function canModerateMember(membership: Misskey.entities.ChatRoomMembership) {
+	if (!canModerateRoom.value) return false;
+	if (membership.userId === props.room.ownerId || membership.userId === $i.id) return false;
+	if (membership.user?.isAdmin === true || membership.user?.isModerator === true) return false;
+	if (membership.role === 'manager' && !canManageRoomRoles.value) return false;
+	return true;
+}
+
+function canChangeMemberRole(membership: Misskey.entities.ChatRoomMembership) {
+	if (!canManageRoomRoles.value) return false;
+	if (membership.userId === props.room.ownerId || membership.userId === $i.id) return false;
+	if (membership.user?.isAdmin === true || membership.user?.isModerator === true) return false;
+	return true;
+}
+
+function canOpenMemberMenu(membership: Misskey.entities.ChatRoomMembership) {
+	return canModerateMember(membership);
+}
+
+async function updateMemberRole(membership: Misskey.entities.ChatRoomMembership, role: 'member' | 'manager') {
+	const updated = await os.apiWithDialog('chat/rooms/members/update-role', {
+		roomId: props.room.id,
+		userId: membership.userId,
+		role,
+	});
+	const index = memberships.value.findIndex(m => m.id === membership.id);
+	if (index !== -1) {
+		memberships.value[index] = {
+			...memberships.value[index],
+			...updated,
+		};
+	}
 }
 
 async function kickMember(membership: Misskey.entities.ChatRoomMembership, ban: boolean) {
@@ -248,13 +327,23 @@ async function initMembers() {
 	membersError.value = false;
 	membersCanFetchMore.value = false;
 	try {
-		const res = await misskeyApi('chat/rooms/members', {
-			roomId: props.room.id,
-			limit: LIMIT,
-		});
+		const [managers, members] = await Promise.all([
+			misskeyApi('chat/rooms/members', {
+				roomId: props.room.id,
+				role: 'manager',
+				limit: MANAGER_LIMIT,
+				...(memberSearchActive.value ? { query: normalizedMemberSearchQuery.value } : {}),
+			}),
+			misskeyApi('chat/rooms/members', {
+				roomId: props.room.id,
+				role: 'member',
+				limit: LIMIT,
+				...(memberSearchActive.value ? { query: normalizedMemberSearchQuery.value } : {}),
+			}),
+		]);
 		if (disposed || requestId !== membersRequestId) return;
-		memberships.value = res;
-		membersCanFetchMore.value = res.length >= LIMIT;
+		memberships.value = [...managers, ...members];
+		membersCanFetchMore.value = members.length >= LIMIT;
 	} catch {
 		if (disposed || requestId !== membersRequestId) return;
 		membersError.value = true;
@@ -266,7 +355,7 @@ async function initMembers() {
 }
 
 async function fetchMoreMembers() {
-	const untilId = memberships.value.at(-1)?.id;
+	const untilId = memberMemberships.value.at(-1)?.id;
 	if (untilId == null || membersMoreFetching.value) return;
 
 	const requestId = membersRequestId;
@@ -274,8 +363,10 @@ async function fetchMoreMembers() {
 	try {
 		const res = await misskeyApi('chat/rooms/members', {
 			roomId: props.room.id,
+			role: 'member',
 			limit: LIMIT,
 			untilId,
+			...(memberSearchActive.value ? { query: normalizedMemberSearchQuery.value } : {}),
 		});
 		if (disposed || requestId !== membersRequestId) return;
 		memberships.value = [...memberships.value, ...res];
@@ -291,7 +382,7 @@ async function fetchMoreMembers() {
 }
 
 async function initInvitations() {
-	if (!canManage.value) {
+	if (!canModerateRoom.value) {
 		invitationsRequestId++;
 		invitations.value = [];
 		invitationsCanFetchMore.value = false;
@@ -345,57 +436,31 @@ async function fetchMoreInvitations() {
 	}
 }
 
-// 关键词禁言记录（正在禁言 + 历史），管理者可清空。
-const muteLog = ref<{ user: Misskey.entities.UserLite | null; keyword: string; mutedUntil: string | null; createdAt: string; }[]>([]);
-const muteLogFetching = ref(false);
-
-function isStillMuted(mutedUntil: string | null): boolean {
-	if (mutedUntil == null) return false;
-	return new Date(mutedUntil).getTime() > Date.now();
-}
-
-async function fetchMuteLog() {
-	if (!canManage.value) { muteLog.value = []; return; }
-	muteLogFetching.value = true;
-	try {
-		muteLog.value = (await misskeyApi('chat/rooms/mute-log', { roomId: props.room.id })) as typeof muteLog.value;
-	} catch {
-		// 忽略
-	} finally {
-		if (!disposed) muteLogFetching.value = false;
-	}
-}
-
-async function clearMuteLog() {
-	const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts.chatMuteLogClearConfirm });
-	if (canceled) return;
-	await os.apiWithDialog('chat/rooms/clear-mute-log', { roomId: props.room.id });
-	muteLog.value = [];
-}
-
 onMounted(async () => {
 	await Promise.all([
 		initMembers(),
 		initInvitations(),
-		fetchMuteLog(),
 	]);
 });
 
 watch(() => props.room.id, async () => {
+	memberSearchQuery.value = '';
 	memberships.value = [];
 	invitations.value = [];
-	muteLog.value = [];
 	await Promise.all([
 		initMembers(),
 		initInvitations(),
-		fetchMuteLog(),
 	]);
 });
 
 watch(() => props.refreshKey, () => {
 	initMembers();
 	initInvitations();
-	fetchMuteLog();
+});
+
+watch(normalizedMemberSearchQuery, () => {
+	memberships.value = [];
+	initMembers();
 });
 
 onBeforeUnmount(() => {
@@ -436,62 +501,84 @@ onBeforeUnmount(() => {
 	font-size: 0.9em;
 }
 
+	.searchInput {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	.memberTools {
+		display: flex;
+		align-items: stretch;
+		gap: 8px;
+		min-width: 0;
+		padding: 10px;
+		border: solid 1px color(from var(--MI_THEME-fg) srgb r g b / 0.1);
+		border-radius: var(--MI-radius);
+		background: color(from var(--MI_THEME-panel) srgb r g b / 0.58);
+	}
+
+	.clearSearchButton {
+		display: grid;
+		place-items: center;
+		flex: 0 0 auto;
+		width: 36px;
+		min-height: 36px;
+		border-radius: 999px;
+		color: color(from var(--MI_THEME-fg) srgb r g b / 0.72);
+
+		&:hover {
+			background: var(--MI_THEME-buttonHoverBg);
+		}
+	}
+
 .section {
 	display: grid;
 	gap: 12px;
 	min-width: 0;
 }
 
-.sectionTitle {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	color: color(from var(--MI_THEME-fg) srgb r g b / 0.72);
+	.sectionTitle {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		color: color(from var(--MI_THEME-fg) srgb r g b / 0.72);
 	font-size: 0.9em;
-	font-weight: 700;
-}
-
-.clearLogButton {
-	margin-left: auto;
-	padding: 2px 10px;
-	border-radius: 999px;
-	font-size: 0.85em;
-	color: var(--MI_THEME-error);
-	border: solid 1px color(from var(--MI_THEME-error) srgb r g b / 0.5);
-
-	&:hover {
-		background: color(from var(--MI_THEME-error) srgb r g b / 0.1);
+		font-weight: 700;
 	}
-}
 
-.muteLogRow {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	padding: 8px 10px;
-	border-radius: var(--MI-radius-sm);
-	background: color(from var(--MI_THEME-fg) srgb r g b / 0.03);
-}
+	.sectionHeader {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		min-width: 0;
+	}
 
-.muteLogMeta {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 6px 10px;
-	font-size: 0.85em;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.muteLogTime {
-	margin-left: auto;
-	opacity: 0.8;
-}
+	.sectionCount {
+		flex: 0 0 auto;
+		min-width: 2.2em;
+		padding: 2px 8px;
+		border-radius: 999px;
+		background: color(from var(--MI_THEME-fg) srgb r g b / 0.07);
+		color: color(from var(--MI_THEME-fg) srgb r g b / 0.68);
+		font-size: 0.82em;
+		font-weight: 700;
+		text-align: center;
+	}
 
 .userList {
 	display: grid;
 	gap: 10px;
 	min-width: 0;
 }
+
+	.scrollList {
+		max-height: min(420px, 54dvh);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding-right: 4px;
+		scrollbar-gutter: stable;
+	}
 
 .userLink {
 	display: block;
@@ -530,6 +617,35 @@ onBeforeUnmount(() => {
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+	}
+}
+
+.roleBadge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+	max-width: 40%;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: color(from var(--MI_THEME-accent) srgb r g b / 0.14);
+	color: var(--MI_THEME-accent);
+	font-size: 0.8em;
+	font-weight: 700;
+
+	> span {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+}
+
+.roleActionButton {
+	flex: 0 0 auto;
+	white-space: nowrap;
+
+	:global(.ti) {
+		margin-right: 4px;
 	}
 }
 

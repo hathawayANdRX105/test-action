@@ -61,6 +61,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		cacheManagementService: CacheManagementService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			if (!ps.room) return await this.compute(ps, me);
+
 			const cacheKey = `${me.id}:${ps.room ? 'r' : 'u'}:${ps.limit}`;
 			const cached = this.historyCache.get(cacheKey);
 			if (cached != null) return cached;

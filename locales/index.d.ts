@@ -6249,6 +6249,30 @@ export interface Locale extends ILocale {
          */
         "members": string;
         /**
+         * オーナー
+         */
+        "roomOwner": string;
+        /**
+         * 管理者
+         */
+        "roomManager": string;
+        /**
+         * 管理者
+         */
+        "roomManagers": string;
+        /**
+         * 管理者はいません
+         */
+        "noRoomManagers": string;
+        /**
+         * 管理者にする
+         */
+        "setRoomManager": string;
+        /**
+         * 管理者を解除
+         */
+        "unsetRoomManager": string;
+        /**
          * メッセージを検索
          */
         "searchMessages": string;
@@ -6285,7 +6309,7 @@ export interface Locale extends ILocale {
          */
         "management": string;
         /**
-         * 管理者とモデレーターのみ、このルームのメッセージ履歴と自動削除ルールを管理できます。
+         * ルームオーナー、ルーム管理者、管理者、モデレーターは告知、ミュート、BAN、安全ルールを管理できます。保持期間と全削除はオーナー、管理者、モデレーターのみ利用できます。
          */
         "managementDescription": string;
         /**
@@ -6616,6 +6640,46 @@ export interface Locale extends ILocale {
          * ルーム
          */
         "groupChats": string;
+        /**
+         * 未分類
+         */
+        "ungroupedRooms": string;
+        /**
+         * ルームを整理
+         */
+        "organizeRoom": string;
+        /**
+         * ルームのメモ名
+         */
+        "roomNickname": string;
+        /**
+         * 自分にだけ表示されます。空欄にすると元のルーム名を表示します。
+         */
+        "roomNicknameDescription": string;
+        /**
+         * グループ
+         */
+        "roomFolder": string;
+        /**
+         * サイドバーの整理に使います。空欄にすると未分類に入ります。
+         */
+        "roomFolderDescription": string;
+        /**
+         * 元の名前
+         */
+        "originalRoomName": string;
+        /**
+         * メモ名とグループをクリア
+         */
+        "clearRoomOrganization": string;
+        /**
+         * 会話を削除
+         */
+        "deleteConversation": string;
+        /**
+         * {name} との個人チャットをサイドバーから削除しますか？既存のメッセージは削除されず、新しいメッセージが届くと会話は再表示されます。
+         */
+        "deleteConversationConfirm": ParameterizedString<"name">;
         "_chatAllowedUsers": {
             /**
              * 誰でも

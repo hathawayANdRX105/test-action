@@ -83,8 +83,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
-			// オーナーまたはサイトモデレーターが編集可能（kick/mute等の管理操作と権限を統一）
-			if (!(await this.chatService.hasPermissionToManageRoom(me, room))) {
+			const profileFieldsTouched = ps.name !== undefined || ps.description !== undefined || ps.joinMode !== undefined || ps.avatarId !== undefined;
+			if (profileFieldsTouched && !(await this.chatService.hasPermissionToEditRoomProfile(me, room))) {
+				throw new ApiError(meta.errors.accessDenied);
+			}
+			if (!profileFieldsTouched && !(await this.chatService.hasPermissionToModerateRoom(me, room))) {
 				throw new ApiError(meta.errors.accessDenied);
 			}
 

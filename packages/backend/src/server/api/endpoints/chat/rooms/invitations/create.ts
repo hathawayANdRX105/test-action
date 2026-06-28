@@ -68,13 +68,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			await this.chatService.checkChatAvailability(me.id, 'write');
 
-			const room = await this.chatService.findMyRoomById(me.id, ps.roomId);
-			if (room == null) {
+			const room = await this.chatService.findRoomById(ps.roomId);
+			if (room == null || !await this.chatService.hasPermissionToModerateRoom(me, room)) {
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 			let invitation;
 			try {
-				invitation = await this.chatService.createRoomInvitation(me.id, room.id, ps.userId);
+				invitation = await this.chatService.createRoomInvitation(me, room.id, ps.userId);
 			} catch (err) {
 				if (err instanceof Error) {
 					if (err.message === 'room is full') throw new ApiError(meta.errors.roomFull);

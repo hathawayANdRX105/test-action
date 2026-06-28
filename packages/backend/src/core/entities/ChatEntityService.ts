@@ -6,7 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as mfm from 'mfm-js';
 import { DI } from '@/di-symbols.js';
-import type { MiUser, ChatMessagesRepository, MiChatMessage, ChatRoomsRepository, MiChatRoom, MiChatRoomInvitation, ChatRoomInvitationsRepository, MiChatRoomMembership, ChatRoomMembershipsRepository, MiChatRoomUserMuting, ChatRoomUserMutingsRepository, MiChatRoomBanning, ChatRoomBanningsRepository } from '@/models/_.js';
+import type { MiUser, ChatMessagesRepository, MiChatMessage, ChatRoomsRepository, MiChatRoom, DriveFilesRepository, MiChatRoomInvitation, ChatRoomInvitationsRepository, MiChatRoomMembership, ChatRoomMembershipsRepository, MiChatRoomUserSetting, ChatRoomUserSettingsRepository, MiChatRoomUserMuting, ChatRoomUserMutingsRepository, MiChatRoomBanning, ChatRoomBanningsRepository } from '@/models/_.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
 import type { Packed } from '@/misc/json-schema.js';
 import type { } from '@/models/Blocking.js';
@@ -38,11 +38,17 @@ export class ChatEntityService {
 		@Inject(DI.chatRoomsRepository)
 		private chatRoomsRepository: ChatRoomsRepository,
 
+		@Inject(DI.driveFilesRepository)
+		private driveFilesRepository: DriveFilesRepository,
+
 		@Inject(DI.chatRoomInvitationsRepository)
 		private chatRoomInvitationsRepository: ChatRoomInvitationsRepository,
 
 		@Inject(DI.chatRoomMembershipsRepository)
 		private chatRoomMembershipsRepository: ChatRoomMembershipsRepository,
+
+		@Inject(DI.chatRoomUserSettingsRepository)
+		private chatRoomUserSettingsRepository: ChatRoomUserSettingsRepository,
 
 		@Inject(DI.chatRoomUserMutingsRepository)
 		private chatRoomUserMutingsRepository: ChatRoomUserMutingsRepository,
@@ -156,6 +162,57 @@ export class ChatEntityService {
 			redisPipeline.set(chatMessageMentionCacheKey(item.id), JSON.stringify(item.mentionedUserIds), 'EX', CHAT_MESSAGE_MENTION_CACHE_TTL);
 		}
 		await redisPipeline.exec();
+
+		return result;
+	}
+
+	@bindThis
+	private async getRoomAvatarUrl(room: MiChatRoom): Promise<string | null> {
+		const avatarUrls = await this.getRoomAvatarUrls([room]);
+		return avatarUrls.get(room.id) ?? null;
+	}
+
+	@bindThis
+	private async getRoomAvatarUrls(rooms: MiChatRoom[]): Promise<Map<MiChatRoom['id'], string | null>> {
+		const result = new Map<MiChatRoom['id'], string | null>();
+		const avatarIds = Array.from(new Set(
+			rooms
+				.filter(room => room.avatarId != null && room.avatarUrl == null && room.avatar == null)
+				.map(room => room.avatarId!),
+		));
+		const avatars = avatarIds.length > 0 ? await this.driveFilesRepository.findBy({ id: In(avatarIds) }) : [];
+		const avatarsById = new Map(avatars.map(avatar => [avatar.id, avatar]));
+		const updates: Promise<unknown>[] = [];
+
+		for (const room of rooms) {
+			if (room.avatarId == null) {
+				result.set(room.id, null);
+				continue;
+			}
+
+			if (room.avatarUrl != null) {
+				result.set(room.id, room.avatarUrl);
+				continue;
+			}
+
+			const avatar = room.avatar ?? avatarsById.get(room.avatarId) ?? null;
+			if (avatar == null) {
+				room.avatarId = null;
+				room.avatarUrl = null;
+				result.set(room.id, null);
+				updates.push(this.chatRoomsRepository.update(room.id, { avatarId: null, avatarUrl: null }));
+				continue;
+			}
+
+			const avatarUrl = this.driveFileEntityService.getPublicUrl(avatar, 'avatar');
+			room.avatarUrl = avatarUrl;
+			result.set(room.id, avatarUrl);
+			updates.push(this.chatRoomsRepository.update(room.id, { avatarUrl }));
+		}
+
+		if (updates.length > 0) {
+			await Promise.all(updates);
+		}
 
 		return result;
 	}
@@ -430,44 +487,56 @@ export class ChatEntityService {
 			_hint_?: {
 				packedOwners: Map<MiChatRoom['id'], Packed<'UserLite'>>;
 				memberships?: Map<MiChatRoom['id'], MiChatRoomMembership | null | undefined>;
+				userSettings?: Map<MiChatRoom['id'], MiChatRoomUserSetting | null | undefined>;
 			};
 		},
 	): Promise<Packed<'ChatRoom'>> {
 		const room = typeof src === 'object' ? src : await this.chatRoomsRepository.findOneByOrFail({ id: src });
 
 		const membership = me && me.id !== room.ownerId ? (options?._hint_?.memberships?.get(room.id) ?? await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
+		const userSetting = me != null ? (options?._hint_?.userSettings?.get(room.id) ?? await this.chatRoomUserSettingsRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
 		const isJoined = me != null && (me.id === room.ownerId || membership != null);
-		const [memberCount, isAdministrator, isModerator] = await Promise.all([
+		const [memberCount, isAdministrator, isModerator, avatarUrl] = await Promise.all([
 			this.chatRoomMembershipsRepository.countBy({ roomId: room.id }).then(count => count + 1),
 			me != null ? this.roleService.isAdministrator(me) : false,
 			me != null ? this.roleService.isModerator(me) : false,
+			this.getRoomAvatarUrl(room),
 		]);
 		const canSeeOverride = me != null && (me.id === room.ownerId || isAdministrator);
-		const canManage = me != null && (me.id === room.ownerId || isModerator);
+		const canModerateRoom = me != null && (me.id === room.ownerId || isModerator || membership?.role === 'manager');
+		const canManageRoomRoles = me != null && (me.id === room.ownerId || isModerator);
+		const canEditRoomProfile = canManageRoomRoles;
+		const canDeleteRoom = canManageRoomRoles;
 
 		return {
 			id: room.id,
 			createdAt: this.idService.parse(room.id).date.toISOString(),
 			name: room.name,
 			description: room.description,
-			avatarUrl: room.avatarId != null ? room.avatarUrl : null,
+			avatarUrl,
 			isSilenced: room.isSilenced,
 			announcement: room.announcement,
 			announcementPinned: room.announcementPinned,
 			joinMode: room.joinMode,
 			memberLimit: room.memberLimitOverride ?? this.meta.chatRoomDefaultMemberLimit,
 			memberLimitOverride: canSeeOverride ? room.memberLimitOverride : undefined,
-			canManage,
-			messageRetentionDays: canManage ? room.messageRetentionDays : undefined,
+			canManage: canModerateRoom,
+			canModerateRoom,
+			canManageRoomRoles,
+			canEditRoomProfile,
+			canDeleteRoom,
+			messageRetentionDays: canManageRoomRoles ? room.messageRetentionDays : undefined,
 			slowModeSeconds: room.slowModeSeconds,
-			bannedKeywords: canManage ? room.bannedKeywords : undefined,
-			keywordMuteSeconds: canManage ? room.keywordMuteSeconds : undefined,
+			bannedKeywords: canModerateRoom ? room.bannedKeywords : undefined,
+			keywordMuteSeconds: canModerateRoom ? room.keywordMuteSeconds : undefined,
 			memberCount,
 			isJoined,
 			ownerId: room.ownerId,
 			owner: options?._hint_?.packedOwners.get(room.ownerId) ?? await this.userEntityService.pack(room.owner ?? room.ownerId, me),
 			isMuted: membership != null ? membership.isMuted : false,
 			myMutedUntil: membership?.mutedUntil?.toISOString() ?? null,
+			myNickname: userSetting?.nickname ?? null,
+			myFolder: userSetting?.folder ?? null,
 		};
 	}
 
@@ -509,7 +578,7 @@ export class ChatEntityService {
 		const roomIds = _rooms.map(room => room.id);
 		const shouldLoadMemberships = _rooms.some(room => room.ownerId !== me.id);
 
-		const [packedOwners, memberships, memberCounts, isAdministrator, isModerator] = await Promise.all([
+		const [packedOwners, memberships, memberCounts, userSettings, avatarUrls, isAdministrator, isModerator] = await Promise.all([
 			this.userEntityService.packMany(owners, me)
 				.then(users => new Map(users.map(u => [u.id, u]))),
 			shouldLoadMemberships ? this.chatRoomMembershipsRepository.find({
@@ -526,6 +595,13 @@ export class ChatEntityService {
 				.groupBy('membership.roomId')
 				.getRawMany<{ roomId: MiChatRoom['id']; count: string; }>()
 				.then(rows => new Map<MiChatRoom['id'], number>(rows.map(row => [row.roomId, Number.parseInt(row.count, 10) + 1]))),
+			this.chatRoomUserSettingsRepository.find({
+				where: {
+					roomId: In(roomIds),
+					userId: me.id,
+				},
+			}),
+			this.getRoomAvatarUrls(_rooms),
 			this.roleService.isAdministrator(me),
 			this.roleService.isModerator(me),
 		]);
@@ -533,11 +609,16 @@ export class ChatEntityService {
 		const membershipsByRoomId = new Map<MiChatRoom['id'], MiChatRoomMembership>(
 			memberships.map(membership => [membership.roomId, membership] as const),
 		);
+		const userSettingsByRoomId = new Map<MiChatRoom['id'], MiChatRoomUserSetting>(
+			userSettings.map(setting => [setting.roomId, setting] as const),
+		);
 
 		return _rooms.map(room => this.packRoomWithHints(room, me, {
 			packedOwners,
 			membership: membershipsByRoomId.get(room.id) ?? null,
+			userSetting: userSettingsByRoomId.get(room.id) ?? null,
 			memberCount: memberCounts.get(room.id) ?? 1,
+			avatarUrl: avatarUrls.get(room.id) ?? null,
 			isAdministrator,
 			isModerator,
 		}));
@@ -549,38 +630,49 @@ export class ChatEntityService {
 		hints: {
 			packedOwners: Map<MiUser['id'], Packed<'UserLite'>>;
 			membership: MiChatRoomMembership | null;
+			userSetting: MiChatRoomUserSetting | null;
 			memberCount: number;
+			avatarUrl: string | null;
 			isAdministrator: boolean;
 			isModerator: boolean;
 		},
 	): Packed<'ChatRoom'> {
 		const isJoined = me.id === room.ownerId || hints.membership != null;
 		const canSeeOverride = me.id === room.ownerId || hints.isAdministrator;
-		const canManage = me.id === room.ownerId || hints.isModerator;
+		const canModerateRoom = me.id === room.ownerId || hints.isModerator || hints.membership?.role === 'manager';
+		const canManageRoomRoles = me.id === room.ownerId || hints.isModerator;
+		const canEditRoomProfile = canManageRoomRoles;
+		const canDeleteRoom = canManageRoomRoles;
 
 		return {
 			id: room.id,
 			createdAt: this.idService.parse(room.id).date.toISOString(),
 			name: room.name,
 			description: room.description,
-			avatarUrl: room.avatarId != null ? room.avatarUrl : null,
+			avatarUrl: hints.avatarUrl,
 			isSilenced: room.isSilenced,
 			announcement: room.announcement,
 			announcementPinned: room.announcementPinned,
 			joinMode: room.joinMode,
 			memberLimit: room.memberLimitOverride ?? this.meta.chatRoomDefaultMemberLimit,
 			memberLimitOverride: canSeeOverride ? room.memberLimitOverride : undefined,
-			canManage,
-			messageRetentionDays: canManage ? room.messageRetentionDays : undefined,
+			canManage: canModerateRoom,
+			canModerateRoom,
+			canManageRoomRoles,
+			canEditRoomProfile,
+			canDeleteRoom,
+			messageRetentionDays: canManageRoomRoles ? room.messageRetentionDays : undefined,
 			slowModeSeconds: room.slowModeSeconds,
-			bannedKeywords: canManage ? room.bannedKeywords : undefined,
-			keywordMuteSeconds: canManage ? room.keywordMuteSeconds : undefined,
+			bannedKeywords: canModerateRoom ? room.bannedKeywords : undefined,
+			keywordMuteSeconds: canModerateRoom ? room.keywordMuteSeconds : undefined,
 			memberCount: hints.memberCount,
 			isJoined,
 			ownerId: room.ownerId,
 			owner: hints.packedOwners.get(room.ownerId)!,
 			isMuted: hints.membership != null ? hints.membership.isMuted : false,
 			myMutedUntil: hints.membership?.mutedUntil?.toISOString() ?? null,
+			myNickname: hints.userSetting?.nickname ?? null,
+			myFolder: hints.userSetting?.folder ?? null,
 		};
 	}
 
@@ -639,6 +731,7 @@ export class ChatEntityService {
 			user: options?.populateUser ? (options._hint_?.packedUsers.get(membership.userId) ?? await this.userEntityService.pack(membership.user ?? membership.userId, me)) : undefined,
 			roomId: membership.roomId,
 			room: options?.populateRoom ? (options._hint_?.packedRooms.get(membership.roomId) ?? await this.packRoom(membership.room ?? membership.roomId, me)) : undefined,
+			role: membership.role,
 			mutedUntil: membership.mutedUntil?.toISOString() ?? null,
 		};
 	}

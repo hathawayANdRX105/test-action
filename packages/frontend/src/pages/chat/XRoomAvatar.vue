@@ -4,17 +4,33 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<img v-if="room.avatarUrl" :class="$style.avatar" :src="room.avatarUrl" :alt="room.name" decoding="async"/>
+<img v-if="roomAvatarUrl" :class="$style.avatar" :src="roomAvatarUrl" :alt="room.name" decoding="async" @error="onAvatarError"/>
 <MkAvatar v-else-if="room.owner" :user="room.owner" :link="false" :class="$style.avatar"/>
 <div v-else :class="[$style.avatar, $style.fallback]"><i class="ti ti-users"></i></div>
 </template>
 
 <script lang="ts" setup>
+import { computed, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
+import { appendAvatarCacheKey } from '@/utility/avatar-cache.js';
 
 const props = defineProps<{
 	room: Misskey.entities.ChatRoom;
 }>();
+
+const avatarLoadFailed = ref(false);
+const roomAvatarUrl = computed(() => {
+	if (avatarLoadFailed.value || props.room.avatarUrl == null) return null;
+	return appendAvatarCacheKey(props.room.avatarUrl, props.room.id);
+});
+
+watch([() => props.room.id, () => props.room.avatarUrl], () => {
+	avatarLoadFailed.value = false;
+});
+
+function onAvatarError() {
+	avatarLoadFailed.value = true;
+}
 </script>
 
 <style lang="scss" module>

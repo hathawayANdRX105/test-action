@@ -6,7 +6,7 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import promiseLimit from 'promise-limit';
-import { Brackets, IsNull } from 'typeorm';
+import { Brackets } from 'typeorm';
 import type { MiLocalUser, MiPartialLocalUser, MiPartialRemoteUser, MiRemoteUser, MiUser } from '@/models/User.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { QueueService } from '@/core/QueueService.js';
@@ -683,7 +683,17 @@ export class UserFollowingService implements OnModuleInit {
 
 	@bindThis
 	public async isMutual(aUserId: MiUser['id'], bUserId: MiUser['id']): Promise<boolean> {
-		const relations = await this.cacheService.getUserRelation(aUserId, bUserId);
-		return !!relations.isFollowing && !!relations.isFollowed;
+		const count = await this.followingsRepository.createQueryBuilder('following')
+			.where(new Brackets(qb => {
+				qb.where('following.followerId = :aUserId', { aUserId })
+					.andWhere('following.followeeId = :bUserId', { bUserId });
+			}))
+			.orWhere(new Brackets(qb => {
+				qb.where('following.followerId = :bUserId', { bUserId })
+					.andWhere('following.followeeId = :aUserId', { aUserId });
+			}))
+			.getCount();
+
+		return count >= 2;
 	}
 }

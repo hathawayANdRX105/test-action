@@ -68,7 +68,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
-			if (!(await this.chatService.hasPermissionToManageRoom(me, room))) {
+			if (!(await this.chatService.hasPermissionToModerateRoom(me, room))) {
 				throw new ApiError(meta.errors.accessDenied);
 			}
 
@@ -87,9 +87,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			await this.chatService.muteRoomMember(room, ps.userId, mutedUntil).catch(err => {
-				if (err instanceof Error && err.message === 'not a member') {
-					throw new ApiError(meta.errors.notAMember);
+			await this.chatService.muteRoomMember(room, ps.userId, mutedUntil, me).catch(err => {
+				if (err instanceof Error) {
+					if (err.message === 'not a member') throw new ApiError(meta.errors.notAMember);
+					if (err.message === 'cannot moderate member') throw new ApiError(meta.errors.accessDenied);
 				}
 				throw err;
 			});

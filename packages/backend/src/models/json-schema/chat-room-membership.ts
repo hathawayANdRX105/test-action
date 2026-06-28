@@ -33,6 +33,11 @@ export const packedChatRoomMembershipSchema = {
 			optional: true, nullable: false,
 			ref: 'ChatRoom',
 		},
+		role: {
+			type: 'string',
+			optional: false, nullable: false,
+			enum: ['member', 'manager'],
+		},
 		mutedUntil: {
 			type: 'string',
 			format: 'date-time',

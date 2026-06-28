@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.localTitle">
 			<XRoomAvatar v-if="room" :room="room" :class="$style.localTitleAvatar"/>
 			<MkAvatar v-else-if="user" :user="user" :class="$style.localTitleAvatar" indicator/>
-			<span>{{ room?.name ?? user?.name ?? user?.username ?? i18n.ts.chat }}</span>
+			<span>{{ headerTitle }}</span>
 		</div>
 		<div :class="[$style.localTabsShell, { [$style.localTabsShellScrollable]: showChatTabsScrollControls }]">
 			<button v-if="showChatTabsScrollControls" class="_button" :class="[$style.localTabsScrollButton, $style.localTabsScrollButtonLeft]" :disabled="!canScrollChatTabsLeft" :aria-label="i18n.ts.left" @click="scrollChatTabs('left')">
@@ -94,12 +94,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div
 							v-for="item in visibleTimeline"
 							:key="item._dynKey"
-							v-memo="[item._dynKey, item.type === 'item' && item.id === contextTargetMessageId, item.type === 'item' ? item.data.reactions.length : 0, item.type === 'item' ? item.data.sendStatus : 0, item.type === 'item' ? item.data.replyUnavailable === true : false, item.type === 'item' ? item.data.quoteUnavailable === true : false, canManageRoomUsers, canDeleteAnyMessage, room?.ownerId]"
+							v-memo="[item._dynKey, item.type === 'item' && item.id === contextTargetMessageId, item.type === 'item' ? item.data.reactions.length : 0, item.type === 'item' ? item.data.sendStatus : 0, item.type === 'item' ? item.data.replyUnavailable === true : false, item.type === 'item' ? item.data.quoteUnavailable === true : false, canManageRoomUsers, canDeleteAnyMessage, canManageRoomRoles, room?.ownerId]"
 							:class="[$style.messageItem, { [$style.contextTarget]: item.type === 'item' && item.id === contextTargetMessageId }]"
 							:data-scroll-anchor="item.type === 'item' ? item.id : undefined"
 							:data-fresh="item.type === 'item' && isFreshlyArrivedItem(item.id) ? 'true' : undefined"
 						>
-							<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" :enableRoomUserMute="true" :canDeleteAnyMessage="canDeleteAnyMessage" :canManageRoomUsers="canManageRoomUsers" :roomOwnerId="room?.ownerId" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)" @mention="mentionUser" @muteUser="muteUserInRoom" @openReference="openReferenceMessage" @deletedMany="onDeletedMany"/>
+							<XMessage v-if="item.type === 'item'" :message="item.data" :enableReferenceActions="true" :enableRoomUserMute="true" :canDeleteAnyMessage="canDeleteAnyMessage" :canManageRoomUsers="canManageRoomUsers" :canManageRoomRoles="canManageRoomRoles" :roomOwnerId="room?.ownerId" @reply="setReplyTarget(item.data)" @quote="setQuoteTarget(item.data)" @mention="mentionUser" @muteUser="muteUserInRoom" @openReference="openReferenceMessage" @deletedMany="onDeletedMany"/>
 							<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 								<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 								<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -150,11 +150,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div v-if="tab === 'management'" :class="$style.tabPane">
 		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 100%;">
-			<XManagement v-if="room != null && room.canManage" :room="room" @updated="onRoomUpdated" @cleared="onCleared"/>
+			<XManagement v-if="room != null && canManageRoomUsers" :room="room" @updated="onRoomUpdated" @cleared="onCleared"/>
 		</div>
 	</div>
 
-	<div v-if="tab === 'chat'" :class="$style.footer">
+	<div v-if="tab === 'chat'" ref="footerEl" :class="$style.footer">
 		<div class="_gaps">
 			<Transition name="fade">
 				<div v-show="showIndicator" :class="$style.new">
@@ -197,7 +197,7 @@ import { useMutationObserver } from '@/use/use-mutation-observer.js';
 import MkInfo from '@/components/MkInfo.vue';
 import MkAcct from '@/components/global/MkAcct.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
-import { appendDetachedChatMessages, ChatAutoScrollState, ChatReadReceiptBatcher, findMissingChatMessageIdsInLatestWindow, getChatScrollMetrics, mergeChatMessagesForTimeline, prependChatMessageForTimeline } from './room-scroll.js';
+import { appendDetachedChatMessages, ChatAutoScrollState, ChatReadReceiptBatcher, findMissingChatMessageIdsInLatestWindow, getChatScrollMetrics, mergeChatMessagesForTimeline, mergeChatMessagesWithWindowResult, prependChatMessageForTimeline } from './room-scroll.js';
 import { hasChatUserResolvedAvatar, mergeChatUserForCache } from './room-user-cache.js';
 
 const $i = ensureSignin();
@@ -223,6 +223,11 @@ export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'from
 };
 
 type LatestGapMessage = Pick<Misskey.entities.ChatMessageLite, 'id' | 'fromUserId'>;
+type MergeMessagesResult = {
+	messages: NormalizedChatMessage[];
+	droppedNewest: boolean;
+	droppedOldest: boolean;
+};
 
 const initializing = ref(true);
 const initializeError = ref<string | null>(null);
@@ -244,18 +249,22 @@ const rootEl = ref<HTMLElement | null>(null);
 const chatPaneEl = ref<HTMLElement | null>(null);
 const localTabsEl = ref<HTMLElement | null>(null);
 const timelineEl = ref<HTMLElement | null>(null);
+const footerEl = ref<HTMLElement | null>(null);
 const formEl = ref<InstanceType<typeof XForm> | null>(null);
 // 新到消息出场动画用 data-fresh CSS;只对真新到的(非"自己刚发"被 adopt 的)播
 const freshlyArrivedIds = new Set<string>();
+
 function isFreshlyArrivedItem(id: string): boolean {
 	return freshlyArrivedIds.has(id);
 }
+
 function markFreshlyArrived(ids: string[]) {
 	for (const id of ids) {
 		freshlyArrivedIds.add(id);
 		window.setTimeout(() => freshlyArrivedIds.delete(id), 2200);
 	}
 }
+
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
 // v-for `:key` 用的稳定标识:本地 pending 入列时 id=`~chat-pending-X`,服务端回包后 id 变成真实
 // ULID 但 clientId 保留 → key 用 `c:${clientId}` 这样这一拍 DOM 不重挂(MkAvatar/MkMfm 不闪)。
@@ -280,6 +289,11 @@ const canScrollChatTabsLeft = ref(false);
 const canScrollChatTabsRight = ref(false);
 const announcementExpanded = ref(false);
 const tab = ref('chat');
+const headerTitle = computed(() => {
+	const nickname = room.value?.myNickname?.trim();
+	if (nickname != null && nickname !== '') return nickname;
+	return room.value?.name ?? user.value?.name ?? user.value?.username ?? i18n.ts.chat;
+});
 
 const CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX = 'chatRoomAnnouncementExpanded:';
 // 之前 24px。图片/反应等异步加载 + 用户手指动一下,latestDistance 经常飘到 30~70px,导致
@@ -292,16 +306,21 @@ const SCROLL_TAIL_THRESHOLD = 480;
 const USER_SCROLL_INTERACTION_LOCK_MS = 1200;
 // 锁定 8s,覆盖移动端 avatar/图片慢加载;期间 ResizeObserver 会持续把视图重锚到底部
 const INITIAL_LATEST_EDGE_LOCK_MS = 8000;
+const INITIAL_LATEST_EDGE_RESCROLL_DELAYS = [400, 1200, 2800, 5000, 7500] as const;
 const TIMELINE_LIMIT = 20;
 const TIMELINE_RECONCILE_LIMIT = 50;
 const CONTEXT_LIMIT = 30;
 const INITIAL_HISTORY_FILL_LIMIT = 6;
 const MAX_ROOM_MESSAGES = 240;
-const MAX_ROOM_MESSAGES_MOBILE = 80;
-// 移动端 240 条 DOM 节点(avatar/MFM/reactions)非常卡;窄屏窗口剪到 80,往上翻历史时 fetchMore 会按需补
+const MAX_ROOM_MESSAGES_MOBILE = 240;
+const MAX_DETACHED_INCOMING_MESSAGES = 160;
+
+// 移动端 Safari 在快速上下滑动时，如果窗口比桌面小太多，分页裁剪会频繁切换 newest/oldest，
+// 造成可见上下文被丢掉。移动端和桌面保持同一窗口大小，优先保证消息连续性。
 function maxRoomMessagesForViewport(): number {
 	return (typeof window !== 'undefined' && window.innerWidth <= 700) ? MAX_ROOM_MESSAGES_MOBILE : MAX_ROOM_MESSAGES;
 }
+
 const MAX_CONTEXT_MESSAGES = 120;
 const STREAM_CONNECT_TIMEOUT = 5000;
 const CHAT_RECONCILE_TIMEOUT_MS = 5000;
@@ -316,12 +335,13 @@ const STREAM_LATEST_GAP_MAX_PAGES = 3;
 const STREAM_RECOVERY_STALE_MS = 60000;
 const STREAM_RECOVERY_HEALTHY_MS = 30000;
 const CHAT_READ_RECEIPT_MIN_INTERVAL_MS = 2000;
+const OUTGOING_MESSAGE_AUTO_STICK_MS = 3000;
 const CHAT_USER_REFRESH_BATCH_SIZE = 20;
 const CHAT_USER_REFRESH_DELAY_MS = 250;
 const CHAT_TABS_SCROLL_MIN_DISTANCE = 160;
 const CHAT_TABS_SCROLL_VISIBLE_RATIO = 0.7;
 const autoScrollState = new ChatAutoScrollState({
-	latestThreshold: SCROLL_LATEST_THRESHOLD,
+	latestThreshold: SCROLL_AUTO_STICK_THRESHOLD,
 	interactionLockMs: USER_SCROLL_INTERACTION_LOCK_MS,
 });
 const readReceiptBatcher = new ChatReadReceiptBatcher({
@@ -335,6 +355,8 @@ const readReceiptBatcher = new ChatReadReceiptBatcher({
 });
 let removeTimelineScrollListener: (() => void) | null = null;
 let timelineResizeObserver: ResizeObserver | null = null;
+let chatPaneResizeObserver: ResizeObserver | null = null;
+let footerResizeObserver: ResizeObserver | null = null;
 let pendingStickToLatestFrame: number | null = null;
 // 进群后陆续撑高(avatar/图片晚到)的兜底定时器,卸载和切群时清掉
 let lateInitialRescrollTimers: number[] = [];
@@ -343,11 +365,13 @@ let pendingIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
 let pendingIncomingShouldStickToLatest = false;
 let detachedIncomingMessages: Misskey.entities.ChatMessageLite[] = [];
 let pendingUserRefreshTimer: number | null = null;
+let outgoingMessageAutoStickUntil = 0;
 let streamRecoveryTimer: number | null = null;
 let streamRecoveryPollingTimer: number | null = null;
 let streamRecoverySinceId: string | undefined;
 let isRoomViewDisposed = false;
 let latestSyncPromise: Promise<void> | null = null;
+let latestRevealPromise: Promise<void> | null = null;
 let latestSyncGeneration = 0;
 let latestStreamEventAt = Date.now();
 let latestTimelineWindowPromise: Promise<Misskey.entities.ChatMessageLite[]> | null = null;
@@ -359,16 +383,18 @@ let historyFetchArmed = true;
 let newerFetchArmed = true;
 let scrollRestorationDepth = 0;
 let latestEdgeLockUntil = 0;
+let latestEdgeLockGeneration = 0;
 let suppressNextMessageIdClearInitialize = false;
 let chatTabLatestReturnGeneration = 0;
 const isRestoringHistoryScroll = ref(false);
 const isRoomChat = computed(() => props.roomId != null);
 const isContextMode = computed(() => contextTargetMessageId.value != null);
 const canDeleteAnyMessage = computed(() => {
-	if (room.value != null) return room.value.canManage === true;
+	if (room.value != null) return (room.value.canModerateRoom ?? room.value.canManage) === true;
 	return $i.isAdmin || $i.isModerator;
 });
-const canManageRoomUsers = computed(() => room.value?.canManage === true);
+const canManageRoomUsers = computed(() => (room.value?.canModerateRoom ?? room.value?.canManage) === true);
+const canManageRoomRoles = computed(() => room.value?.canManageRoomRoles === true);
 
 function getAnnouncementExpandedStorageKey(roomId: string) {
 	return `${CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX}${roomId}`;
@@ -405,13 +431,31 @@ function rememberLatestScrollMetrics(metrics: ScrollMetricsSnapshot) {
 	latestScrollMetricsSnapshot = metrics;
 }
 
-function lockLatestEdgeDuringInitialRender() {
+function lockLatestEdgeDuringInitialRender(): number {
+	latestEdgeLockGeneration++;
 	latestEdgeLockUntil = Date.now() + INITIAL_LATEST_EDGE_LOCK_MS;
 	autoScrollState.markLatest();
+	return latestEdgeLockGeneration;
 }
 
 function clearLatestEdgeInitialLock() {
 	latestEdgeLockUntil = 0;
+	latestEdgeLockGeneration++;
+}
+
+function clearOutgoingMessageAutoStick() {
+	outgoingMessageAutoStickUntil = 0;
+}
+
+function markOutgoingMessageAutoStick() {
+	outgoingMessageAutoStickUntil = Date.now() + OUTGOING_MESSAGE_AUTO_STICK_MS;
+	autoScrollState.markLatest();
+	clearNewMessageIndicator();
+	showScrollToLatestButton.value = false;
+}
+
+function shouldForceStickIncomingBatchToLatest(batch: Misskey.entities.ChatMessageLite[]) {
+	return Date.now() <= outgoingMessageAutoStickUntil || batch.some(message => message.fromUserId === $i.id);
 }
 
 function clearLateInitialRescrollTimers() {
@@ -421,19 +465,23 @@ function clearLateInitialRescrollTimers() {
 
 // 进群 / 切群之后 avatar、图片可能在帧循环结束后才加载完撑高内容,
 // 这里按递增时间点重新锚到底部;只在初始锁定窗口内有效,用户一旦手动滑过就不会再触发。
-function scheduleLateInitialRescrolls() {
+function scheduleLateInitialRescrolls(generation: number) {
 	clearLateInitialRescrollTimers();
 	if (isContextMode.value) return;
-	const delays = [400, 1200, 2800, 5000, 7500];
-	for (const delay of delays) {
+	for (const delay of INITIAL_LATEST_EDGE_RESCROLL_DELAYS) {
 		const id = window.setTimeout(() => {
 			lateInitialRescrollTimers = lateInitialRescrollTimers.filter(v => v !== id);
-			if (!isLatestEdgeInitialLockActive()) return;
+			if (isContextMode.value) return;
+			if (!isLatestEdgeInitialLockActive(generation)) return;
 			if (!canUseChatScrollMetrics()) return;
 			if (autoScrollState.isUserInteracting()) return;
 			const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 			if (scrollContainer == null) return;
 			const metrics = getChatScrollMetrics(scrollContainer);
+			if (!shouldStickToLatestAfterLayoutShift(metrics)) {
+				rememberLatestScrollMetrics(metrics);
+				return;
+			}
 			if (metrics.latestDistance <= 0) {
 				rememberLatestScrollMetrics(metrics);
 				return;
@@ -445,12 +493,26 @@ function scheduleLateInitialRescrolls() {
 	}
 }
 
-function isLatestEdgeInitialLockActive() {
-	return Date.now() <= latestEdgeLockUntil;
+function isLatestEdgeInitialLockActive(generation = latestEdgeLockGeneration) {
+	return generation === latestEdgeLockGeneration && Date.now() <= latestEdgeLockUntil && !autoScrollState.isUserInteracting();
+}
+
+function isAtLatestEdgeDistance(latestDistance: number): boolean {
+	return latestDistance <= SCROLL_AUTO_STICK_THRESHOLD;
+}
+
+function shouldInitialLatestEdgeLockStick(metrics: ScrollMetricsSnapshot): boolean {
+	if (!isLatestEdgeInitialLockActive()) return false;
+	if (isAtLatestEdgeDistance(metrics.latestDistance)) return true;
+	if (latestScrollMetricsSnapshot == null) return false;
+	if (latestScrollMetricsSnapshot.latestDistance > SCROLL_AUTO_STICK_THRESHOLD) return false;
+	if (metrics.maxScrollTop <= latestScrollMetricsSnapshot.maxScrollTop) return false;
+
+	return Math.abs(metrics.scrollTop - latestScrollMetricsSnapshot.maxScrollTop) <= SCROLL_AUTO_STICK_THRESHOLD;
 }
 
 function shouldStickToLatestAfterLayoutShift(metrics: ScrollMetricsSnapshot): boolean {
-	if (isLatestEdgeInitialLockActive()) return true;
+	if (isLatestEdgeInitialLockActive()) return shouldInitialLatestEdgeLockStick(metrics);
 	if (autoScrollState.shouldStickToLatest(metrics.latestDistance, SCROLL_AUTO_STICK_THRESHOLD)) return true;
 	if (autoScrollState.isUserInteracting()) return false;
 	if (latestScrollMetricsSnapshot == null) return false;
@@ -496,11 +558,17 @@ function isAtLatest() {
 	if (scrollContainer == null) return true;
 
 	const { latestDistance } = getChatScrollMetrics(scrollContainer);
-	if (latestDistance <= SCROLL_LATEST_THRESHOLD) {
+	if (autoScrollState.isUserInteracting()) {
+		autoScrollState.updateFromScroll(latestDistance);
+		return false;
+	}
+
+	if (isAtLatestEdgeDistance(latestDistance)) {
 		autoScrollState.updateFromScroll(latestDistance);
 		return true;
 	}
 
+	autoScrollState.updateFromScroll(latestDistance);
 	return autoScrollState.canAutoFollowLatest(latestDistance);
 }
 
@@ -515,20 +583,26 @@ function shouldAutoRevealLatestMessages() {
 	const metrics = getChatScrollMetrics(scrollContainer);
 	rememberLatestScrollMetrics(metrics);
 
-	if (metrics.latestDistance <= SCROLL_LATEST_THRESHOLD) {
+	if (autoScrollState.isUserInteracting()) {
+		autoScrollState.updateFromScroll(metrics.latestDistance);
+		return false;
+	}
+
+	if (isAtLatestEdgeDistance(metrics.latestDistance)) {
 		autoScrollState.markLatest();
 		return true;
 	}
 
 	if (
 		previousMetrics != null &&
-		previousMetrics.latestDistance <= SCROLL_LATEST_THRESHOLD &&
-		Math.abs(metrics.scrollTop - previousMetrics.maxScrollTop) <= SCROLL_LATEST_THRESHOLD
+		previousMetrics.latestDistance <= SCROLL_AUTO_STICK_THRESHOLD &&
+		metrics.latestDistance <= SCROLL_LATEST_THRESHOLD
 	) {
 		autoScrollState.markLatest();
 		return true;
 	}
 
+	autoScrollState.updateFromScroll(metrics.latestDistance);
 	return autoScrollState.canAutoFollowLatest(metrics.latestDistance);
 }
 
@@ -634,6 +708,7 @@ function setupTimelineScrollListener() {
 
 	const markUserScrollInteraction = () => {
 		clearLatestEdgeInitialLock();
+		clearOutgoingMessageAutoStick();
 		autoScrollState.markUserInteraction();
 	};
 
@@ -647,28 +722,37 @@ function setupTimelineScrollListener() {
 			historyFetchArmed = true;
 		}
 
-		if (!isRestoringHistoryScroll.value && canFetchMore.value && !moreFetching.value && messages.value.length > 0 && historyFetchArmed && historyDistance < SCROLL_HISTORY_THRESHOLD) {
+		if (!isRestoringHistoryScroll.value && canFetchMore.value && !moreFetching.value && !newerFetching.value && messages.value.length > 0 && historyFetchArmed && historyDistance < SCROLL_HISTORY_THRESHOLD) {
 			historyFetchArmed = false;
 			fetchMore();
 		}
 
-			if (latestDistance <= SCROLL_LATEST_THRESHOLD) {
-				if (!isContextMode.value && detachedIncomingMessages.length > 0) {
-					scrollToLatest('instant', { flushReadReceipt: true });
-					return;
-				}
-				if (!isContextMode.value) {
-					clearNewMessageIndicator();
-				}
+		if (isAtLatestEdgeDistance(latestDistance)) {
+			if (!isContextMode.value && (detachedIncomingMessages.length > 0 || canFetchNewer.value)) {
+				void showLatestMessages('instant');
+				return;
 			}
+			if (!isContextMode.value) {
+				clearNewMessageIndicator();
+			}
+		}
 
 		if (latestDistance >= SCROLL_TAIL_THRESHOLD) {
 			newerFetchArmed = true;
 		}
 
-		if (!isRestoringHistoryScroll.value && canFetchNewer.value && !newerFetching.value && messages.value.length > 0 && newerFetchArmed && latestDistance < SCROLL_TAIL_THRESHOLD) {
-			newerFetchArmed = false;
-			fetchNewer();
+		if (!isRestoringHistoryScroll.value && canFetchNewer.value && !newerFetching.value && !moreFetching.value && messages.value.length > 0 && newerFetchArmed && latestDistance < SCROLL_TAIL_THRESHOLD) {
+			if (!isContextMode.value) {
+				if (isAtLatestEdgeDistance(latestDistance)) {
+					newerFetchArmed = false;
+					void showLatestMessages('instant');
+				} else {
+					showScrollToLatestButton.value = true;
+				}
+			} else {
+				newerFetchArmed = false;
+				fetchNewer();
+			}
 		}
 	};
 
@@ -817,7 +901,7 @@ async function restoreVisibleMessageAnchorAfterLayout(anchor: ScrollAnchor | nul
 	if (anchor == null) return;
 
 	let stableFrames = 0;
-	for (let i = 0; i < 8; i++) {
+	for (let i = 0; i < 14; i++) {
 		await nextTick();
 		await waitAnimationFrame();
 		const delta = restoreVisibleMessageAnchor(anchor);
@@ -878,6 +962,28 @@ watch(timelineEl, (to) => {
 		scheduleStickToLatestAfterMutation();
 	});
 	timelineResizeObserver.observe(to);
+}, { immediate: true });
+
+watch(chatPaneEl, (to) => {
+	chatPaneResizeObserver?.disconnect();
+	chatPaneResizeObserver = null;
+	if (to == null) return;
+
+	chatPaneResizeObserver = new ResizeObserver(() => {
+		scheduleStickToLatestAfterMutation();
+	});
+	chatPaneResizeObserver.observe(to);
+}, { immediate: true });
+
+watch(footerEl, (to) => {
+	footerResizeObserver?.disconnect();
+	footerResizeObserver = null;
+	if (to == null) return;
+
+	footerResizeObserver = new ResizeObserver(() => {
+		scheduleStickToLatestAfterMutation();
+	});
+	footerResizeObserver.observe(to);
 }, { immediate: true });
 
 function refreshMessagesForUser(userId: string) {
@@ -1103,12 +1209,52 @@ function messageLimit(): number | undefined {
 	return isRoomChat.value ? maxRoomMessagesForViewport() : undefined;
 }
 
-function mergeMessages(first: NormalizedChatMessage[] | { keep?: 'newest' | 'oldest' }, ...rest: NormalizedChatMessage[][]): NormalizedChatMessage[] {
+function detachedIncomingMessageLimit(): number | undefined {
+	if (!isRoomChat.value) return undefined;
+	return Math.max(MAX_DETACHED_INCOMING_MESSAGES, maxRoomMessagesForViewport() * 2);
+}
+
+function trimDetachedIncomingMessages(items: Misskey.entities.ChatMessageLite[]): Misskey.entities.ChatMessageLite[] {
+	const limit = detachedIncomingMessageLimit();
+	if (limit == null || items.length <= limit) return items;
+	return mergeChatMessagesForTimeline([], items, { limit, keep: 'newest' });
+}
+
+function mergeMessagesWithResult(first: NormalizedChatMessage[] | { keep?: 'newest' | 'oldest' }, ...rest: NormalizedChatMessage[][]): MergeMessagesResult {
 	const options = Array.isArray(first) ? { keep: 'newest' as const } : { keep: first.keep ?? 'newest' };
 	const sources = Array.isArray(first) ? [first, ...rest] : rest;
-	if (sources.length === 0) return [];
-	if (sources.length === 1) return mergeChatMessagesForTimeline([], sources[0], { limit: messageLimit(), keep: options.keep });
-	return mergeChatMessagesForTimeline(sources[0], sources[1], { limit: messageLimit(), keep: options.keep, preserveExistingOrder: isRoomChat.value });
+	const emptyResult: MergeMessagesResult = {
+		messages: [],
+		droppedNewest: false,
+		droppedOldest: false,
+	};
+	if (sources.length === 0) return emptyResult;
+
+	const result = sources.length === 1
+		? mergeChatMessagesWithWindowResult([], sources[0], { limit: messageLimit(), keep: options.keep })
+		: mergeChatMessagesWithWindowResult(sources[0], sources[1], { limit: messageLimit(), keep: options.keep, preserveExistingOrder: isRoomChat.value });
+
+	return {
+		messages: result.items,
+		droppedNewest: result.droppedNewest,
+		droppedOldest: result.droppedOldest,
+	};
+}
+
+function mergeMessages(first: NormalizedChatMessage[] | { keep?: 'newest' | 'oldest' }, ...rest: NormalizedChatMessage[][]): NormalizedChatMessage[] {
+	return mergeMessagesWithResult(first, ...rest).messages;
+}
+
+function applyWindowTrimFlags(result: MergeMessagesResult) {
+	if (result.droppedNewest) {
+		canFetchNewer.value = true;
+		newerFetchArmed = true;
+		showScrollToLatestButton.value = true;
+	}
+	if (result.droppedOldest) {
+		canFetchMore.value = true;
+		historyFetchArmed = true;
+	}
 }
 
 function prependMessage(message: NormalizedChatMessage) {
@@ -1127,7 +1273,9 @@ function appendFetchedMessagesWithWindow(fetched: Misskey.entities.ChatMessageLi
 	const normalized = visible.map(x => normalizeMessage(x));
 	const newlyVisible = normalized.filter(message => !existingIds.has(message.id));
 	const current = removeMatchingPendingMessagesFrom(messages.value, normalized);
-	messages.value = mergeMessages({ keep }, current, normalized);
+	const result = mergeMessagesWithResult({ keep }, current, normalized);
+	messages.value = result.messages;
+	applyWindowTrimFlags(result);
 	return newlyVisible;
 }
 
@@ -1140,7 +1288,7 @@ function bufferFetchedLatestMessages(fetched: Misskey.entities.ChatMessageLite[]
 		...detachedIncomingMessages.map(message => message.id),
 	]);
 	const newlyVisible = visible.filter(message => !existingIds.has(message.id));
-	detachedIncomingMessages = appendDetachedChatMessages(detachedIncomingMessages, visible, messages.value);
+	detachedIncomingMessages = trimDetachedIncomingMessages(appendDetachedChatMessages(detachedIncomingMessages, visible, messages.value));
 	return newlyVisible.map(message => ({
 		id: message.id,
 		fromUserId: message.fromUserId,
@@ -1301,11 +1449,13 @@ function removeMatchingPendingMessage(message: NormalizedChatMessage) {
 }
 
 function onSendingMessage(message: NormalizedChatMessage) {
+	markOutgoingMessageAutoStick();
 	prependMessage(message);
-	nextTick(() => scrollToLatest('instant'));
+	void revealLatestMessagesAfterLayout({ behavior: 'instant' });
 }
 
 function onSentMessage(message: Misskey.entities.ChatMessageLite, clientId?: string) {
+	markOutgoingMessageAutoStick();
 	const normalized = normalizeMessage(message);
 
 	// 关键:把"已确认"的真实消息原地替换 pending,并保留 clientId。
@@ -1317,7 +1467,7 @@ function onSentMessage(message: Misskey.entities.ChatMessageLite, clientId?: str
 			messages.value = [...messages.value.slice(0, idx), adopted, ...messages.value.slice(idx + 1)];
 			replyTarget.value = null;
 			quoteTarget.value = null;
-			nextTick(() => scrollToLatest('instant'));
+			void revealLatestMessagesAfterLayout({ behavior: 'instant' });
 			return;
 		}
 		removePendingMessage(clientId);
@@ -1328,7 +1478,7 @@ function onSentMessage(message: Misskey.entities.ChatMessageLite, clientId?: str
 	prependMessage(normalized);
 	replyTarget.value = null;
 	quoteTarget.value = null;
-	nextTick(() => scrollToLatest('instant'));
+	void revealLatestMessagesAfterLayout({ behavior: 'instant' });
 }
 
 function onSendMessageFailed(clientId: string) {
@@ -1386,6 +1536,7 @@ function connectStream() {
 		roomConnection.on('roomUpdated', onRoomUpdatedStream);
 		roomConnection.on('memberKicked', onMemberKicked);
 		roomConnection.on('memberMuted', onMemberMuted);
+		roomConnection.on('memberRoleUpdated', onMemberRoleUpdated);
 		// B-light:后端把 60ms 窗口内同房间的 message/react/unreact 合并成一个 batch 事件
 		roomConnection.on('batch', onBatch);
 		// 进群时服务端立刻 push 完整初始包(room + latest 30 messages + mutes)
@@ -1423,10 +1574,12 @@ function startStreamRecoveryPolling(delay = STREAM_RECOVERY_POLL_INTERVAL_MS) {
 		if (isRoomViewDisposed) return;
 
 		let retryDelay = STREAM_RECOVERY_POLL_INTERVAL_MS;
-		if (canSyncLatestMessages() && Date.now() - latestStreamEventAt >= STREAM_RECOVERY_STALE_MS) {
-			const shouldStickToLatest = shouldAutoRevealLatestMessages();
+		const streamStale = Date.now() - latestStreamEventAt >= STREAM_RECOVERY_STALE_MS;
+		const shouldStickToLatest = shouldAutoRevealLatestMessages();
+		const shouldCheckLatest = shouldStickToLatest || streamStale || showIndicator.value || showScrollToLatestButton.value || canFetchNewer.value;
+		if (canSyncLatestMessages() && shouldCheckLatest) {
 			try {
-				await syncLatestMessages({ stickToLatest: shouldStickToLatest, flushReadReceipt: shouldStickToLatest });
+				await syncLatestMessages({ stickToLatest: shouldStickToLatest, flushReadReceipt: shouldStickToLatest, reconcileLatestWindow: shouldStickToLatest || streamStale });
 			} catch (err) {
 				if (!isAbortError(err)) {
 					console.warn('Failed to poll latest chat messages:', err);
@@ -1447,8 +1600,8 @@ function rememberStreamRecoverySinceId(sinceId: string | undefined) {
 	}
 }
 
-function scheduleStreamRecovery(reason: 'connected' | 'visible' | 'manual' = 'manual', options?: { sinceId?: string }) {
-	if (reason !== 'manual' && options?.sinceId == null && !streamHadDisconnect && isChatStreamHealthy()) return;
+function scheduleStreamRecovery(reason: 'connected' | 'visible' | 'manual' = 'manual', options?: { sinceId?: string; force?: boolean; reconcileLatestWindow?: boolean }) {
+	if (reason !== 'manual' && options?.force !== true && options?.sinceId == null && !streamHadDisconnect && isChatStreamHealthy()) return;
 	rememberStreamRecoverySinceId(options?.sinceId);
 	clearStreamRecoveryTimer();
 	streamRecoveryTimer = window.setTimeout(async () => {
@@ -1462,7 +1615,7 @@ function scheduleStreamRecovery(reason: 'connected' | 'visible' | 'manual' = 'ma
 			if (reason === 'connected') {
 				await waitChannelConnected();
 			}
-			await syncLatestMessages({ stickToLatest: shouldStickToLatest, flushReadReceipt: shouldStickToLatest, sinceId });
+			await syncLatestMessages({ stickToLatest: shouldStickToLatest, flushReadReceipt: shouldStickToLatest, sinceId, reconcileLatestWindow: shouldStickToLatest || options?.force === true || options?.reconcileLatestWindow === true });
 		} catch (err) {
 			if (!isAbortError(err)) {
 				console.warn('Failed to recover chat stream messages:', err);
@@ -1616,15 +1769,51 @@ async function syncLatestMessages(options?: { stickToLatest?: boolean; flushRead
 }
 
 async function showLatestMessages(behavior: ScrollBehavior = 'smooth') {
-	try {
-		await syncLatestMessages({ stickToLatest: true, flushReadReceipt: false, reconcileLatestWindow: true });
-	} catch (err) {
-		if (!isAbortError(err)) {
-			console.warn('Failed to reconcile latest chat messages before revealing:', err);
-		}
+	if (latestRevealPromise != null) {
+		await latestRevealPromise;
+		await scrollToLatestAfterLayout({ behavior, flushReadReceipt: true });
+		return;
 	}
 
-	scrollToLatest(behavior, { flushReadReceipt: true });
+	const run = async () => {
+		try {
+			await revealAuthoritativeLatestWindow();
+		} catch (err) {
+			if (!isAbortError(err)) {
+				console.warn('Failed to reconcile latest chat messages before revealing:', err);
+			}
+		}
+	};
+
+	latestRevealPromise = run();
+	try {
+		await latestRevealPromise;
+	} finally {
+		latestRevealPromise = null;
+	}
+
+	await scrollToLatestAfterLayout({ behavior, flushReadReceipt: true });
+}
+
+async function revealAuthoritativeLatestWindow() {
+	if (!canSyncLatestMessages()) {
+		flushIncomingMessagesNow({ stickToLatest: true });
+		flushDetachedIncomingMessages({ queueReadReceipt: true, keep: 'newest' });
+		clearNewMessageIndicator();
+		showScrollToLatestButton.value = false;
+		return;
+	}
+
+	const latestWindow = await reconcileLatestTimelineWindow();
+	flushIncomingMessagesNow({ stickToLatest: true });
+	const latestResult = appendFetchedMessagesWithWindow(latestWindow, 'newest');
+	flushDetachedIncomingMessages({ queueReadReceipt: true, keep: 'newest' });
+	if (latestResult.length > 0 || detachedIncomingMessages.length === 0) {
+		canFetchNewer.value = false;
+		newerFetchArmed = false;
+	}
+	clearNewMessageIndicator();
+	showScrollToLatestButton.value = false;
 }
 
 async function initializeContextTimeline(messageId: string) {
@@ -1719,12 +1908,8 @@ async function finishContextAtLatest() {
 	clearMessageContextRoute();
 	contextTargetMessageId.value = null;
 	pendingContextScrollId.value = null;
-	canFetchNewer.value = false;
-	newerFetchArmed = false;
-	showScrollToLatestButton.value = false;
-	clearNewMessageIndicator();
-	await revealLatestMessagesAfterLayout({ behavior: 'instant', flushReadReceipt: true });
-	await syncLatestMessages({ stickToLatest: true, flushReadReceipt: true });
+	await showLatestMessages('instant');
+	await fillInitialScrollableHistory();
 }
 
 async function exitContextToLatest() {
@@ -1748,6 +1933,8 @@ async function exitContextToLatest() {
 
 async function openMessageContext(messageId: string) {
 	tab.value = 'chat';
+	clearLatestEdgeInitialLock();
+	clearLateInitialRescrollTimers();
 	clearIncomingMessageQueue({ flushReadReceipt: true });
 	streamRecoverySinceId = undefined;
 	initializeError.value = null;
@@ -1776,6 +1963,8 @@ async function openMessageContext(messageId: string) {
 
 async function openReferenceMessage(messageId: string) {
 	tab.value = 'chat';
+	clearLatestEdgeInitialLock();
+	clearLateInitialRescrollTimers();
 	clearIncomingMessageQueue({ flushReadReceipt: true });
 	streamRecoverySinceId = undefined;
 	initializeError.value = null;
@@ -1836,9 +2025,10 @@ async function finishInitializeRender() {
 	}
 }
 
-async function scrollToLatestAfterLayout(options?: { flushReadReceipt?: boolean; fillHistory?: boolean }) {
+async function scrollToLatestAfterLayout(options?: { flushReadReceipt?: boolean; fillHistory?: boolean; behavior?: ScrollBehavior }) {
+	let initialLatestEdgeLockGeneration: number | null = null;
 	if (!isContextMode.value) {
-		lockLatestEdgeDuringInitialRender();
+		initialLatestEdgeLockGeneration = lockLatestEdgeDuringInitialRender();
 	}
 	beginScrollRestoration();
 
@@ -1874,12 +2064,14 @@ async function scrollToLatestAfterLayout(options?: { flushReadReceipt?: boolean;
 			}
 		}
 
-		scrollToLatest('instant', { flushReadReceipt: options?.flushReadReceipt });
+		scrollToLatest(options?.behavior ?? 'instant', { flushReadReceipt: options?.flushReadReceipt });
 		if (options?.fillHistory === true) {
 			await fillInitialScrollableHistory();
 		}
 		// avatar/图片晚加载会撑高内容把视图顶离底部:在锁定期内分批兜底重锚
-		scheduleLateInitialRescrolls();
+		if (initialLatestEdgeLockGeneration != null && isLatestEdgeInitialLockActive(initialLatestEdgeLockGeneration)) {
+			scheduleLateInitialRescrolls(initialLatestEdgeLockGeneration);
+		}
 	} finally {
 		endScrollRestoration();
 	}
@@ -1897,6 +2089,7 @@ async function initialize() {
 	// 触发的"是否吸底"判断会拿旧 maxScrollTop 比对新房间,新房进群停在错误位置(经常停在中间/顶部)。
 	latestScrollMetricsSnapshot = null;
 	bootstrapAppliedAt = 0;
+	clearLatestEdgeInitialLock();
 	clearLateInitialRescrollTimers();
 	autoScrollState.markLatest();
 	messages.value = [];
@@ -2001,7 +2194,7 @@ onActivated(() => {
 	isActivated = true;
 	readReceiptBatcher.flush();
 	if (tab.value === 'chat' && !isContextMode.value && !initializing.value && initializeError.value == null && joinRequiredRoom.value == null) {
-		scheduleLatestOnChatTabReturn();
+		scheduleLatestOnChatTabReturn({ forceLatest: false });
 	}
 });
 
@@ -2012,7 +2205,7 @@ onDeactivated(() => {
 async function fetchMore(options: { keepLatest?: boolean } = {}) {
 	const LIMIT = 30;
 	const untilId = findOldestPersistedMessageId();
-	if (!canFetchMore.value || moreFetching.value || untilId == null) return;
+	if (!canFetchMore.value || moreFetching.value || newerFetching.value || untilId == null) return;
 
 	const anchor = options.keepLatest ? null : getVisibleMessageAnchor();
 	beginScrollRestoration();
@@ -2029,7 +2222,7 @@ async function fetchMore(options: { keepLatest?: boolean } = {}) {
 			untilId,
 		});
 
-		appendFetchedMessagesWithWindow(newMessages, 'oldest');
+		appendFetchedMessagesWithWindow(newMessages, options.keepLatest ? 'newest' : 'oldest');
 
 		canFetchMore.value = newMessages.length === LIMIT;
 	} finally {
@@ -2061,6 +2254,8 @@ async function fillInitialScrollableHistory() {
 		const scrollContainer = timelineEl.value == null ? null : getScrollContainer(timelineEl.value);
 		if (scrollContainer == null || messages.value.length === 0 || !canFetchMore.value || moreFetching.value) return;
 		if (scrollContainer.scrollHeight > scrollContainer.clientHeight + 1) return;
+		const limit = messageLimit();
+		if (limit != null && messages.value.length >= limit) return;
 
 		await fetchMore({ keepLatest: true });
 	}
@@ -2069,7 +2264,7 @@ async function fillInitialScrollableHistory() {
 async function fetchNewer() {
 	const LIMIT = 30;
 	const sinceId = findNewestPersistedMessageId();
-	if (!canFetchNewer.value || newerFetching.value || sinceId == null) return;
+	if (!canFetchNewer.value || newerFetching.value || moreFetching.value || sinceId == null) return;
 
 	const anchor = getVisibleMessageAnchor();
 	const wasContextMode = isContextMode.value;
@@ -2088,7 +2283,7 @@ async function fetchNewer() {
 			sinceId,
 		});
 
-		appendFetchedMessages(newMessages);
+		appendFetchedMessagesWithWindow(newMessages, 'newest');
 		canFetchNewer.value = newMessages.length === LIMIT;
 		reachedLatestInContext = wasContextMode && !canFetchNewer.value;
 	} finally {
@@ -2125,7 +2320,7 @@ function clearIncomingMessageQueue(options?: { flushReadReceipt?: boolean }) {
 	}
 }
 
-function flushDetachedIncomingMessages(options?: { queueReadReceipt?: boolean }) {
+function flushDetachedIncomingMessages(options?: { queueReadReceipt?: boolean; keep?: 'newest' | 'oldest' }) {
 	if (detachedIncomingMessages.length === 0) return false;
 
 	const filtered = filterMutedRoomMessages(detachedIncomingMessages);
@@ -2135,9 +2330,9 @@ function flushDetachedIncomingMessages(options?: { queueReadReceipt?: boolean })
 
 	const newestOtherMessage = getNewestMessage(normalized.filter(message => message.fromUserId !== $i.id));
 	const current = removeMatchingPendingMessagesFrom(messages.value, normalized);
-	messages.value = normalized.length === 1
-		? prependChatMessageForTimeline(current, normalized[0], { limit: messageLimit() })
-		: mergeChatMessagesForTimeline(current, normalized, { limit: messageLimit() });
+	const result = mergeMessagesWithResult({ keep: options?.keep ?? 'newest' }, current, normalized);
+	messages.value = result.messages;
+	applyWindowTrimFlags(result);
 
 	if (options?.queueReadReceipt === true && newestOtherMessage != null && !window.document.hidden && isActivated) {
 		readReceiptBatcher.queue(newestOtherMessage.id);
@@ -2162,7 +2357,7 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[], 
 	const visibleBatch = filterMutedRoomMessages(batch);
 	if (visibleBatch.length === 0) return;
 	const batchNewestId = visibleBatch.reduce<string | null>((acc, message) => acc == null || message.id > acc ? message.id : acc, null);
-	const shouldStickToLatest = options?.stickToLatest === true || shouldAutoRevealLatestMessages();
+	const shouldStickToLatest = options?.stickToLatest === true || shouldForceStickIncomingBatchToLatest(visibleBatch) || shouldAutoRevealLatestMessages();
 
 	if (isContextMode.value) {
 		if (shouldStickToLatest) {
@@ -2195,32 +2390,34 @@ function processIncomingMessageBatch(batch: Misskey.entities.ChatMessageLite[], 
 	const firstNormalized = normalized[0];
 	if (firstNormalized == null) return;
 
-	// 不论在不在底部,都把消息塞进 messages.value:用户向上翻看历史时,新消息追加在底部
-	// 不在视口内,不会打断阅读;到底部一拉就自然看到。**之前用 detachedIncomingMessages 暂存,
-	// 直到用户滑到 80px 以内才 flush,导致网友说的"吞消息"**。直接 merge,既不丢也不打扰。
 	const { next: adopted, consumedIncomingIds } = adoptPendingMessagesFrom(messages.value, normalized);
 	const remaining = consumedIncomingIds.size === 0 ? normalized : normalized.filter(m => !consumedIncomingIds.has(m.id));
-	if (remaining.length === 0) {
-		messages.value = adopted;
-	} else if (remaining.length === 1) {
-		messages.value = prependChatMessageForTimeline(adopted, remaining[0], { limit: messageLimit() });
-	} else {
-		messages.value = mergeChatMessagesForTimeline(adopted, remaining, { limit: messageLimit() });
-	}
-
-	markFreshlyArrived(remaining.map(m => m.id));
 
 	if (!wasAtLatest) {
-		// 用户在向上翻历史。不滚动,仅亮起 "+N 条新消息" 指示器 + 到底按钮
+		detachedIncomingMessages = trimDetachedIncomingMessages(appendDetachedChatMessages(detachedIncomingMessages, visibleBatch, messages.value));
+		messages.value = adopted;
+		detachedIncomingMessages = trimDetachedIncomingMessages(appendDetachedChatMessages(detachedIncomingMessages, [], messages.value));
+		// 用户在向上翻历史。不滚动,仅亮起 "+N 条新消息" 指示器 + 到底按钮。
 		if (otherCount > 0) {
 			notifyNewMessages(otherCount);
 		}
 		showScrollToLatestButton.value = true;
+		canFetchNewer.value = true;
+		newerFetchArmed = true;
 		if (shouldRecoverGap) {
 			scheduleStreamRecovery('manual');
 		}
 		return;
 	}
+
+	if (remaining.length === 0) {
+		messages.value = adopted;
+	} else {
+		const result = mergeMessagesWithResult(adopted, remaining);
+		messages.value = result.messages;
+		applyWindowTrimFlags(result);
+	}
+	markFreshlyArrived(remaining.map(m => m.id));
 
 	// 在底部:标已读 + 自动锚底
 	if (newestOtherMessage != null && !window.document.hidden && isActivated) {
@@ -2256,7 +2453,7 @@ function flushIncomingMessagesNow(options?: { stickToLatest?: boolean }) {
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {
 	markChatStreamEvent();
-	pendingIncomingShouldStickToLatest = pendingIncomingShouldStickToLatest || shouldAutoRevealLatestMessages();
+	pendingIncomingShouldStickToLatest = pendingIncomingShouldStickToLatest || shouldForceStickIncomingBatchToLatest([message]) || shouldAutoRevealLatestMessages();
 	pendingIncomingMessages.push(message);
 	if (pendingIncomingMessageFrame == null) {
 		pendingIncomingMessageFrame = window.requestAnimationFrame(flushIncomingMessages);
@@ -2298,6 +2495,7 @@ function onPruned(ctx: Parameters<Misskey.Channels['chatRoom']['events']['pruned
 // 进群 bootstrap:WS 端口直推的初始数据。把 messages + mutes 全套填进去,
 // 后续 loadLatestTimeline / loadMutedRoomUsers 看到 bootstrapAppliedAt 就直接跳过 HTTP。
 let bootstrapAppliedAt = 0;
+
 // 1on1 DM 的 bootstrap:服务端推过来 30 条 messages,跳过 HTTP user-timeline
 function onUserBootstrap(payload: Parameters<Misskey.Channels['chatUser']['events']['bootstrap']>[0]) {
 	if (payload.messages.length > 0) {
@@ -2307,6 +2505,7 @@ function onUserBootstrap(payload: Parameters<Misskey.Channels['chatUser']['event
 	}
 	bootstrapAppliedAt = Date.now();
 }
+
 function onBootstrap(payload: Parameters<Misskey.Channels['chatRoom']['events']['bootstrap']>[0]) {
 	// room 信息:HTTP 已经在跑了,但 bootstrap 一般会更新——以 HTTP 为准时也接受 bootstrap 的 latest 字段
 	if (room.value == null) {
@@ -2422,6 +2621,20 @@ function onMemberMuted(ctx: Parameters<Misskey.Channels['chatRoom']['events']['m
 	membersRefreshKey.value++;
 }
 
+async function onMemberRoleUpdated(ctx: Parameters<Misskey.Channels['chatRoom']['events']['memberRoleUpdated']>[0]) {
+	markChatStreamEvent();
+	membersRefreshKey.value++;
+	if (room.value == null || ctx.userId !== $i.id) return;
+	try {
+		const updated = await misskeyApi('chat/rooms/show', {
+			roomId: room.value.id,
+		});
+		room.value = updated;
+	} catch {
+		// 権限が変わった直後に再取得できなくても、次の通常更新で復旧する
+	}
+}
+
 function onIndicatorClick() {
 	if (isContextMode.value) {
 		// 之前调 exitContextToLatest → loadLatestTimeline,会等 bootstrap 1.5s 再 HTTP 兜底,
@@ -2431,7 +2644,7 @@ function onIndicatorClick() {
 		return;
 	}
 
-	void showLatestMessages('smooth');
+	void showLatestMessages('instant');
 }
 
 function notifyNewMessages(count = 1) {
@@ -2496,17 +2709,38 @@ function ensureSelectedChatTabVisible(behavior: ScrollBehavior = 'smooth') {
 	});
 }
 
-function onVisibilitychange() {
+function recoverLatestAfterMobileResume() {
 	if (window.document.hidden) return;
 	readReceiptBatcher.flush();
+	scheduleStickToLatestAfterMutation();
 	startStreamRecoveryPolling(STREAM_RECOVERY_ERROR_RETRY_MS);
-	scheduleStreamRecovery('visible');
+	scheduleStreamRecovery('visible', { force: true, reconcileLatestWindow: true });
+}
+
+function onVisibilitychange() {
+	recoverLatestAfterMobileResume();
+}
+
+function onWindowFocus() {
+	recoverLatestAfterMobileResume();
+}
+
+function onPageShow() {
+	recoverLatestAfterMobileResume();
+}
+
+function onVisualViewportChange() {
+	scheduleStickToLatestAfterMutation();
 }
 
 onMounted(() => {
 	isRoomViewDisposed = false;
 	window.document.addEventListener('visibilitychange', onVisibilitychange);
+	window.addEventListener('focus', onWindowFocus);
+	window.addEventListener('pageshow', onPageShow);
 	window.addEventListener('resize', updateChatTabsScrollState);
+	window.visualViewport?.addEventListener('resize', onVisualViewportChange);
+	window.visualViewport?.addEventListener('scroll', onVisualViewportChange);
 	useStream().on('_connected_', onStreamConnected);
 	useStream().on('_disconnected_', onStreamDisconnected);
 	startStreamRecoveryPolling(STREAM_RECOVERY_ERROR_RETRY_MS);
@@ -2541,6 +2775,8 @@ onBeforeUnmount(() => {
 	useStream().off('_disconnected_', onStreamDisconnected);
 	removeTimelineScrollListener?.();
 	timelineResizeObserver?.disconnect();
+	chatPaneResizeObserver?.disconnect();
+	footerResizeObserver?.disconnect();
 	clearStreamRecoveryTimer();
 	clearStreamRecoveryPollingTimer();
 	streamRecoverySinceId = undefined;
@@ -2550,13 +2786,18 @@ onBeforeUnmount(() => {
 		pendingStickToLatestFrame = null;
 	}
 	clearLateInitialRescrollTimers();
+	clearLatestEdgeInitialLock();
 	if (pendingUserRefreshTimer != null) {
 		window.clearTimeout(pendingUserRefreshTimer);
 		pendingUserRefreshTimer = null;
 	}
 	usersRefreshQueue.clear();
 	window.document.removeEventListener('visibilitychange', onVisibilitychange);
+	window.removeEventListener('focus', onWindowFocus);
+	window.removeEventListener('pageshow', onPageShow);
 	window.removeEventListener('resize', updateChatTabsScrollState);
+	window.visualViewport?.removeEventListener('resize', onVisualViewportChange);
+	window.visualViewport?.removeEventListener('scroll', onVisualViewportChange);
 });
 
 async function inviteUser() {
@@ -2646,15 +2887,16 @@ function showMenu(ev: MouseEvent) {
 	os.popupMenu(menuItems, ev.currentTarget ?? ev.target);
 }
 
-async function ensureLatestOnChatTabReturn(generation: number) {
+async function ensureLatestOnChatTabReturn(generation: number, options: { forceLatest?: boolean } = {}) {
 	await nextTick();
 	await waitAnimationFrame();
 
 	if (generation !== chatTabLatestReturnGeneration || tab.value !== 'chat' || initializing.value || initializeError.value != null || joinRequiredRoom.value != null) return;
 
 	const sinceId = findNewestPersistedMessageId();
+	const shouldStickToLatest = options.forceLatest === true || shouldAutoRevealLatestMessages();
 	try {
-		await syncLatestMessages({ stickToLatest: true, flushReadReceipt: true, sinceId, reconcileLatestWindow: true });
+		await syncLatestMessages({ stickToLatest: shouldStickToLatest, flushReadReceipt: shouldStickToLatest, sinceId, reconcileLatestWindow: shouldStickToLatest });
 	} catch (err) {
 		if (!isAbortError(err)) {
 			console.warn('Failed to refresh latest chat messages after returning to chat tab:', err);
@@ -2666,12 +2908,14 @@ async function ensureLatestOnChatTabReturn(generation: number) {
 
 	if (generation !== chatTabLatestReturnGeneration || tab.value !== 'chat' || initializing.value || initializeError.value != null || joinRequiredRoom.value != null) return;
 
-	await scrollToLatestAfterLayout({ flushReadReceipt: true, fillHistory: true });
+	if (shouldStickToLatest) {
+		await scrollToLatestAfterLayout({ flushReadReceipt: true, fillHistory: true });
+	}
 }
 
-function scheduleLatestOnChatTabReturn() {
+function scheduleLatestOnChatTabReturn(options: { forceLatest?: boolean } = {}) {
 	chatTabLatestReturnGeneration++;
-	void ensureLatestOnChatTabReturn(chatTabLatestReturnGeneration);
+	void ensureLatestOnChatTabReturn(chatTabLatestReturnGeneration, options);
 }
 
 function selectTab(key: string) {
@@ -2686,7 +2930,7 @@ function selectTab(key: string) {
 	}
 
 	if (previousTab !== 'chat') {
-		scheduleLatestOnChatTabReturn();
+		scheduleLatestOnChatTabReturn({ forceLatest: true });
 	}
 }
 
@@ -2710,7 +2954,7 @@ const headerTabs = computed(() => room.value ? room.value.isJoined ? [{
 	key: 'info',
 	title: i18n.ts.info,
 	icon: 'ti ti-info-circle',
-}, ...(room.value.canManage ? [{
+}, ...(canManageRoomUsers.value ? [{
 	key: 'management',
 	title: i18n.ts._chat.management,
 	icon: 'ti ti-shield-cog',
@@ -2792,6 +3036,7 @@ definePage(computed(() => {
 	--chat-room-border: light-dark(rgb(198 213 222), rgb(31 43 55));
 	--chat-room-footer-cover: light-dark(rgb(216 230 238 / 0.98), rgb(14 22 33 / 0.98));
 	--chat-room-footer-shadow: light-dark(rgb(137 164 180 / 0.52), rgb(0 0 0 / 0.44));
+	--chat-room-footer-overlap: 18px;
 
 	position: relative;
 	container-type: inline-size;
@@ -3097,11 +3342,8 @@ definePage(computed(() => {
 	max-width: 100%;
 	min-width: 0;
 	box-sizing: border-box;
-	/* 屏外消息浏览器层面跳 layout/paint,屏内不变 —— 用浏览器原生的"虚拟化"代替 DynamicScroller。
-	 * <img> 节点全部稳定挂载,头像不会再因 recycler 复用 DOM 而闪。
-	 * contain-intrinsic-size 给浏览器一个占位高度的提示,避免 scroll height 抖动。 */
-	content-visibility: auto;
-	contain-intrinsic-size: auto 72px;
+	/* 不使用 content-visibility。移动端 WebKit 快速滑动时会用估算高度参与滚动，
+	 * 图片/引用晚加载后容易出现消息错位或短暂不可见。 */
 }
 
 /* 新到消息出场动画:标了 data-fresh=true 的 item 演 220ms */
@@ -3126,7 +3368,7 @@ definePage(computed(() => {
 	width: 100%;
 	max-width: 100%;
 	margin: 0 auto;
-	padding: 14px 18px;
+	padding: 14px 18px calc(14px + var(--chat-room-footer-overlap));
 	box-sizing: border-box;
 	overflow-x: hidden;
 	overflow-y: scroll;
@@ -3155,7 +3397,6 @@ definePage(computed(() => {
 .chatPane > :global(._gaps) > :first-child {
 	margin-top: auto;
 }
-
 
 .searchPane {
 	height: 100%;
@@ -3268,8 +3509,8 @@ definePage(computed(() => {
 .footer::before {
 	content: "";
 	position: absolute;
-	inset: -18px 0 auto;
-	height: 18px;
+	inset: calc(-1 * var(--chat-room-footer-overlap)) 0 auto;
+	height: var(--chat-room-footer-overlap);
 	pointer-events: none;
 	background: linear-gradient(to bottom, transparent, var(--chat-room-footer-cover));
 }

@@ -17,13 +17,15 @@ import { CHAT_MESSAGE_MENTION_CACHE_TTL, ChatEntityService, chatMessageMentionCa
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
 import { PushNotificationService } from '@/core/PushNotificationService.js';
 import { bindThis } from '@/decorators.js';
-import type { ChatApprovalsRepository, ChatMessagesRepository, ChatRoomBanningsRepository, ChatRoomInvitationsRepository, ChatRoomMembershipsRepository, ChatRoomUserMutingsRepository, ChatRoomsRepository, DriveFilesRepository, MetasRepository, MiChatMessage, MiChatRoom, MiChatRoomBanning, MiChatRoomMembership, MiChatRoomUserMuting, MiDriveFile, MiUser, MutingsRepository, UsersRepository } from '@/models/_.js';
+import type { ChatApprovalsRepository, ChatMessagesRepository, ChatRoomBanningsRepository, ChatRoomInvitationsRepository, ChatRoomMembershipsRepository, ChatRoomUserSettingsRepository, ChatRoomUserMutingsRepository, ChatRoomsRepository, ChatUserConversationSettingsRepository, DriveFilesRepository, MetasRepository, MiChatMessage, MiChatRoom, MiChatRoomBanning, MiChatRoomMembership, MiChatRoomUserMuting, MiDriveFile, MiUser, MutingsRepository, UsersRepository } from '@/models/_.js';
 import { UserBlockingService } from '@/core/UserBlockingService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { RoleService } from '@/core/RoleService.js';
 import { UserFollowingService } from '@/core/UserFollowingService.js';
 import { MiChatRoomInvitation } from '@/models/ChatRoomInvitation.js';
+import { MiChatUserConversationSetting } from '@/models/ChatUserConversationSetting.js';
 import { chatRoomJoinModes, type ChatRoomJoinMode } from '@/models/ChatRoom.js';
+import { chatRoomMembershipRoles, type ChatRoomMembershipRole } from '@/models/ChatRoomMembership.js';
 import { Packed } from '@/misc/json-schema.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
@@ -160,6 +162,12 @@ export class ChatService {
 		@Inject(DI.chatRoomMembershipsRepository)
 		private chatRoomMembershipsRepository: ChatRoomMembershipsRepository,
 
+		@Inject(DI.chatRoomUserSettingsRepository)
+		private chatRoomUserSettingsRepository: ChatRoomUserSettingsRepository,
+
+		@Inject(DI.chatUserConversationSettingsRepository)
+		private chatUserConversationSettingsRepository: ChatUserConversationSettingsRepository,
+
 		@Inject(DI.chatRoomUserMutingsRepository)
 		private chatRoomUserMutingsRepository: ChatRoomUserMutingsRepository,
 
@@ -203,6 +211,11 @@ export class ChatService {
 	@bindThis
 	private roomTimelineCacheMetaKey(roomId: MiChatRoom['id']): string {
 		return `chat:room:${roomId}:timeline:v1:meta`;
+	}
+
+	@bindThis
+	private latestRoomChatMessageKey(roomId: MiChatRoom['id']): string {
+		return `latestRoomChatMessage:${roomId}`;
 	}
 
 	@bindThis
@@ -289,6 +302,13 @@ export class ChatService {
 	}
 
 	@bindThis
+	private isPackedRoomTimelineCacheBehindLatestMarker(packed: PackedRoomChatMessage[], latestRoomChatMessageId: string | null): boolean {
+		if (latestRoomChatMessageId == null) return false;
+		const newestCachedMessageId = packed[0]?.id;
+		return newestCachedMessageId == null || newestCachedMessageId < latestRoomChatMessageId;
+	}
+
+	@bindThis
 	public async getMutedRoomUserIds(userId: MiUser['id'] | null, roomId: MiChatRoom['id']): Promise<Set<MiUser['id']>> {
 		if (userId == null) return new Set();
 
@@ -333,12 +353,17 @@ export class ChatService {
 		sinceId?: MiChatMessage['id'] | null,
 	): Promise<PackedRoomChatMessage[] | null> {
 		try {
-			const [rawMessages, rawMeta] = await Promise.all([
+			const [rawMessages, rawMeta, latestRoomChatMessageId] = await Promise.all([
 				this.redisClient.lrange(this.roomTimelineCacheKey(roomId), 0, ROOM_TIMELINE_CACHE_LIMIT - 1),
 				this.redisClient.get(this.roomTimelineCacheMetaKey(roomId)),
+				this.redisClient.get(this.latestRoomChatMessageKey(roomId)),
 			]);
 			const meta = this.parseRoomTimelineCacheMeta(rawMeta);
 			const packed = rawMessages.map(raw => this.parsePackedRoomMessage(raw)).filter((message): message is PackedRoomChatMessage => message != null);
+
+			if (this.isPackedRoomTimelineCacheBehindLatestMarker(packed, latestRoomChatMessageId)) {
+				return null;
+			}
 
 			return this.selectPackedRoomTimeline(packed, meta?.complete === true, limit, mutedUserIds, sinceId);
 		} catch {
@@ -1133,9 +1158,63 @@ export class ChatService {
 	}
 
 	@bindThis
+	public async hasPermissionToModerateRoom(me: MiUser, room: MiChatRoom) {
+		if (room.ownerId === me.id) return true;
+		const [membership, iAmModerator] = await Promise.all([
+			this.chatRoomMembershipsRepository.findOne({
+				select: {
+					role: true,
+				},
+				where: {
+					roomId: room.id,
+					userId: me.id,
+				},
+			}),
+			this.roleService.isModerator(me),
+		]);
+		return iAmModerator || membership?.role === 'manager';
+	}
+
+	@bindThis
 	public async hasPermissionToManageRoom(me: MiUser, room: MiChatRoom) {
+		return await this.hasPermissionToModerateRoom(me, room);
+	}
+
+	@bindThis
+	public async hasPermissionToManageRoomRoles(me: MiUser, room: MiChatRoom) {
 		if (room.ownerId === me.id) return true;
 		return await this.roleService.isModerator(me);
+	}
+
+	@bindThis
+	public async hasPermissionToEditRoomProfile(me: MiUser, room: MiChatRoom) {
+		return await this.hasPermissionToManageRoomRoles(me, room);
+	}
+
+	@bindThis
+	public async canModerateRoomMember(actor: MiUser, room: MiChatRoom, targetUserId: MiUser['id']) {
+		if (!await this.hasPermissionToModerateRoom(actor, room)) return false;
+		if (await this.roleService.isModerator({ id: targetUserId } as MiUser)) return false;
+		const actorHasOwnerPower = await this.hasPermissionToManageRoomRoles(actor, room);
+		if (targetUserId === room.ownerId) return false;
+		if (actorHasOwnerPower) return true;
+		const targetMembership = await this.chatRoomMembershipsRepository.findOne({
+			select: {
+				role: true,
+			},
+			where: {
+				roomId: room.id,
+				userId: targetUserId,
+			},
+		});
+		return targetMembership != null && targetMembership.role !== 'manager';
+	}
+
+	@bindThis
+	public async canDeleteRoomMessagesByUser(actor: MiUser, room: MiChatRoom, targetUserId: MiUser['id']) {
+		if (targetUserId === actor.id) return true;
+		if (targetUserId === room.ownerId) return await this.hasPermissionToManageRoomRoles(actor, room);
+		return await this.canModerateRoomMember(actor, room, targetUserId);
 	}
 
 	@bindThis
@@ -1144,7 +1223,7 @@ export class ChatService {
 		if (message.toRoomId != null) {
 			const room = await this.chatRoomsRepository.findOneBy({ id: message.toRoomId });
 			if (room == null) return false;
-			return await this.hasPermissionToManageRoom(me, room);
+			return await this.canDeleteRoomMessagesByUser(me, room, message.fromUserId);
 		}
 		if (message.toUserId != null) {
 			return await this.roleService.isModerator(me);
@@ -1175,6 +1254,116 @@ export class ChatService {
 		]);
 
 		return membership != null || iAmModerator;
+	}
+
+	@bindThis
+	public async isRoomParticipant(userId: MiUser['id'], room: ChatRoomMessageTarget) {
+		if (room.ownerId === userId) return true;
+
+		const membership = await this.chatRoomMembershipsRepository.findOne({
+			select: {
+				userId: true,
+			},
+			where: {
+				roomId: room.id,
+				userId,
+			},
+		});
+
+		return membership != null;
+	}
+
+	@bindThis
+	public async updateRoomUserSetting(userId: MiUser['id'], roomId: MiChatRoom['id'], params: {
+		nickname?: string | null;
+		folder?: string | null;
+	}) {
+		const updatedAt = new Date();
+		const existing = await this.chatRoomUserSettingsRepository.findOneBy({ userId, roomId });
+		const normalize = (value: string | null | undefined) => value == null ? null : value.trim() || null;
+		const nickname = params.nickname === undefined ? existing?.nickname ?? null : normalize(params.nickname);
+		const folder = params.folder === undefined ? existing?.folder ?? null : normalize(params.folder);
+
+		if (nickname == null && folder == null) {
+			if (existing != null) {
+				await this.chatRoomUserSettingsRepository.delete(existing.id);
+			}
+			return null;
+		}
+
+		if (existing != null) {
+			await this.chatRoomUserSettingsRepository.update(existing.id, {
+				nickname,
+				folder,
+				updatedAt,
+			});
+			return {
+				...existing,
+				nickname,
+				folder,
+				updatedAt,
+			};
+		}
+
+		return await this.chatRoomUserSettingsRepository.insertOne({
+			id: this.idService.gen(),
+			userId,
+			roomId,
+			nickname,
+			folder,
+			updatedAt,
+		});
+	}
+
+	@bindThis
+	public async hideUserConversation(userId: MiUser['id'], otherUserId: MiUser['id']) {
+		const latestMessage = await this.chatMessagesRepository.createQueryBuilder('message')
+			.where('message.toRoomId IS NULL')
+			.andWhere(new Brackets(qb => {
+				qb
+					.where(new Brackets(qb => {
+						qb
+							.where('message.fromUserId = :userId')
+							.andWhere('message.toUserId = :otherUserId');
+					}))
+					.orWhere(new Brackets(qb => {
+						qb
+							.where('message.fromUserId = :otherUserId')
+							.andWhere('message.toUserId = :userId');
+					}));
+			}))
+			.setParameter('userId', userId)
+			.setParameter('otherUserId', otherUserId)
+			.orderBy('message.id', 'DESC')
+			.getOne();
+
+		if (latestMessage == null) {
+			await Promise.all([
+				this.chatUserConversationSettingsRepository.delete({ userId, otherUserId }),
+				this.readUserChatMessage(userId, otherUserId),
+			]);
+			return null;
+		}
+
+		const updatedAt = new Date();
+		const existing = await this.chatUserConversationSettingsRepository.findOneBy({ userId, otherUserId });
+		if (existing != null) {
+			await this.chatUserConversationSettingsRepository.update(existing.id, {
+				hiddenUntilMessageId: latestMessage.id,
+				updatedAt,
+			});
+		} else {
+			await this.chatUserConversationSettingsRepository.insertOne({
+				id: this.idService.gen(),
+				userId,
+				otherUserId,
+				hiddenUntilMessageId: latestMessage.id,
+				updatedAt,
+			});
+		}
+
+		await this.readUserChatMessage(userId, otherUserId);
+		return latestMessage;
 	}
 
 	@bindThis
@@ -1613,6 +1802,10 @@ export class ChatService {
 			const found = history.map(m => (m.fromUserId === meId) ? m.toUserId! : m.fromUserId!);
 
 			const query = this.chatMessagesRepository.createQueryBuilder('message')
+				.leftJoin(MiChatUserConversationSetting, 'conversationSetting', [
+					'conversationSetting."userId" = :meId',
+					'conversationSetting."otherUserId" = CASE WHEN message."fromUserId" = :meId THEN message."toUserId" ELSE message."fromUserId" END',
+				].join(' AND '))
 				.orderBy('message.id', 'DESC')
 				.where(new Brackets(qb => {
 					qb
@@ -1620,6 +1813,11 @@ export class ChatService {
 						.orWhere('message.toUserId = :meId', { meId: meId });
 				}))
 				.andWhere('message.toRoomId IS NULL')
+				.andWhere(new Brackets(qb => {
+					qb
+						.where('conversationSetting."hiddenUntilMessageId" IS NULL')
+						.orWhere('message.id > conversationSetting."hiddenUntilMessageId"');
+				}))
 				.andWhere(`message.fromUserId NOT IN (${ mutingQuery.getQuery() })`)
 				.andWhere(`message.toUserId NOT IN (${ mutingQuery.getQuery() })`);
 
@@ -1854,16 +2052,7 @@ export class ChatService {
 
 	@bindThis
 	public async hasPermissionToDeleteRoom(me: MiUser, room: MiChatRoom) {
-		if (room.ownerId === me.id) {
-			return true;
-		}
-
-		const iAmModerator = await this.roleService.isModerator(me);
-		if (iAmModerator) {
-			return true;
-		}
-
-		return false;
+		return await this.hasPermissionToManageRoomRoles(me, room);
 	}
 
 	@bindThis
@@ -1950,12 +2139,15 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async createRoomInvitation(inviterId: MiUser['id'], roomId: MiChatRoom['id'], inviteeId: MiUser['id']) {
-		if (inviterId === inviteeId) {
+	public async createRoomInvitation(inviter: MiUser, roomId: MiChatRoom['id'], inviteeId: MiUser['id']) {
+		if (inviter.id === inviteeId) {
 			throw new Error('yourself');
 		}
 
-		const room = await this.chatRoomsRepository.findOneByOrFail({ id: roomId, ownerId: inviterId });
+		const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
+		if (room == null || !await this.hasPermissionToModerateRoom(inviter, room)) {
+			throw new Error('no such room');
+		}
 
 		if (room.joinMode === 'closed') {
 			throw new Error('joining disabled');
@@ -1991,7 +2183,7 @@ export class ChatService {
 
 		this.notificationService.createNotification(inviteeId, 'chatRoomInvitationReceived', {
 			invitationId: invitation.id,
-		}, inviterId);
+		}, inviter.id);
 
 		return created;
 	}
@@ -2060,6 +2252,7 @@ export class ChatService {
 				id: this.idService.gen(),
 				roomId: roomId,
 				userId: userId,
+				role: 'member',
 			} satisfies Partial<MiChatRoomMembership>;
 
 			await this.chatRoomMembershipsRepository.insertOne(membership);
@@ -2093,9 +2286,12 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async kickFromRoom(room: MiChatRoom, userId: MiUser['id'], options: { ban?: boolean } = {}) {
+	public async kickFromRoom(room: MiChatRoom, userId: MiUser['id'], options: { ban?: boolean; actor?: MiUser } = {}) {
 		if (userId === room.ownerId) {
 			throw new Error('cannot kick the owner');
+		}
+		if (options.actor != null && !await this.canModerateRoomMember(options.actor, room, userId)) {
+			throw new Error('cannot moderate member');
 		}
 
 		const membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId });
@@ -2152,9 +2348,12 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async muteRoomMember(room: MiChatRoom, userId: MiUser['id'], mutedUntil: Date | null) {
+	public async muteRoomMember(room: MiChatRoom, userId: MiUser['id'], mutedUntil: Date | null, actor?: MiUser) {
 		if (userId === room.ownerId) {
 			throw new Error('cannot mute the owner');
+		}
+		if (actor != null && !await this.canModerateRoomMember(actor, room, userId)) {
+			throw new Error('cannot moderate member');
 		}
 
 		const membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId });
@@ -2169,6 +2368,38 @@ export class ChatService {
 			userId,
 			mutedUntil: mutedUntil?.toISOString() ?? null,
 		});
+	}
+
+	@bindThis
+	public async updateRoomMembershipRole(room: MiChatRoom, userId: MiUser['id'], role: ChatRoomMembershipRole) {
+		if (!chatRoomMembershipRoles.includes(role)) {
+			throw new Error('invalid role');
+		}
+		if (userId === room.ownerId) {
+			throw new Error('cannot update owner role');
+		}
+		if (await this.roleService.isModerator({ id: userId } as MiUser)) {
+			throw new Error('cannot update moderator role');
+		}
+
+		const membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId });
+		if (membership == null) {
+			throw new Error('not a member');
+		}
+
+		await this.chatRoomMembershipsRepository.update(membership.id, { role });
+		const updated = {
+			...membership,
+			role,
+		};
+
+		this.globalEventService.publishChatRoomStream(room.id, 'memberRoleUpdated', {
+			roomId: room.id,
+			userId,
+			role,
+		});
+
+		return updated;
 	}
 
 	@bindThis
@@ -2273,9 +2504,29 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async getRoomMembershipsWithPagination(roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatRoomMembership['id'] | null, untilId?: MiChatRoomMembership['id'] | null) {
+	public async getRoomMembershipsWithPagination(roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatRoomMembership['id'] | null, untilId?: MiChatRoomMembership['id'] | null, role?: ChatRoomMembershipRole | null, userId?: MiUser['id'] | null, memberQuery?: string | null) {
 		const query = this.queryService.makePaginationQuery(this.chatRoomMembershipsRepository.createQueryBuilder('membership'), sinceId, untilId)
 			.andWhere('membership.roomId = :roomId', { roomId });
+		if (role != null) {
+			query.andWhere('membership.role = :role', { role });
+		}
+		if (userId != null) {
+			query.andWhere('membership.userId = :userId', { userId });
+		}
+		const normalizedQuery = memberQuery?.trim().normalize('NFC');
+		if (normalizedQuery != null && normalizedQuery !== '') {
+			const like = `%${sqlLikeEscape(normalizedQuery.toLowerCase())}%`;
+			query
+				.innerJoin('membership.user', 'user')
+				.andWhere(new Brackets(qb => {
+					qb
+						.where('LOWER(user.id) LIKE :memberQuery', { memberQuery: like })
+						.orWhere('LOWER(user.username) LIKE :memberQuery', { memberQuery: like })
+						.orWhere('LOWER(user.name) LIKE :memberQuery', { memberQuery: like });
+				}))
+				.andWhere('user.isSuspended = FALSE')
+				.andWhere('user.isDeleted = FALSE');
+		}
 
 		const memberships = await query.take(limit).getMany();
 

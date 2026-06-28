@@ -4,13 +4,12 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { GetterService } from '@/server/api/GetterService.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatService } from '@/core/ChatService.js';
-import type { DriveFilesRepository, MiUser, MiDriveFile } from '@/models/_.js';
+import type { DriveFilesRepository, MiDriveFile } from '@/models/_.js';
 import type { Config } from '@/config.js';
 
 export const meta = {
@@ -63,7 +62,35 @@ export const meta = {
 		youHaveBeenBlocked: {
 			message: 'You cannot send a message because you have been blocked by this user.',
 			code: 'YOU_HAVE_BEEN_BLOCKED',
+			kind: 'permission',
 			id: 'c15a5199-7422-4968-941a-2a462c478f7d',
+		},
+
+		recipientCannotChat: {
+			message: 'You cannot send a message because the recipient does not accept this chat.',
+			code: 'RECIPIENT_CANNOT_CHAT',
+			kind: 'permission',
+			id: '7a4a85a0-7fa3-4dbe-8611-1f5b2680e0da',
+		},
+
+		recipientChatUnavailable: {
+			message: 'You cannot send a message because chat is unavailable for the recipient.',
+			code: 'RECIPIENT_CHAT_UNAVAILABLE',
+			kind: 'permission',
+			id: '3f99d4aa-ff37-43d9-96a4-17d63ad16944',
+		},
+
+		chatUnavailable: {
+			message: 'You cannot send a message because chat is unavailable for this account.',
+			code: 'CHAT_UNAVAILABLE',
+			kind: 'permission',
+			id: '6e724242-a331-42be-bc93-5ea9a463a0bd',
+		},
+
+		blockedByKeyword: {
+			message: 'Your message was blocked by a keyword filter.',
+			code: 'BLOCKED_BY_KEYWORD',
+			id: 'c9a1ad21-5d0a-42bf-b53c-a7cb4b459c78',
 		},
 
 		maxLength: {
@@ -105,7 +132,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private chatService: ChatService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			await this.chatService.checkChatAvailability(me.id, 'write');
+			await this.chatService.checkChatAvailability(me.id, 'write').catch(err => {
+				if (err instanceof Error && err.message === 'ROLE_PERMISSION_DENIED') throw new ApiError(meta.errors.chatUnavailable);
+				throw err;
+			});
 
 			const text = ps.text?.trim();
 			if (text && text.length > this.config.maxNoteLength) {
@@ -156,6 +186,30 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				file: file,
 				reply,
 				quote,
+			}).catch(err => {
+				if (err instanceof Error) {
+					if (err.message === 'blocked by keyword') {
+						throw new ApiError(meta.errors.blockedByKeyword, {
+							keyword: (err as Error & { keyword?: string }).keyword ?? null,
+						});
+					}
+					if (err.message === 'recipient is cannot chat (policy)') {
+						throw new ApiError(meta.errors.recipientChatUnavailable);
+					}
+					if (err.message.startsWith('recipient is cannot chat (')) {
+						const reason = err.message.match(/^recipient is cannot chat \(([^)]+)\)$/)?.[1] ?? null;
+						throw new ApiError(meta.errors.recipientCannotChat, {
+							reason,
+						});
+					}
+					if (err.message === 'blocked') {
+						throw new ApiError(meta.errors.youHaveBeenBlocked);
+					}
+					if (err.message === 'content required') {
+						throw new ApiError(meta.errors.contentRequired);
+					}
+				}
+				throw err;
 			});
 		});
 	}

@@ -541,7 +541,9 @@ export * as 'chat/rooms/show' from './endpoints/chat/rooms/show.js';
 export * as 'chat/rooms/owned' from './endpoints/chat/rooms/owned.js';
 export * as 'chat/rooms/joining' from './endpoints/chat/rooms/joining.js';
 export * as 'chat/rooms/update' from './endpoints/chat/rooms/update.js';
+export * as 'chat/rooms/user-settings/update' from './endpoints/chat/rooms/user-settings/update.js';
 export * as 'chat/rooms/members' from './endpoints/chat/rooms/members.js';
+export * as 'chat/rooms/members/update-role' from './endpoints/chat/rooms/members/update-role.js';
 export * as 'chat/rooms/kick' from './endpoints/chat/rooms/kick.js';
 export * as 'chat/rooms/mute-member' from './endpoints/chat/rooms/mute-member.js';
 export * as 'chat/rooms/unmute-member' from './endpoints/chat/rooms/unmute-member.js';
@@ -558,5 +560,6 @@ export * as 'chat/rooms/invitations/create' from './endpoints/chat/rooms/invitat
 export * as 'chat/rooms/invitations/ignore' from './endpoints/chat/rooms/invitations/ignore.js';
 export * as 'chat/rooms/invitations/inbox' from './endpoints/chat/rooms/invitations/inbox.js';
 export * as 'chat/rooms/invitations/outbox' from './endpoints/chat/rooms/invitations/outbox.js';
+export * as 'chat/users/conversation/delete' from './endpoints/chat/users/conversation/delete.js';
 export * as 'chat/history' from './endpoints/chat/history.js';
 export * as 'v2/admin/emoji/list' from './endpoints/v2/admin/emoji/list.js';

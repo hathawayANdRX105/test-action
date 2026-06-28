@@ -58,7 +58,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (room == null) {
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
-			if (!await this.chatService.hasPermissionToManageRoom(me, room)) {
+			if (!await this.chatService.hasPermissionToManageRoomRoles(me, room)) {
 				throw new ApiError(meta.errors.accessDenied);
 			}
 

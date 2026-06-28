@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { ChatService } from '@/core/ChatService.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
+import { chatRoomMembershipRoles } from '@/models/ChatRoomMembership.js';
 
 export const meta = {
 	tags: ['chat'],
@@ -42,6 +43,9 @@ export const paramDef = {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },
+		role: { type: 'string', enum: chatRoomMembershipRoles },
+		userId: { type: 'string', format: 'misskey:id' },
+		query: { type: 'string', minLength: 1, maxLength: 100 },
 	},
 	required: ['roomId'],
 } as const;
@@ -64,7 +68,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
-			const memberships = await this.chatService.getRoomMembershipsWithPagination(room.id, ps.limit, ps.sinceId, ps.untilId);
+			const memberships = await this.chatService.getRoomMembershipsWithPagination(room.id, ps.limit, ps.sinceId, ps.untilId, ps.role, ps.userId, ps.query);
 
 			return await this.chatEntityService.packRoomMemberships(memberships, me, {
 				populateUser: true,

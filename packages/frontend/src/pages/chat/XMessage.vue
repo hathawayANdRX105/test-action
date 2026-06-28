@@ -118,6 +118,7 @@ const props = defineProps<{
 	enableRoomUserMute?: boolean;
 	canDeleteAnyMessage?: boolean;
 	canManageRoomUsers?: boolean;
+	canManageRoomRoles?: boolean;
 	canModerateUsers?: boolean;
 	roomOwnerId?: string | null;
 }>();
@@ -152,9 +153,14 @@ const isRoomChat = computed(() => props.message.toRoomId != null);
 const isPending = computed(() => (props.message as MessageWithSendState).sendStatus === 'pending');
 const hasFile = computed(() => props.message.file != null);
 const hasVideoFile = computed(() => props.message.file?.type.startsWith('video') === true);
-const canDelete = computed(() => !isPending.value && (isMe.value || props.canDeleteAnyMessage === true || (props.canManageRoomUsers === true && props.message.toRoomId != null)) && $i.policies.chatAvailability === 'available');
+const isRoomOwnerSender = computed(() => props.roomOwnerId != null && props.message.fromUserId === props.roomOwnerId);
+const isPrivilegedSender = computed(() => props.message.fromUser?.isAdmin === true || props.message.fromUser?.isModerator === true);
+const canManageOwnerSender = computed(() => props.message.fromUserId === props.roomOwnerId && props.canManageRoomRoles === true);
+const canDelete = computed(() => !isPending.value && (isMe.value || (!isPrivilegedSender.value && ((props.canDeleteAnyMessage === true || (props.canManageRoomUsers === true && props.message.toRoomId != null)) && (!isRoomOwnerSender.value || canManageOwnerSender.value)))) && $i.policies.chatAvailability === 'available');
 const canMuteRoomSender = computed(() => props.enableRoomUserMute === true && !isPending.value && isRoomChat.value && !isMe.value && props.message.fromUser != null && $i.policies.chatAvailability === 'available');
-const canManageSender = computed(() => !isPending.value && props.canManageRoomUsers === true && !isMe.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
+const canManageSender = computed(() => !isPending.value && props.canManageRoomUsers === true && !isMe.value && !isPrivilegedSender.value && (!isRoomOwnerSender.value || canManageOwnerSender.value) && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
+const canManageRoomSenderRole = computed(() => !isPending.value && props.canManageRoomRoles === true && !isMe.value && !isRoomOwnerSender.value && !isPrivilegedSender.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
+const canModerateRoomSender = computed(() => canManageSender.value && !isRoomOwnerSender.value);
 const canModerateSender = computed(() => !isPending.value && props.canModerateUsers === true && !isMe.value && props.message.fromUser != null);
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
 const messageWithReferenceState = computed<MessageWithReferenceState>(() => props.message);
@@ -254,7 +260,7 @@ function onAvatarPointerdown(ev: PointerEvent) {
 		if (event == null) return;
 		avatarLongPressTriggered = true;
 		ev.preventDefault();
-		showAvatarMenu(event);
+		void showAvatarMenu(event);
 	}, 550);
 }
 
@@ -271,12 +277,12 @@ function onAvatarClick(ev: MouseEvent) {
 }
 
 function onAvatarContextmenu(ev: MouseEvent) {
-	showAvatarMenu(ev);
+	void showAvatarMenu(ev);
 }
 
-function showAvatarMenu(ev: MouseEvent) {
+async function showAvatarMenu(ev: MouseEvent) {
 	if (props.message.fromUser == null || isPending.value) return;
-	os.contextMenu(getAvatarMenu(), ev);
+	os.contextMenu(await getAvatarMenu(), ev);
 }
 
 function openReference(messageId: string) {
@@ -376,7 +382,26 @@ function showMenu(ev: MouseEvent, contextmenu = false) {
 	}
 }
 
-function getAvatarMenu(): MenuItem[] {
+type RoomMembershipRole = 'member' | 'manager';
+
+async function fetchRoomSenderMembershipRole(roomId: string, userId: string): Promise<RoomMembershipRole | null> {
+	const memberships = await misskeyApi('chat/rooms/members', {
+		roomId,
+		userId,
+		limit: 1,
+	}).catch(() => []);
+	return memberships[0]?.role ?? null;
+}
+
+function updateRoomSenderRole(roomId: string, userId: string, role: RoomMembershipRole) {
+	return os.apiWithDialog('chat/rooms/members/update-role', {
+		roomId,
+		userId,
+		role,
+	});
+}
+
+async function getAvatarMenu(): Promise<MenuItem[]> {
 	const user = props.message.fromUser!;
 	const menu: MenuItem[] = [{
 		type: 'label',
@@ -384,6 +409,7 @@ function getAvatarMenu(): MenuItem[] {
 		caption: `@${user.username}`,
 	}];
 	const roomId = props.message.toRoomId;
+	const roomSenderRole = canManageRoomSenderRole.value && roomId != null ? await fetchRoomSenderMembershipRole(roomId, user.id) : null;
 
 	if (canMuteRoomSender.value) {
 		menu.push({
@@ -398,7 +424,17 @@ function getAvatarMenu(): MenuItem[] {
 		});
 	}
 
-	if (canManageSender.value && user.id !== props.roomOwnerId) {
+	if (roomId != null && roomSenderRole != null) {
+		menu.push({
+			type: 'divider',
+		}, {
+			text: roomSenderRole === 'manager' ? i18n.ts._chat.unsetRoomManager : i18n.ts._chat.setRoomManager,
+			icon: roomSenderRole === 'manager' ? 'ti ti-shield-x' : 'ti ti-shield-check',
+			action: () => updateRoomSenderRole(roomId, user.id, roomSenderRole === 'manager' ? 'member' : 'manager'),
+		});
+	}
+
+	if (canModerateRoomSender.value) {
 		const muteMember = async (durationMs: number | null) => {
 			await os.apiWithDialog('chat/rooms/mute-member', {
 				roomId: roomId!,

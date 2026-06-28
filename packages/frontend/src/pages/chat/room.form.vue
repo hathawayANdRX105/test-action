@@ -26,12 +26,27 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template v-else-if="muteState.until == null">{{ i18n.ts._chat.mutedForever }}</template>
 		<template v-else>{{ i18n.tsx._chat.youAreMutedInRoomUntil({ time: dateString(muteState.until) }) }}</template>
 	</MkInfo>
-	<div v-if="file" :class="$style.file" data-chat-attached-file>
-		<i class="ti ti-paperclip"></i>
-		<span :class="$style.fileName">{{ file.name }}</span>
-		<button class="_button" :class="$style.fileRemove" type="button" :title="i18n.ts.attachCancel" :aria-label="i18n.ts.attachCancel" @click="removeAttachedFile">
-			<i class="ti ti-x"></i>
-		</button>
+	<div v-if="chatFormUploadings.length > 0 || files.length > 0" :class="$style.files" aria-live="polite">
+		<div v-for="ctx in chatFormUploadings" :key="ctx.id" :class="$style.uploadingFile" data-chat-uploading-file>
+			<div :class="$style.uploadingThumbnail" :style="{ backgroundImage: `url(${ctx.img})` }">
+				<i class="ti ti-file-upload"></i>
+			</div>
+			<div :class="$style.uploadingBody">
+				<div :class="$style.fileName">{{ ctx.name }}</div>
+				<div :class="$style.uploadingStatus">
+					<span v-if="ctx.progressValue === undefined">{{ i18n.ts.uploading }}</span>
+					<span v-else>{{ Math.floor((ctx.progressValue / (ctx.progressMax || 1)) * 100) }}%</span>
+				</div>
+				<progress :value="ctx.progressValue ?? undefined" :max="ctx.progressMax ?? undefined" :class="{ [$style.uploadingProgressIndeterminate]: ctx.progressValue === undefined }"></progress>
+			</div>
+		</div>
+		<div v-for="(attachedFile, index) in files" :key="attachedFile.id" :class="$style.file" data-chat-attached-file>
+			<i class="ti ti-paperclip"></i>
+			<span :class="$style.fileName">{{ attachedFile.name }}</span>
+			<button class="_button" :class="$style.fileRemove" type="button" :title="i18n.ts.attachCancel" :aria-label="i18n.ts.attachCancel" @click="removeAttachedFile(index)">
+				<i class="ti ti-x"></i>
+			</button>
+		</div>
 	</div>
 	<div :class="$style.composer">
 		<button class="_button" :class="$style.button" :title="i18n.ts.attachFile" @click="chooseFile"><i class="ti ti-paperclip"></i></button>
@@ -43,15 +58,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:readonly="textareaReadOnly"
 			:disabled="muteState != null"
 			@keydown="onKeydown"
+			@keyup="onKeyup"
+			@compositionstart="onCompositionStart"
+			@compositionend="onCompositionEnd"
 			@focus="onFocus"
 			@paste="onPaste"
 		></textarea>
 		<button class="_button" :class="$style.button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
-		<button class="_button" :class="[$style.button, $style.send]" :disabled="!canSend || sending" :title="i18n.ts.send" @click="send">
+		<button class="_button" :class="[$style.button, $style.send]" :disabled="!canSend || sending || isUploading" :title="i18n.ts.send" @click="send">
 			<template v-if="!sending"><i class="ti ti-send"></i></template><template v-if="sending"><MkLoading :em="true"/></template>
 		</button>
 	</div>
-	<input ref="fileEl" style="display: none;" type="file" @change="onChangeFile"/>
+	<input ref="fileEl" style="display: none;" type="file" multiple @change="onChangeFile"/>
 </div>
 </template>
 
@@ -63,11 +81,11 @@ import { formatTimeString } from '@@/js/format-time-string.js';
 import { useInterval } from '@@/js/use-interval.js';
 import type { NormalizedChatMessage } from './room.vue';
 import MkInfo from '@/components/MkInfo.vue';
-import { selectFile } from '@/utility/select-file.js';
+import { selectFiles } from '@/utility/select-file.js';
 import { dateString } from '@/filters/date.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
-import { uploadFile } from '@/utility/upload.js';
+import { uploadFile, uploads } from '@/utility/upload.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { misskeyApi, printError } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
@@ -110,9 +128,12 @@ const textareaEl = shallowRef<HTMLTextAreaElement>();
 const fileEl = shallowRef<HTMLInputElement>();
 
 const text = ref<string>('');
-const file = ref<Misskey.entities.DriveFile | null>(null);
+const files = ref<Misskey.entities.DriveFile[]>([]);
+const uploadingIds = ref<string[]>([]);
 const sending = ref(false);
 const textareaReadOnly = ref(false);
+const isImeComposing = ref(false);
+const justEndedComposition = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
 let focusScrollTimers: number[] = [];
 let sendSerial = 0;
@@ -134,7 +155,9 @@ const muteState = computed<{ type: 'silenced' } | { type: 'muted'; until: string
 	return null;
 });
 
-const canSend = computed(() => muteState.value == null && (text.value.trim().length > 0 || file.value != null || props.replyTarget != null || props.quoteTarget != null));
+const chatFormUploadings = computed(() => uploads.value.filter(ctx => uploadingIds.value.includes(ctx.id)));
+const isUploading = computed(() => chatFormUploadings.value.length > 0);
+const canSend = computed(() => muteState.value == null && (text.value.trim().length > 0 || files.value.length > 0 || props.replyTarget != null || props.quoteTarget != null));
 
 function getDraftKey(): string | null {
 	if (props.user) return 'user:' + props.user.id;
@@ -142,7 +165,7 @@ function getDraftKey(): string | null {
 	return null;
 }
 
-watch([text, file], saveDraft);
+watch([text, files], saveDraft, { deep: true });
 
 async function onPaste(ev: ClipboardEvent) {
 	if (!ev.clipboardData) return;
@@ -150,23 +173,18 @@ async function onPaste(ev: ClipboardEvent) {
 	const pastedFileName = 'yyyy-MM-dd HH-mm-ss [{{number}}]';
 
 	const clipboardData = ev.clipboardData;
-	const items = clipboardData.items;
+	const pastedFiles = Array.from(clipboardData.items)
+		.filter(item => item.kind === 'file')
+		.map(item => item.getAsFile())
+		.filter((file): file is File => file != null);
 
-	if (items.length === 1) {
-		if (items[0].kind === 'file') {
-			const pastedFile = items[0].getAsFile();
-			if (!pastedFile) return;
+	if (pastedFiles.length > 0) {
+		ev.preventDefault();
+		for (const [index, pastedFile] of pastedFiles.entries()) {
 			const lio = pastedFile.name.lastIndexOf('.');
 			const ext = lio >= 0 ? pastedFile.name.slice(lio) : '';
-			const formatted = formatTimeString(new Date(pastedFile.lastModified), pastedFileName).replace(/{{number}}/g, '1') + ext;
-			if (formatted) upload(pastedFile, formatted);
-		}
-	} else {
-		if (items[0].kind === 'file') {
-			os.alert({
-				type: 'error',
-				text: i18n.ts.onlyOneFileCanBeAttached,
-			});
+			const formatted = formatTimeString(new Date(pastedFile.lastModified), pastedFileName).replace(/{{number}}/g, String(index + 1)) + ext;
+			upload(pastedFile, formatted);
 		}
 	}
 }
@@ -174,8 +192,8 @@ async function onPaste(ev: ClipboardEvent) {
 function onDragover(ev: DragEvent) {
 	if (!ev.dataTransfer) return;
 
-	const isFile = ev.dataTransfer.items[0].kind === 'file';
-	const isDriveFile = ev.dataTransfer.types[0] === _DATA_TRANSFER_DRIVE_FILE_;
+	const isFile = ev.dataTransfer.items[0]?.kind === 'file';
+	const isDriveFile = ev.dataTransfer.types.includes(_DATA_TRANSFER_DRIVE_FILE_);
 	if (isFile || isDriveFile) {
 		ev.preventDefault();
 		switch (ev.dataTransfer.effectAllowed) {
@@ -201,23 +219,18 @@ function onDrop(ev: DragEvent): void {
 	if (!ev.dataTransfer) return;
 
 	// ファイルだったら
-	if (ev.dataTransfer.files.length === 1) {
+	if (ev.dataTransfer.files.length > 0) {
 		ev.preventDefault();
-		upload(ev.dataTransfer.files[0]);
-		return;
-	} else if (ev.dataTransfer.files.length > 1) {
-		ev.preventDefault();
-		os.alert({
-			type: 'error',
-			text: i18n.ts.onlyOneFileCanBeAttached,
-		});
+		for (const droppedFile of Array.from(ev.dataTransfer.files)) {
+			upload(droppedFile);
+		}
 		return;
 	}
 
 	//#region ドライブのファイル
 	const driveFile = ev.dataTransfer.getData(_DATA_TRANSFER_DRIVE_FILE_);
 	if (driveFile != null && driveFile !== '') {
-		file.value = JSON.parse(driveFile);
+		appendAttachedFiles([JSON.parse(driveFile)]);
 		ev.preventDefault();
 	}
 	//#endregion
@@ -225,6 +238,8 @@ function onDrop(ev: DragEvent): void {
 
 function onKeydown(ev: KeyboardEvent) {
 	if (ev.key === 'Enter') {
+		if (isComposingInput(ev)) return;
+
 		if (prefer.s['chat.sendOnEnter']) {
 			if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) {
 				ev.preventDefault();
@@ -237,6 +252,27 @@ function onKeydown(ev: KeyboardEvent) {
 			}
 		}
 	}
+}
+
+function isComposingInput(ev: KeyboardEvent): boolean {
+	return isImeComposing.value || justEndedComposition.value || ev.isComposing || ev.keyCode === 229;
+}
+
+function onKeyup() {
+	justEndedComposition.value = false;
+}
+
+function onCompositionStart() {
+	isImeComposing.value = true;
+	justEndedComposition.value = false;
+}
+
+function onCompositionEnd() {
+	isImeComposing.value = false;
+	justEndedComposition.value = true;
+	window.setTimeout(() => {
+		justEndedComposition.value = false;
+	}, 0);
 }
 
 function onFocus() {
@@ -284,27 +320,41 @@ function onVisualViewportChange() {
 }
 
 function chooseFile(ev: MouseEvent) {
-	selectFile(ev.currentTarget ?? ev.target, i18n.ts.selectFile).then(selectedFile => {
-		if (selectedFile != null) {
-			file.value = selectedFile;
-		}
+	selectFiles(ev.currentTarget ?? ev.target, i18n.ts.selectFile).then(selectedFiles => {
+		appendAttachedFiles(selectedFiles);
 	});
 }
 
 function onChangeFile() {
 	if (fileEl.value == null || fileEl.value.files == null) return;
 
-	if (fileEl.value.files[0]) upload(fileEl.value.files[0]);
+	for (const selectedFile of Array.from(fileEl.value.files)) {
+		upload(selectedFile);
+	}
+	fileEl.value.value = '';
 }
 
 function upload(fileToUpload: File, name?: string) {
-	uploadFile(fileToUpload, prefer.s.uploadFolder, name).then(res => {
-		file.value = res;
+	const uploading = uploadFile(fileToUpload, prefer.s.uploadFolder, name);
+	uploadingIds.value.push(uploading.id);
+	uploading.then(res => {
+		appendAttachedFiles([res]);
+	}).catch(() => {
+		// uploadFile already shows the error dialog.
+	}).finally(() => {
+		uploadingIds.value = uploadingIds.value.filter(id => id !== uploading.id);
 	});
 }
 
-function removeAttachedFile() {
-	file.value = null;
+function appendAttachedFiles(selectedFiles: Array<Misskey.entities.DriveFile | null | undefined>) {
+	for (const selectedFile of selectedFiles) {
+		if (selectedFile == null) continue;
+		files.value.push(selectedFile);
+	}
+}
+
+function removeAttachedFile(index: number) {
+	files.value.splice(index, 1);
 	if (fileEl.value != null) {
 		fileEl.value.value = '';
 	}
@@ -321,10 +371,25 @@ function createSendSnapshot(target: SendTarget): SendSnapshot {
 		clientId: `${Date.now()}-${++sendSerial}`,
 		target,
 		text: text.value,
-		file: file.value,
+		file: null,
 		replyTarget: props.replyTarget ?? null,
 		quoteTarget: props.quoteTarget ?? null,
 	};
+}
+
+function createSendSnapshots(target: SendTarget): SendSnapshot[] {
+	if (files.value.length === 0) {
+		return [createSendSnapshot(target)];
+	}
+
+	return files.value.map((attachedFile, index) => ({
+		clientId: `${Date.now()}-${++sendSerial}`,
+		target,
+		text: index === 0 ? text.value : '',
+		file: attachedFile,
+		replyTarget: index === 0 ? props.replyTarget ?? null : null,
+		quoteTarget: index === 0 ? props.quoteTarget ?? null : null,
+	}));
 }
 
 function createOptimisticMessage(snapshot: SendSnapshot): NormalizedChatMessage {
@@ -351,35 +416,44 @@ function createOptimisticMessage(snapshot: SendSnapshot): NormalizedChatMessage 
 }
 
 async function send() {
-	if (sending.value || !canSend.value || muteState.value != null) return;
+	if (sending.value || isUploading.value || !canSend.value || muteState.value != null) return;
 
 	const target = getSendTarget();
 	if (target == null) return;
 
-	const snapshot = createSendSnapshot(target);
+	const snapshots = createSendSnapshots(target);
+	if (snapshots.length === 0) return;
+
 	sending.value = true;
-	emit('sending', createOptimisticMessage(snapshot));
 	clear();
 
 	try {
-		const message = target.type === 'user' ? await misskeyApi('chat/messages/create-to-user', {
-			toUserId: target.user.id,
-			text: snapshot.text !== '' ? snapshot.text : undefined,
-			fileId: snapshot.file?.id,
-			replyId: snapshot.replyTarget?.id,
-			quoteId: snapshot.quoteTarget?.id,
-		}) : await misskeyApi('chat/messages/create-to-room', {
-			toRoomId: target.room.id,
-			text: snapshot.text !== '' ? snapshot.text : undefined,
-			fileId: snapshot.file?.id,
-			replyId: snapshot.replyTarget?.id,
-			quoteId: snapshot.quoteTarget?.id,
-		});
+		for (const [index, snapshot] of snapshots.entries()) {
+			emit('sending', createOptimisticMessage(snapshot));
 
-		emit('sent', message, snapshot.clientId);
+			try {
+				const message = target.type === 'user' ? await misskeyApi('chat/messages/create-to-user', {
+					toUserId: target.user.id,
+					text: snapshot.text !== '' ? snapshot.text : undefined,
+					fileId: snapshot.file?.id,
+					replyId: snapshot.replyTarget?.id,
+					quoteId: snapshot.quoteTarget?.id,
+				}) : await misskeyApi('chat/messages/create-to-room', {
+					toRoomId: target.room.id,
+					text: snapshot.text !== '' ? snapshot.text : undefined,
+					fileId: snapshot.file?.id,
+					replyId: snapshot.replyTarget?.id,
+					quoteId: snapshot.quoteTarget?.id,
+				});
+
+				emit('sent', message, snapshot.clientId);
+			} catch (err) {
+				emit('sendFailed', snapshot.clientId);
+				restoreSnapshotsIfIdle(snapshots.slice(index));
+				throw err;
+			}
+		}
 	} catch (err) {
-		emit('sendFailed', snapshot.clientId);
-		restoreSnapshotIfIdle(snapshot);
 		const code = (err as { code?: string } | null)?.code;
 		if (code === 'SLOW_MODE') {
 			const retryAfter = (err as { info?: { retryAfter?: number | null } } | null)?.info?.retryAfter;
@@ -391,6 +465,12 @@ async function send() {
 			void os.alert({
 				type: 'warning',
 				text: i18n.ts._chat.blockedByKeyword,
+			});
+		} else if (code === 'RECIPIENT_CANNOT_CHAT' || code === 'RECIPIENT_CHAT_UNAVAILABLE') {
+			void os.alert({
+				type: 'warning',
+				title: i18n.ts._chat.cannotChatWithTheUser,
+				text: i18n.ts._chat.cannotChatWithTheUser_description,
 			});
 		} else {
 			console.error('Error in chat:', err);
@@ -407,20 +487,22 @@ async function send() {
 
 function clear() {
 	text.value = '';
-	file.value = null;
+	files.value = [];
 	emit('clearReply');
 	emit('clearQuote');
 	deleteDraft();
 }
 
-function restoreSnapshotIfIdle(snapshot: SendSnapshot) {
-	if (text.value !== '' || file.value != null) return;
+function restoreSnapshotsIfIdle(snapshots: SendSnapshot[]) {
+	if (snapshots.length === 0 || text.value !== '' || files.value.length > 0) return;
 
-	text.value = snapshot.text;
-	file.value = snapshot.file;
+	text.value = snapshots[0].text;
+	files.value = snapshots
+		.map(snapshot => snapshot.file)
+		.filter((file): file is Misskey.entities.DriveFile => file != null);
 	emit('restoreReferences', {
-		replyTarget: snapshot.replyTarget,
-		quoteTarget: snapshot.quoteTarget,
+		replyTarget: snapshots[0].replyTarget,
+		quoteTarget: snapshots[0].quoteTarget,
 	});
 }
 
@@ -441,7 +523,7 @@ function saveDraft() {
 			updatedAt: new Date(),
 			data: {
 				text: text.value,
-				file: file.value,
+				files: files.value,
 			},
 		};
 	}
@@ -508,7 +590,7 @@ onMounted(() => {
 	const draft = draftKey == null ? null : JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}')[draftKey];
 	if (draft) {
 		text.value = draft.data.text;
-		file.value = draft.data.file;
+		files.value = Array.isArray(draft.data.files) ? draft.data.files : (draft.data.file != null ? [draft.data.file] : []);
 	}
 });
 
@@ -533,6 +615,8 @@ onBeforeUnmount(() => {
 	position: relative;
 	border-bottom: none;
 	display: grid;
+	min-width: 0;
+	max-width: 100%;
 	gap: 6px;
 	border-radius: 0;
 	background: transparent;
@@ -614,23 +698,39 @@ onBeforeUnmount(() => {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto auto;
 	align-items: end;
+	min-width: 0;
+	max-width: 100%;
 	gap: 4px;
 	padding: 4px;
 	border-radius: 21px;
+	box-sizing: border-box;
 	background: light-dark(#ffffff, #17212b);
 	border: solid 1px light-dark(rgb(206 221 230), rgb(35 48 60));
 	box-shadow: 0 2px 10px rgb(0 0 0 / 0.14);
 }
 
-.file {
+.files {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	min-width: 0;
+	max-width: 100%;
+	gap: 6px;
+	padding: 0 8px;
+	overflow-x: hidden;
+}
+
+.file,
+.uploadingFile {
 	display: inline-flex;
 	align-items: center;
+	min-width: 0;
 	gap: 6px;
 	width: fit-content;
 	max-width: min(420px, 100%);
-	margin-left: 8px;
 	padding: 5px 6px 5px 10px;
 	border-radius: 999px;
+	box-sizing: border-box;
 	background: light-dark(rgb(225 244 255), rgb(34 49 62));
 	color: light-dark(#168acd, #6ab7f5);
 	font-size: 90%;
@@ -638,10 +738,67 @@ onBeforeUnmount(() => {
 	white-space: nowrap;
 }
 
+.file {
+	flex: 0 1 min(420px, 100%);
+	width: auto;
+}
+
+.file > i {
+	flex: 0 0 auto;
+}
+
+.uploadingFile {
+	display: grid;
+	grid-template-columns: 30px minmax(0, 1fr);
+	width: min(360px, 100%);
+	padding: 5px 10px 6px 6px;
+	border-radius: 14px;
+}
+
+.uploadingThumbnail {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 10px;
+	background-color: light-dark(rgb(197 230 248), rgb(45 67 84));
+	background-position: center;
+	background-size: cover;
+	overflow: hidden;
+}
+
+.uploadingBody {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.uploadingStatus {
+	font-size: 82%;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.uploadingBody progress {
+	width: 100%;
+	height: 4px;
+	border: none;
+	border-radius: 999px;
+	overflow: hidden;
+}
+
+.uploadingProgressIndeterminate {
+	opacity: 0.75;
+}
+
 .fileName {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.file > .fileName {
+	flex: 1 1 auto;
 }
 
 .fileRemove {

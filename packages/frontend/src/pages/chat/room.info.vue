@@ -7,21 +7,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div class="_gaps">
 	<div :class="$style.avatarBlock">
 		<XRoomAvatar :room="room" :class="$style.roomAvatar"/>
-		<div v-if="canManage" :class="$style.avatarActions">
+		<div v-if="canEditRoomProfile" :class="$style.avatarActions">
 			<MkButton primary rounded @click="changeAvatar">{{ i18n.ts._chat.changeRoomAvatar }}</MkButton>
 			<MkButton v-if="room.avatarUrl" rounded @click="removeAvatar">{{ i18n.ts._chat.removeRoomAvatar }}</MkButton>
 		</div>
 	</div>
 
-	<MkInput v-model="name_" :disabled="!canManage">
+	<MkInput v-model="name_" :disabled="!canEditRoomProfile">
 		<template #label>{{ i18n.ts.name }}</template>
 	</MkInput>
 
-	<MkTextarea v-model="description_" :disabled="!canManage">
+	<MkTextarea v-model="description_" :disabled="!canEditRoomProfile">
 		<template #label>{{ i18n.ts.description }}</template>
 	</MkTextarea>
 
-	<MkSelect v-if="canManage" v-model="joinMode_">
+	<MkSelect v-if="canEditRoomProfile" v-model="joinMode_">
 		<template #label>{{ i18n.ts._chat.roomJoinMode }}</template>
 		<option value="inviteOnly">{{ i18n.ts._chat.inviteOnlyRoom }}</option>
 		<option value="open">{{ i18n.ts._chat.openRoom }}</option>
@@ -39,11 +39,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<MkInfo v-if="$i.isAdmin">{{ i18n.ts._chat.roomMemberLimitManagedByAdmin }}</MkInfo>
 
-	<MkButton v-if="canManage" primary @click="save">{{ i18n.ts.save }}</MkButton>
+	<MkButton v-if="canEditRoomProfile" primary @click="save">{{ i18n.ts.save }}</MkButton>
 
 	<hr>
 
-	<MkButton v-if="isOwner || ($i.isAdmin || $i.isModerator)" danger @click="del">{{ i18n.ts._chat.deleteRoom }}</MkButton>
+	<MkButton v-if="canDeleteRoom" danger @click="del">{{ i18n.ts._chat.deleteRoom }}</MkButton>
 
 	<MkSwitch v-if="!isOwner" v-model="isMuted">
 		<template #label>{{ i18n.ts._chat.muteThisRoom }}</template>
@@ -82,10 +82,8 @@ const isOwner = computed(() => {
 	return props.room.ownerId === $i.id;
 });
 
-// 管理员/审核员对任意房间也有完整管理权（后端 hasPermissionToManageRoom 已放行）。
-const canManage = computed(() => {
-	return isOwner.value || $i.isModerator || $i.isAdmin;
-});
+const canEditRoomProfile = computed(() => (props.room.canEditRoomProfile ?? (isOwner.value || $i.isModerator || $i.isAdmin)) === true);
+const canDeleteRoom = computed(() => (props.room.canDeleteRoom ?? (isOwner.value || $i.isModerator || $i.isAdmin)) === true);
 
 const name_ = ref(props.room.name);
 const description_ = ref(props.room.description);

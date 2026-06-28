@@ -38,7 +38,7 @@ describe('chat room user mutes', () => {
 		assert.match(roomSource, /appendFetchedMessages\([\s\S]*filterMutedRoomMessages\(fetched\)\.map/);
 		assert.match(roomSource, /replaceMessages\([\s\S]*filterMutedRoomMessages\(fetched\)\.map/);
 		assert.match(roomSource, /const visibleBatch = filterMutedRoomMessages\(batch\);[\s\S]*if \(visibleBatch\.length === 0\) return;/);
-		assert.match(roomSource, /detachedIncomingMessages = appendDetachedChatMessages\(detachedIncomingMessages, visibleBatch, messages\.value\)/);
+		assert.match(roomSource, /detachedIncomingMessages = trimDetachedIncomingMessages\(appendDetachedChatMessages\(detachedIncomingMessages, visibleBatch, messages\.value\)\)/);
 		assert.match(roomSource, /messages\.value = filterMutedNormalizedMessages\(messages\.value\);/);
 	});
 

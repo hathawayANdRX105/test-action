@@ -5,6 +5,7 @@
 
 import { describe, expect, jest, test } from '@jest/globals';
 import RoomMembersEndpoint from '@/server/api/endpoints/chat/rooms/members.js';
+import UpdateMemberRoleEndpoint from '@/server/api/endpoints/chat/rooms/members/update-role.js';
 import DeleteAllMessagesEndpoint, { meta as deleteAllMessagesMeta, paramDef as deleteAllMessagesParamDef } from '@/server/api/endpoints/chat/rooms/manage/delete-all-messages.js';
 import DeleteUserMessagesEndpoint, { meta as deleteUserMessagesMeta } from '@/server/api/endpoints/chat/rooms/manage/delete-user-messages.js';
 
@@ -19,7 +20,7 @@ describe('chat room manage endpoints', () => {
 		const chatService: any = {
 			checkChatAvailability: jest.fn(async () => undefined),
 			findRoomById: jest.fn(async () => room),
-			hasPermissionToManageRoom: jest.fn(async () => options?.canManage ?? true),
+			hasPermissionToManageRoomRoles: jest.fn(async () => options?.canManage ?? true),
 			deleteAllRoomMessages: jest.fn(async () => undefined),
 		};
 		const userAuthService: any = {
@@ -48,7 +49,7 @@ describe('chat room manage endpoints', () => {
 		const chatService: any = {
 			checkChatAvailability: jest.fn(async () => undefined),
 			findRoomById: jest.fn(async () => room),
-			hasPermissionToManageRoom: jest.fn(async () => options?.canManage ?? true),
+			canDeleteRoomMessagesByUser: jest.fn(async () => options?.canManage ?? true),
 			deleteRoomMessagesByUser: jest.fn(async () => ['message-1', 'message-2']),
 		};
 
@@ -83,18 +84,40 @@ describe('chat room manage endpoints', () => {
 		};
 	}
 
-	test('delete-user-messages relies on room management permission instead of requireModerator', async () => {
+	function createUpdateMemberRoleEndpoint(options?: {
+		canManageRoles?: boolean;
+	}) {
+		const membership = { id: 'membership-1', roomId: 'room', userId: 'target', role: 'manager' };
+		const chatService: any = {
+			checkChatAvailability: jest.fn(async () => undefined),
+			findRoomById: jest.fn(async () => room),
+			hasPermissionToManageRoomRoles: jest.fn(async () => options?.canManageRoles ?? true),
+			updateRoomMembershipRole: jest.fn(async () => membership),
+		};
+		const chatEntityService: any = {
+			packRoomMembership: jest.fn(async () => membership),
+		};
+
+		return {
+			endpoint: new UpdateMemberRoleEndpoint(chatService, chatEntityService),
+			chatService,
+			chatEntityService,
+			membership,
+		};
+	}
+
+	test('delete-user-messages relies on room moderation target permission instead of requireModerator', async () => {
 		expect(deleteUserMessagesMeta.requireModerator).toBeUndefined();
 		const ctx = createDeleteUserEndpoint();
 
 		await expect(ctx.endpoint.exec({ roomId: 'room', userId: 'target' }, me, null)).resolves.toEqual({
 			deletedIds: ['message-1', 'message-2'],
 		});
-		expect(ctx.chatService.hasPermissionToManageRoom).toHaveBeenCalledWith(me, room);
+		expect(ctx.chatService.canDeleteRoomMessagesByUser).toHaveBeenCalledWith(me, room, 'target');
 		expect(ctx.chatService.deleteRoomMessagesByUser).toHaveBeenCalledWith(room, 'target');
 	});
 
-	test('delete-user-messages rejects users without room management permission', async () => {
+	test('delete-user-messages rejects users without target moderation permission', async () => {
 		const ctx = createDeleteUserEndpoint({ canManage: false });
 
 		await expect(ctx.endpoint.exec({ roomId: 'room', userId: 'target' }, me, null)).rejects.toMatchObject({
@@ -131,7 +154,7 @@ describe('chat room manage endpoints', () => {
 
 		await expect(ctx.endpoint.exec({ roomId: 'room', limit: 30 }, me, null)).resolves.toEqual(ctx.memberships);
 		expect(ctx.chatService.hasPermissionToManageRoom).toHaveBeenCalledWith(me, room);
-		expect(ctx.chatService.getRoomMembershipsWithPagination).toHaveBeenCalledWith('room', 30, undefined, undefined);
+		expect(ctx.chatService.getRoomMembershipsWithPagination).toHaveBeenCalledWith('room', 30, undefined, undefined, undefined, undefined, undefined);
 		expect(ctx.chatEntityService.packRoomMemberships).toHaveBeenCalledWith(ctx.memberships, me, {
 			populateUser: true,
 			populateRoom: false,
@@ -145,5 +168,26 @@ describe('chat room manage endpoints', () => {
 			code: 'NO_SUCH_ROOM',
 		});
 		expect(ctx.chatService.getRoomMembershipsWithPagination).not.toHaveBeenCalled();
+	});
+
+	test('room owner level permission can update member role', async () => {
+		const ctx = createUpdateMemberRoleEndpoint({ canManageRoles: true });
+
+		await expect(ctx.endpoint.exec({ roomId: 'room', userId: 'target', role: 'manager' }, me, null)).resolves.toEqual(ctx.membership);
+		expect(ctx.chatService.hasPermissionToManageRoomRoles).toHaveBeenCalledWith(me, room);
+		expect(ctx.chatService.updateRoomMembershipRole).toHaveBeenCalledWith(room, 'target', 'manager');
+		expect(ctx.chatEntityService.packRoomMembership).toHaveBeenCalledWith(ctx.membership, me, {
+			populateUser: true,
+			populateRoom: false,
+		});
+	});
+
+	test('room manager cannot update member role without owner level permission', async () => {
+		const ctx = createUpdateMemberRoleEndpoint({ canManageRoles: false });
+
+		await expect(ctx.endpoint.exec({ roomId: 'room', userId: 'target', role: 'manager' }, me, null)).rejects.toMatchObject({
+			code: 'ACCESS_DENIED',
+		});
+		expect(ctx.chatService.updateRoomMembershipRole).not.toHaveBeenCalled();
 	});
 });
