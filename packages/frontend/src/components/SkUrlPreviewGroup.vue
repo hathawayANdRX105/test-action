@@ -193,9 +193,18 @@ async function fetchPreview(url: string): Promise<Summary | null> {
 	const params = new URLSearchParams({ url, lang: versatileLang });
 	const res = await window.fetch(`/url?${params.toString()}`, { headers }).catch(() => null);
 
+	if (res?.status === 204) {
+		cachedPreviews.set(url, null);
+		return null;
+	}
+
 	if (res?.ok) {
 		// Success - got the summary
-		const summary: Summary = await res.json();
+		const summary: Summary = await res.json().catch(() => null);
+		if (summary == null) {
+			cachedPreviews.set(url, null);
+			return null;
+		}
 		cachedPreviews.set(url, summary);
 		if (summary.url !== url) {
 			cachedPreviews.set(summary.url, summary);

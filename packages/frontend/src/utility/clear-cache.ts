@@ -3,22 +3,32 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { unisonReload } from '@/utility/unison-reload.js';
 import * as os from '@/os.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { fetchCustomEmojis } from '@/custom-emojis.js';
 import { fetchInstance } from '@/instance.js';
 
-export async function clearCache() {
-	os.waiting();
-	miLocalStorage.removeItem('instance');
-	miLocalStorage.removeItem('instanceCachedAt');
-	miLocalStorage.removeItem('locale');
-	miLocalStorage.removeItem('localeVersion');
-	miLocalStorage.removeItem('theme');
-	miLocalStorage.removeItem('emojis');
-	miLocalStorage.removeItem('lastEmojisFetchedAt');
-	await fetchInstance(true);
-	await fetchCustomEmojis(true);
-	unisonReload();
+async function clearBrowserCaches(): Promise<void> {
+	try {
+		if ('caches' in window) {
+			await Promise.all((await window.caches.keys()).map(key => window.caches.delete(key)));
+		}
+	} catch (err) {
+		console.warn('Failed to clear browser caches.', err);
+	}
+}
+
+export function clearCache(): Promise<void> {
+	return os.promiseDialog((async () => {
+		miLocalStorage.removeItem('instance');
+		miLocalStorage.removeItem('instanceCachedAt');
+		miLocalStorage.removeItem('locale');
+		miLocalStorage.removeItem('localeVersion');
+		miLocalStorage.removeItem('theme');
+		miLocalStorage.removeItem('emojis');
+		miLocalStorage.removeItem('lastEmojisFetchedAt');
+		await clearBrowserCaches();
+		await fetchInstance(true);
+		await fetchCustomEmojis(true);
+	})());
 }

@@ -341,6 +341,7 @@ export class UserEntityService implements OnModuleInit {
 		const iAmAdmin = me ? (opts.hint?.iAmAdmin ?? await this.roleService.isAdministrator(me)) : false;
 		const iAmModerator = me ? (opts.hint?.iAmModerator ?? (iAmAdmin || await this.roleService.isModerator(me))) : false;
 		const iAmRoot = iAmAdmin && me && this.meta.rootUserId === me.id;
+		const canViewOnlineStatus = isMe || iAmModerator;
 
 		const profile = isDetailed
 			? (opts.hint?.userProfile ?? user.userProfile ?? await this.cacheService.userProfileCache.fetch(user.id))
@@ -455,7 +456,7 @@ export class UserEntityService implements OnModuleInit {
 			followingCount: followingCount ?? 0,
 			notesCount: user.notesCount,
 			emojis: this.customEmojiService.populateEmojis(user.emojis, checkHost),
-			onlineStatus: this.getOnlineStatus(user),
+			onlineStatus: canViewOnlineStatus ? this.getOnlineStatus(user) : 'unknown',
 			// パフォーマンス上の理由でローカルユーザーのみ
 			badgeRoles: user.host == null ? this.roleService.getUserBadgeRoles(user).then((rs) => rs
 				.filter((r) => r.isPublic || iAmModerator)

@@ -17,7 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<optgroup :label="i18n.ts.users">
 						<option value="users">{{ i18n.ts._charts.usersIncDec }}</option>
 						<option value="users-total">{{ i18n.ts._charts.usersTotal }}</option>
-						<option value="active-users">{{ i18n.ts._charts.activeUsers }}</option>
+						<option v-if="canViewOnlineAnalytics" value="active-users">{{ i18n.ts._charts.activeUsers }}</option>
 					</optgroup>
 					<optgroup :label="i18n.ts.notes">
 						<option value="notes">{{ i18n.ts._charts.notesIncDec }}</option>
@@ -42,16 +42,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</MkFoldableSection>
 
 	<MkFoldableSection class="item">
-		<template #header>Active users heatmap</template>
+		<template #header>{{ heatmapSrc === 'active-users' ? 'Active users heatmap' : 'Notes heatmap' }}</template>
 		<MkSelect v-model="heatmapSrc" style="margin: 0 0 12px 0;">
-			<option value="active-users">Active users</option>
+			<option v-if="canViewOnlineAnalytics" value="active-users">Active users</option>
 			<option value="notes">Notes</option>
 			<option v-if="shouldShowFederation" value="ap-requests-inbox-received">AP Requests: inboxReceived</option>
 			<option v-if="shouldShowFederation" value="ap-requests-deliver-succeeded">AP Requests: deliverSucceeded</option>
 			<option v-if="shouldShowFederation" value="ap-requests-deliver-failed">AP Requests: deliverFailed</option>
 		</MkSelect>
 		<div class="_panel" :class="$style.heatmap">
-			<MkHeatmap :src="heatmapSrc" :label="'Read & Write'"/>
+			<MkHeatmap :src="heatmapSrc" :label="heatmapLabel"/>
 		</div>
 	</MkFoldableSection>
 
@@ -104,11 +104,13 @@ import { initChart } from '@/utility/init-chart.js';
 initChart();
 
 const shouldShowFederation = computed(() => (instance.federation !== 'none' || $i?.isModerator) && policies.canViewFederation);
+const canViewOnlineAnalytics = computed(() => $i?.isModerator === true || $i?.isAdmin === true);
 
 const chartLimit = 500;
 const chartSpan = ref<'hour' | 'day'>('hour');
-const chartSrc = ref('active-users');
-const heatmapSrc = ref<HeatmapSource>('active-users');
+const chartSrc = ref(canViewOnlineAnalytics.value ? 'active-users' : 'users');
+const heatmapSrc = ref<HeatmapSource>(canViewOnlineAnalytics.value ? 'active-users' : 'notes');
+const heatmapLabel = computed(() => heatmapSrc.value === 'active-users' ? 'Read & Write' : 'Notes');
 const subDoughnutEl = useTemplateRef('subDoughnutEl');
 const pubDoughnutEl = useTemplateRef('pubDoughnutEl');
 

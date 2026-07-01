@@ -48,7 +48,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginOption
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = dirname(_filename);
 
-const assets = `${_dirname}/../../server/file/assets/`;
+const assets = `${_dirname}/assets/`;
 
 type ParsedRange = {
 	start: number;
@@ -138,7 +138,11 @@ export class FileServerService {
 
 	@bindThis
 	private async errorHandler(request: FastifyRequest<{ Params?: { [x: string]: any }; Querystring?: { [x: string]: any }; }>, reply: FastifyReply, err?: any) {
-		this.logger.error(`Unhandled error in file server: ${renderInlineError(err)}`);
+		if (err instanceof StatusError && err.isClientError) {
+			this.logger.warn(`Handled client error in file server: ${renderInlineError(err)}`);
+		} else {
+			this.logger.error(`Unhandled error in file server: ${renderInlineError(err)}`);
+		}
 
 		reply.header('Cache-Control', 'max-age=300');
 
@@ -307,6 +311,7 @@ export class FileServerService {
 		// アバタークロップなど、どうしてもオリジンである必要がある場合
 		const mustOrigin = 'origin' in request.query;
 		const useUrlPreviewProxy = 'preview' in request.query && this.getUrlPreviewProxyMode() === 'outbound';
+		const localFileKey = getLocalFileKeyFromUrl(url, this.config.url);
 
 		if (this.config.externalMediaProxyEnabled && !mustOrigin && !useUrlPreviewProxy) {
 			// 外部のメディアプロキシが有効なら、そちらにリダイレクト
@@ -327,13 +332,25 @@ export class FileServerService {
 
 		if (!request.headers['user-agent']) {
 			throw new StatusError('User-Agent is required', 400, 'User-Agent is required');
-		} else if (request.headers['user-agent'].toLowerCase().indexOf('misskey/') !== -1) {
+		} else if (localFileKey == null && request.headers['user-agent'].toLowerCase().indexOf('misskey/') !== -1) {
 			throw new StatusError(`Refusing to proxy recursive request to ${url} (from user-agent ${request.headers['user-agent']})`, 403, 'Proxy is recursive');
 		}
 
-		// Create temp file
-		const file = await this.getStreamAndTypeFromUrl(url, { useUrlPreviewProxy });
+		let file: Awaited<ReturnType<FileServerService['getStreamAndTypeFromUrl']>>;
+		try {
+			file = localFileKey != null ? await this.getFileFromKey(localFileKey) : await this.getStreamAndTypeFromUrl(url, { useUrlPreviewProxy });
+		} catch (err) {
+			if (this.shouldReturnAvatarFallback(request)) {
+				this.logger.warn(`Avatar proxy fallback for ${url}: ${renderInlineError(err)}`);
+				return this.sendAvatarFallback(reply);
+			}
+			throw err;
+		}
+
 		if (file === '404') {
+			if (this.shouldReturnAvatarFallback(request)) {
+				return this.sendAvatarFallback(reply);
+			}
 			reply.code(404);
 			reply.header('Cache-Control', 'public, max-age=86400');
 			return reply.sendFile('/dummy.png', assets);
@@ -466,6 +483,10 @@ export class FileServerService {
 			return image.data;
 		} catch (e) {
 			if ('cleanup' in file) file.cleanup();
+			if (this.shouldReturnAvatarFallback(request)) {
+				this.logger.warn(`Avatar proxy fallback for ${url}: ${renderInlineError(e)}`);
+				return this.sendAvatarFallback(reply);
+			}
 			throw e;
 		}
 	}
@@ -477,10 +498,8 @@ export class FileServerService {
 		| '404'
 		| '204'
 	> {
-		if (url.startsWith(`${this.config.url}/files/`)) {
-			const key = url.replace(`${this.config.url}/files/`, '').split('/').shift();
-			if (!key) throw new StatusError(`Invalid file URL ${url}`, 400, 'Invalid file url');
-
+		const key = getLocalFileKeyFromUrl(url, this.config.url);
+		if (key != null) {
 			return await this.getFileFromKey(key);
 		}
 
@@ -530,6 +549,17 @@ export class FileServerService {
 
 	private getUrlPreviewProxyMode(): UrlPreviewProxyMode {
 		return this.meta.urlPreviewProxyMode ?? (this.meta.urlPreviewSummaryProxyUrl ? 'summaly' : 'direct');
+	}
+
+	private shouldReturnAvatarFallback(request: FastifyRequest<{ Querystring: { url?: string; }; }>): boolean {
+		return 'avatar' in request.query;
+	}
+
+	private sendAvatarFallback(reply: FastifyReply) {
+		reply.code(200);
+		reply.header('Content-Type', 'image/png');
+		reply.header('Cache-Control', 'public, max-age=86400');
+		return reply.send(fs.createReadStream(`${_dirname}/assets/dummy.png`));
 	}
 
 	@bindThis
@@ -696,6 +726,25 @@ export class FileServerService {
 
 		return true;
 	}
+}
+
+export function getLocalFileKeyFromUrl(url: string, instanceUrl: string): string | null {
+	let parsedUrl: URL;
+	let parsedInstanceUrl: URL;
+	try {
+		parsedUrl = new URL(url);
+		parsedInstanceUrl = new URL(instanceUrl);
+	} catch {
+		return null;
+	}
+
+	if (parsedUrl.origin !== parsedInstanceUrl.origin) return null;
+
+	const normalizedPath = parsedUrl.pathname.replace(/\/{2,}/g, '/');
+	if (!normalizedPath.startsWith('/files/')) return null;
+
+	const key = normalizedPath.slice('/files/'.length).split('/')[0];
+	return key.length > 0 ? key : null;
 }
 
 function createReadStreamWithRange(path: string, size: number, rangeHeader: string | undefined, reply: FastifyReply): fs.ReadStream | undefined {

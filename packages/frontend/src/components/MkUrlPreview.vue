@@ -282,6 +282,10 @@ function refresh(withFetch = false, initial = false) {
 		? Promise.resolve(props.previewHint)
 		: window.fetch(`/url?${params.toString()}`, { headers })
 			.then(res => {
+				if (res.status === 204) {
+					return null;
+				}
+
 				if (!res.ok) {
 					if (_DEV_) {
 						console.warn(`[HTTP${res.status}] Failed to fetch url preview`);
@@ -290,7 +294,8 @@ function refresh(withFetch = false, initial = false) {
 				}
 
 				return res.json();
-			});
+			})
+			.catch(() => null);
 	return fetching.value ??= fetchPromise
 		.then(async (info: SummalyResult | null) => {
 			unknownUrl.value = info == null;

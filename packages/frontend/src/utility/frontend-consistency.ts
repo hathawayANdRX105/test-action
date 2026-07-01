@@ -60,7 +60,13 @@ export async function assertFrontendAssetsCurrent(): Promise<void> {
 	const currentEntry = clientEntryFromPage();
 	if (_DEV_ || currentEntry == null) return;
 
-	const res = await window.fetch(window.location.pathname + window.location.search, {
+	const url = new URL(window.location.href);
+	url.searchParams.delete('_frontendUpdatedTo');
+	url.searchParams.delete('_frontendRepair');
+	url.searchParams.delete('_frontendUpdateCheck');
+	url.searchParams.set('_frontendAssetCheck', Date.now().toString());
+
+	const res = await window.fetch(`${url.pathname}${url.search}`, {
 		method: 'GET',
 		cache: 'no-store',
 		headers: {

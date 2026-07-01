@@ -13,7 +13,7 @@ import type { MiUserList } from '@/models/UserList.js';
 import type { MiAbuseUserReport } from '@/models/AbuseUserReport.js';
 import type { MiSignin } from '@/models/Signin.js';
 import type { MiPage } from '@/models/Page.js';
-import type { MiChatMessage, MiChatRoom, MiReversiGame, MiRole } from '@/models/_.js';
+import type { MiChatMessage, MiChatRoom, MiChatRoomMembership, MiReversiGame, MiRole } from '@/models/_.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
@@ -21,7 +21,7 @@ import type { EmptyObject, Serialized } from '@/types.js';
 import { bindThis } from '@/decorators.js';
 import type { InternalEventTypes } from '@/global/InternalEventService.js';
 import { ChatRoomEventBatcher, type ChatBatchEventEntry } from '@/core/ChatRoomEventBatcher.js';
-import { ChatRoomShardRouter } from '@/core/ChatRoomShardRouter.js';
+import { ChatRoomShardRouter, type ChatRoomStreamChannel } from '@/core/ChatRoomShardRouter.js';
 import type * as Redis from 'ioredis';
 import type * as Reversi from 'misskey-reversi';
 
@@ -196,6 +196,11 @@ export interface ChatEventTypes {
 		userId: MiUser['id'];
 		mutedUntil: string | null;
 	};
+	memberRoleUpdated: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+		role: MiChatRoomMembership['role'];
+	};
 	// 同房间 60ms 窗口内合并的高频事件批量包(B-light)
 	batch: Array<
 		| { type: 'message'; body: Packed<'ChatMessageLite'> }
@@ -300,7 +305,7 @@ export type GlobalEventsMap = {
 } & {
 	[k: `chatUserStream:${MiUser['id']}-${MiUser['id']}`]: [ChatEventPayload];
 } & {
-	[k: `chatRoomStream:${MiChatRoom['id']}`]: [ChatEventPayload];
+	[k in ChatRoomStreamChannel]: [ChatEventPayload];
 } & {
 	[k: `reversiStream:${MiUser['id']}`]: [ReversiEventPayload];
 } & {
@@ -327,7 +332,7 @@ export interface GlobalEvents {
 	admin: TranslateEventToLegacy<`adminStream:${MiUser['id']}`>;
 	notes: TranslateEventToLegacy<'notesStream'>;
 	chatUser: TranslateEventToLegacy<`chatUserStream:${MiUser['id']}-${MiUser['id']}`>;
-	chatRoom: TranslateEventToLegacy<`chatRoomStream:${MiChatRoom['id']}`>;
+	chatRoom: TranslateEventToLegacy<ChatRoomStreamChannel>;
 	reversi: TranslateEventToLegacy<`reversiStream:${MiUser['id']}`>;
 	reversiGame: TranslateEventToLegacy<`reversiGameStream:${MiReversiGame['id']}`>;
 }
@@ -424,9 +429,9 @@ export class GlobalEventService {
 	}
 
 	@bindThis
-	public async publishChatRoomStream<Id extends MiChatRoom['id'], Type extends GlobalEventTypes<`chatRoomStream:${Id}`>>(chatRoomId: Id, type: Type, value: GlobalEventBody<`chatRoomStream:${Id}`, Type>): Promise<void> {
+	public async publishChatRoomStream<Id extends MiChatRoom['id'], Type extends GlobalEventTypes<ChatRoomStreamChannel>>(chatRoomId: Id, type: Type, value: GlobalEventBody<ChatRoomStreamChannel, Type>): Promise<void> {
 		// shard 路由:SHARKEY_CHAT_SHARDS=1 时 channel 跟旧版完全相同;>1 时加 s${shard} 前缀
-		await this.publish(this.chatRoomShardRouter.channelFor(chatRoomId) as `chatRoomStream:${Id}`, type, value);
+		await this.publish(this.chatRoomShardRouter.channelFor(chatRoomId), type, value);
 	}
 
 	/**

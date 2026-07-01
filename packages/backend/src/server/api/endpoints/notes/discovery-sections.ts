@@ -210,6 +210,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	private async getCoverNotes(sinceId: string, limit: number, me: Parameters<NoteEntityService['packMany']>[1], config: RecommendationConfig, scope: 'all' | 'local' | 'global' = 'all') {
 		const fresh48hId = this.idService.gen(this.timeService.now - 1000 * 60 * 60 * DISCOVERY_FRESH_PRIORITY_HOURS);
 		const fresh3dId = this.idService.gen(this.timeService.now - 1000 * 60 * 60 * 24 * 3);
+		const coverScore = `(
+			note."repliesCount" * 4
+			+ note."renoteCount" * 3
+			+ note."clippedCount" * 4
+			+ CASE WHEN note.id > :fresh48hId THEN 46 ELSE -34 END
+			+ CASE WHEN note.id > :fresh3dId THEN 12 ELSE -18 END
+		)`;
 		const query = this.baseNotesQuery(sinceId, me, config, scope)
 			.andWhere('note.fileIds != \'{}\'')
 			.andWhere('user.isBot = FALSE')
@@ -218,13 +225,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				qb.orWhere('note."repliesCount" + note."renoteCount" + note."clippedCount" >= 2');
 				qb.orWhere('note.id = ANY(COALESCE(channel."pinnedNoteIds", ARRAY[]::varchar[]))');
 			}))
-			.orderBy(`(
-				note."repliesCount" * 4
-				+ note."renoteCount" * 3
-				+ note."clippedCount" * 4
-				+ CASE WHEN note.id > :fresh48hId THEN 46 ELSE -34 END
-				+ CASE WHEN note.id > :fresh3dId THEN 12 ELSE -18 END
-			)`, 'DESC')
+			.addSelect(coverScore, 'discovery_cover_score')
+			.orderBy('discovery_cover_score', 'DESC')
 			.addOrderBy('note.id', 'DESC')
 			.setParameter('fresh48hId', fresh48hId)
 			.setParameter('fresh3dId', fresh3dId)
@@ -235,6 +237,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	private async getHotNotes(sinceId: string, limit: number, me: Parameters<NoteEntityService['packMany']>[1], config: RecommendationConfig, scope: 'all' | 'local' | 'global' = 'all') {
 		const fresh48hId = this.idService.gen(this.timeService.now - 1000 * 60 * 60 * DISCOVERY_FRESH_PRIORITY_HOURS);
 		const fresh3dId = this.idService.gen(this.timeService.now - 1000 * 60 * 60 * 24 * 3);
+		const hotScore = `(
+			note."repliesCount" * 5
+			+ note."renoteCount" * 4
+			+ note."clippedCount" * 5
+			+ CASE WHEN note."channelId" IS NOT NULL THEN 8 ELSE 0 END
+			+ CASE WHEN note.id > :fresh48hId THEN 52 ELSE -38 END
+			+ CASE WHEN note.id > :fresh3dId THEN 12 ELSE -18 END
+			+ CASE WHEN LOWER(COALESCE(note.text, '')) ~ '(教程|指南|配置|部署|使用方法|怎么用|如何|说明|公告|更新|讨论|分享|经验|科普|ai|claude|codex|gpt)' THEN 12 ELSE 0 END
+		)`;
 		const query = this.baseNotesQuery(sinceId, me, config, scope)
 			.andWhere('user.isBot = FALSE')
 			.andWhere('LENGTH(COALESCE(note.text, \'\')) >= 20')
@@ -250,15 +261,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				qb.orWhere('note."repliesCount" + note."renoteCount" + note."clippedCount" >= 2');
 				qb.orWhere('note.id = ANY(COALESCE(channel."pinnedNoteIds", ARRAY[]::varchar[]))');
 			}))
-			.orderBy(`(
-				note."repliesCount" * 5
-				+ note."renoteCount" * 4
-				+ note."clippedCount" * 5
-				+ CASE WHEN note."channelId" IS NOT NULL THEN 8 ELSE 0 END
-				+ CASE WHEN note.id > :fresh48hId THEN 52 ELSE -38 END
-				+ CASE WHEN note.id > :fresh3dId THEN 12 ELSE -18 END
-				+ CASE WHEN LOWER(COALESCE(note.text, '')) ~ '(教程|指南|配置|部署|使用方法|怎么用|如何|说明|公告|更新|讨论|分享|经验|科普|ai|claude|codex|gpt)' THEN 12 ELSE 0 END
-			)`, 'DESC')
+			.addSelect(hotScore, 'discovery_hot_score')
+			.orderBy('discovery_hot_score', 'DESC')
 			.addOrderBy('note.id', 'DESC')
 			.setParameter('fresh48hId', fresh48hId)
 			.setParameter('fresh3dId', fresh3dId)
@@ -269,6 +273,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	private async getTutorialNotes(sinceId: string, limit: number, me: Parameters<NoteEntityService['packMany']>[1], config: RecommendationConfig, scope: 'all' | 'local' | 'global' = 'all') {
 		const fresh48hId = this.idService.gen(this.timeService.now - 1000 * 60 * 60 * DISCOVERY_FRESH_PRIORITY_HOURS);
 		const fresh3dId = this.idService.gen(this.timeService.now - 1000 * 60 * 60 * 24 * 3);
+		const tutorialScore = `(
+			note."repliesCount" * 4
+			+ note."renoteCount" * 3
+			+ note."clippedCount" * 4
+			+ CASE WHEN note."channelId" IS NOT NULL THEN 10 ELSE 0 END
+			+ CASE WHEN note.id > :fresh48hId THEN 46 ELSE -36 END
+			+ CASE WHEN note.id > :fresh3dId THEN 12 ELSE -18 END
+			+ CASE WHEN LENGTH(COALESCE(note.text, '')) >= 80 THEN 10 ELSE 0 END
+		)`;
 		const query = this.baseNotesQuery(sinceId, me, config, scope)
 			.andWhere('user.isBot = FALSE')
 			.andWhere(new Brackets(qb => {
@@ -282,15 +295,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}))
 			.setParameter('tutorialTags', ['教程', 'AI', 'ai', 'Token', 'token', '资源', '指南', '讨论', '分享', '经验'])
 			.setParameter('tutorialPattern', '教程|指南|配置|部署|api|claude|codex|ai|gpt|token|资源|讨论|分享|经验|科普')
-			.orderBy(`(
-				note."repliesCount" * 4
-				+ note."renoteCount" * 3
-				+ note."clippedCount" * 4
-				+ CASE WHEN note."channelId" IS NOT NULL THEN 10 ELSE 0 END
-				+ CASE WHEN note.id > :fresh48hId THEN 46 ELSE -36 END
-				+ CASE WHEN note.id > :fresh3dId THEN 12 ELSE -18 END
-				+ CASE WHEN LENGTH(COALESCE(note.text, '')) >= 80 THEN 10 ELSE 0 END
-			)`, 'DESC')
+			.addSelect(tutorialScore, 'discovery_tutorial_score')
+			.orderBy('discovery_tutorial_score', 'DESC')
 			.addOrderBy('note.id', 'DESC')
 			.setParameter('fresh48hId', fresh48hId)
 			.setParameter('fresh3dId', fresh3dId)
@@ -299,18 +305,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	}
 
 	private async getChannels(limit: number, me: Parameters<ChannelEntityService['packMany']>[1]) {
+		const channelScore = `(
+			LEAST(channel."notesCount", 500) * 0.35
+			+ LEAST(channel."usersCount", 200) * 1.6
+			+ CASE WHEN channel."lastNotedAt" > now() - interval '48 hours' THEN 45 ELSE 0 END
+			+ CASE WHEN channel."lastNotedAt" > now() - interval '7 days' THEN 20 ELSE -20 END
+			+ cardinality(channel."pinnedNoteIds") * 6
+		)`;
 		const channels = await this.channelsRepository.createQueryBuilder('channel')
 			.where('channel.isArchived = FALSE')
 			.andWhere('channel.isSensitive = FALSE')
 			.andWhere('channel."notesCount" > 0')
 			.andWhere('channel.name !~* :lowValueChannelPattern')
-			.orderBy(`(
-				LEAST(channel."notesCount", 500) * 0.35
-				+ LEAST(channel."usersCount", 200) * 1.6
-				+ CASE WHEN channel."lastNotedAt" > now() - interval '48 hours' THEN 45 ELSE 0 END
-				+ CASE WHEN channel."lastNotedAt" > now() - interval '7 days' THEN 20 ELSE -20 END
-				+ cardinality(channel."pinnedNoteIds") * 6
-			)`, 'DESC')
+			.addSelect(channelScore, 'discovery_channel_score')
+			.orderBy('discovery_channel_score', 'DESC')
 			.setParameter('lowValueChannelPattern', '^(Key|key|白嫖|签到|打卡)$')
 			.addOrderBy('channel.lastNotedAt', 'DESC', 'NULLS LAST')
 			.limit(limit * POOL_MULTIPLIER)
@@ -319,6 +327,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	}
 
 	private async getUsers(limit: number, me: Parameters<UserEntityService['packMany']>[1]) {
+		const userScore = `(
+			LEAST("user"."followersCount", 500) * 1.0
+			+ LEAST("user"."notesCount", 300) * 0.2
+			+ CASE WHEN "user"."updatedAt" > now() - interval '14 days' THEN 40 ELSE 0 END
+			+ CASE WHEN "user"."updatedAt" > now() - interval '60 days' THEN 15 ELSE -25 END
+		)`;
 		const query = this.usersRepository.createQueryBuilder('user')
 			.where('user.host IS NULL')
 			.andWhere('user.isSuspended = FALSE')
@@ -332,12 +346,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			query.andWhere('NOT EXISTS (SELECT 1 FROM "following" f WHERE f."followerId" = :meId AND f."followeeId" = "user"."id")', { meId: me.id });
 		}
 		const users = await query
-			.orderBy(`(
-				LEAST("user"."followersCount", 500) * 1.0
-				+ LEAST("user"."notesCount", 300) * 0.2
-				+ CASE WHEN "user"."updatedAt" > now() - interval '14 days' THEN 40 ELSE 0 END
-				+ CASE WHEN "user"."updatedAt" > now() - interval '60 days' THEN 15 ELSE -25 END
-			)`, 'DESC')
+			.addSelect(userScore, 'discovery_user_score')
+			.orderBy('discovery_user_score', 'DESC')
 			.addOrderBy('"user"."followersCount"', 'DESC')
 			.addOrderBy('"user"."notesCount"', 'DESC')
 			.limit(limit * POOL_MULTIPLIER)

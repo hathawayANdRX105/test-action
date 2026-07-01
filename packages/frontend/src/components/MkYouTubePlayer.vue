@@ -48,12 +48,21 @@ const player = ref({
 const ytFetch = (): void => {
 	fetching.value = true;
 	window.fetch(`/url?url=${encodeURIComponent(requestUrl.href)}&lang=${versatileLang}`).then(res => {
+		if (res.status === 204 || !res.ok) {
+			fetching.value = false;
+			return;
+		}
+
 		res.json().then(info => {
 			if (info.url == null) return;
 			title.value = info.title;
 			fetching.value = false;
 			player.value = info.player;
+		}).catch(() => {
+			fetching.value = false;
 		});
+	}).catch(() => {
+		fetching.value = false;
 	});
 };
 

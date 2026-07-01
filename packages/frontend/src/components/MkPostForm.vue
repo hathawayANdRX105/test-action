@@ -165,6 +165,7 @@ import MkRippleEffect from '@/components/MkRippleEffect.vue';
 import MkScheduleEditor from '@/components/MkScheduleEditor.vue';
 import { miLocalStorage } from '@/local-storage.js';
 import { claimAchievement } from '@/utility/achievements.js';
+import { isILoveUniverseFederationAchievementText } from '@/utility/achievement-post-triggers.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { mfmFunctionPicker } from '@/utility/mfm-function-picker.js';
 import { prefer } from '@/preferences.js';
@@ -879,6 +880,9 @@ function clear() {
 }
 
 function onKeydown(ev: KeyboardEvent) {
+	const isComposing = justEndedComposition.value || ev.isComposing || ev.keyCode === 229;
+	if (isComposing) return;
+
 	if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey) && canPost.value) {
 		ev.preventDefault();
 		post();
@@ -886,7 +890,7 @@ function onKeydown(ev: KeyboardEvent) {
 
 	// justEndedComposition.value is for Safari, which keyDown occurs after compositionend.
 	// ev.isComposing is for another browsers.
-	if (ev.key === 'Escape' && !justEndedComposition.value && !ev.isComposing) emit('esc');
+	if (ev.key === 'Escape') emit('esc');
 }
 
 function onKeyup(ev: KeyboardEvent) {
@@ -1201,8 +1205,7 @@ async function post(ev?: MouseEvent) {
 			}
 
 			const text = postData.text ?? '';
-			const lowerCase = text.toLowerCase();
-			if ((lowerCase.includes('love') || lowerCase.includes('❤')) && lowerCase.includes('sharkey')) {
+			if (isILoveUniverseFederationAchievementText(text)) {
 				claimAchievement('iLoveMisskey');
 			}
 			if ([

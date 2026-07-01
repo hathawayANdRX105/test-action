@@ -16,6 +16,8 @@ import { Injectable } from '@nestjs/common';
 import { bindThis } from '@/decorators.js';
 import type { MiChatRoom } from '@/models/_.js';
 
+export type ChatRoomStreamChannel = `chatRoomStream:${MiChatRoom['id']}` | `chatRoomStream:s${number}:${MiChatRoom['id']}`;
+
 const TOTAL_SHARDS = Math.max(1, Math.floor(Number(process.env.SHARKEY_CHAT_SHARDS ?? '1')) || 1);
 const MY_SHARD = ((Math.floor(Number(process.env.SHARKEY_SHARD_ID ?? '0')) || 0) % TOTAL_SHARDS + TOTAL_SHARDS) % TOTAL_SHARDS;
 
@@ -41,7 +43,7 @@ export class ChatRoomShardRouter {
 	}
 
 	@bindThis
-	public channelFor(roomId: MiChatRoom['id']): string {
+	public channelFor(roomId: MiChatRoom['id']): ChatRoomStreamChannel {
 		// shard=0 时不加前缀,跟旧的 `chatRoomStream:${roomId}` 完全兼容(无缝升级)
 		if (TOTAL_SHARDS === 1) return `chatRoomStream:${roomId}`;
 		return `chatRoomStream:s${this.shardOf(roomId)}:${roomId}`;

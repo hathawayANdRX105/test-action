@@ -8,9 +8,15 @@ import { getJsonSchema } from '@/core/chart/core.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import ActiveUsersChart from '@/core/chart/charts/active-users.js';
 import { schema } from '@/core/chart/charts/entities/active-users.js';
+import type { IEndpointMeta } from '@/server/api/endpoints.js';
+import type { Schema } from '@/misc/json-schema.js';
 
 export const meta = {
 	tags: ['charts', 'users'],
+
+	requireCredential: true,
+	requireModerator: true,
+	kind: 'read:admin:show-user',
 
 	res: getJsonSchema(schema),
 
@@ -23,7 +29,7 @@ export const meta = {
 		size: 200,
 		dripRate: 200,
 	},
-} as const;
+} as const satisfies IEndpointMeta;
 
 export const paramDef = {
 	type: 'object',
@@ -33,7 +39,7 @@ export const paramDef = {
 		offset: { type: 'integer', nullable: true, default: null },
 	},
 	required: ['span'],
-} as const;
+} as const satisfies Schema;
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export

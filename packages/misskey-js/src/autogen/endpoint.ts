@@ -385,6 +385,8 @@ import type {
 	ChatRoomsManageUpdateResponse,
 	ChatRoomsMembersRequest,
 	ChatRoomsMembersResponse,
+	ChatRoomsMembersUpdateRoleRequest,
+	ChatRoomsMembersUpdateRoleResponse,
 	ChatRoomsMuteRequest,
 	ChatRoomsMuteLogRequest,
 	ChatRoomsMuteLogResponse,
@@ -401,6 +403,8 @@ import type {
 	ChatRoomsUserMutesDeleteRequest,
 	ChatRoomsUserMutesListRequest,
 	ChatRoomsUserMutesListResponse,
+	ChatRoomsUserSettingsUpdateRequest,
+	ChatRoomsUserSettingsUpdateResponse,
 	ClipsAddNoteRequest,
 	ClipsCreateRequest,
 	ClipsCreateResponse,
@@ -693,10 +697,10 @@ import type {
 	NotesThreadMutingDeleteRequest,
 	NotesTimelineRequest,
 	NotesTimelineResponse,
-	NotesTranslateBatchRequest,
-	NotesTranslateBatchResponse,
 	NotesTranslateRequest,
 	NotesTranslateResponse,
+	NotesTranslateBatchRequest,
+	NotesTranslateBatchResponse,
 	NotesUnrenoteRequest,
 	NotesUserListTimelineRequest,
 	NotesUserListTimelineResponse,
@@ -1087,6 +1091,7 @@ export type Endpoints = {
 	'chat/rooms/manage/stats': { req: ChatRoomsManageStatsRequest; res: ChatRoomsManageStatsResponse };
 	'chat/rooms/manage/update': { req: ChatRoomsManageUpdateRequest; res: ChatRoomsManageUpdateResponse };
 	'chat/rooms/members': { req: ChatRoomsMembersRequest; res: ChatRoomsMembersResponse };
+	'chat/rooms/members/update-role': { req: ChatRoomsMembersUpdateRoleRequest; res: ChatRoomsMembersUpdateRoleResponse };
 	'chat/rooms/mute': { req: ChatRoomsMuteRequest; res: EmptyResponse };
 	'chat/rooms/mute-log': { req: ChatRoomsMuteLogRequest; res: ChatRoomsMuteLogResponse };
 	'chat/rooms/mute-member': { req: ChatRoomsMuteMemberRequest; res: EmptyResponse };
@@ -1097,6 +1102,7 @@ export type Endpoints = {
 	'chat/rooms/user-mutes/create': { req: ChatRoomsUserMutesCreateRequest; res: ChatRoomsUserMutesCreateResponse };
 	'chat/rooms/user-mutes/delete': { req: ChatRoomsUserMutesDeleteRequest; res: EmptyResponse };
 	'chat/rooms/user-mutes/list': { req: ChatRoomsUserMutesListRequest; res: ChatRoomsUserMutesListResponse };
+	'chat/rooms/user-settings/update': { req: ChatRoomsUserSettingsUpdateRequest; res: ChatRoomsUserSettingsUpdateResponse };
 	'clips/add-note': { req: ClipsAddNoteRequest; res: EmptyResponse };
 	'clips/create': { req: ClipsCreateRequest; res: ClipsCreateResponse };
 	'clips/delete': { req: ClipsDeleteRequest; res: EmptyResponse };
@@ -1288,8 +1294,8 @@ export type Endpoints = {
 	'notes/thread-muting/create': { req: NotesThreadMutingCreateRequest; res: EmptyResponse };
 	'notes/thread-muting/delete': { req: NotesThreadMutingDeleteRequest; res: EmptyResponse };
 	'notes/timeline': { req: NotesTimelineRequest; res: NotesTimelineResponse };
-	'notes/translate-batch': { req: NotesTranslateBatchRequest; res: NotesTranslateBatchResponse };
 	'notes/translate': { req: NotesTranslateRequest; res: NotesTranslateResponse };
+	'notes/translate-batch': { req: NotesTranslateBatchRequest; res: NotesTranslateBatchResponse };
 	'notes/unrenote': { req: NotesUnrenoteRequest; res: EmptyResponse };
 	'notes/user-list-timeline': { req: NotesUserListTimelineRequest; res: NotesUserListTimelineResponse };
 	'notes/versions': { req: NotesVersionsRequest; res: NotesVersionsResponse };

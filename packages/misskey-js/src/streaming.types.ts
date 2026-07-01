@@ -327,6 +327,11 @@ export type Channels = {
 				userId: string;
 				mutedUntil: string | null;
 			}) => void;
+			memberRoleUpdated: (payload: {
+				roomId: string;
+				userId: string;
+				role: 'member' | 'manager';
+			}) => void;
 			// B-light:同房间 60ms 窗口内合并的高频事件批量包。客户端按顺序解包后再触发 message/react/unreact。
 			batch: (payload: Array<
 				| { type: 'message'; body: ChatMessageLite }

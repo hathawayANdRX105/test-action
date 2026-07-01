@@ -341,6 +341,10 @@ export class UrlPreviewService {
 		const e = errorResponse.error!;
 		reply.header('Cache-Control', `max-age=${e.age}`);
 
+		if (e.code === 'URL_PREVIEW_FAILED' || e.code === 'URL_PREVIEW_PROXY_UNAVAILABLE') {
+			return reply.code(204).send();
+		}
+
 		return reply.code(e.status).send({
 			error: {
 				message: e.message,

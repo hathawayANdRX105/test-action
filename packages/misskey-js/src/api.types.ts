@@ -1,5 +1,5 @@
 import type { Endpoints as Gen } from './autogen/endpoint.js';
-import type { Channel, ChatMessage, ChatRoom, Note, UserDetailed } from './autogen/models.js';
+import type { Channel, ChatMessage, ChatRoom, ChatRoomMembership, Note, UserDetailed } from './autogen/models.js';
 import type {
 	AdminChatRoomsListRequest,
 	AdminChatRoomsListResponse,
@@ -380,6 +380,34 @@ export type Endpoints = Overwrite<
 					count: number;
 				}[];
 			};
+		},
+		'chat/rooms/members': {
+			req: {
+				roomId: string;
+				limit?: number;
+				sinceId?: string;
+				untilId?: string;
+				role?: 'member' | 'manager';
+				userId?: string;
+				query?: string;
+			};
+			res: (ChatRoomMembership & { role: 'member' | 'manager' })[];
+		},
+		'chat/rooms/members/update-role': {
+			req: {
+				roomId: string;
+				userId: string;
+				role: 'member' | 'manager';
+			};
+			res: ChatRoomMembership & { role: 'member' | 'manager' };
+		},
+		'chat/rooms/user-settings/update': {
+			req: {
+				roomId: string;
+				nickname?: string | null;
+				folder?: string | null;
+			};
+			res: ChatRoom;
 		},
 		'chat/messages/context': {
 			req: {

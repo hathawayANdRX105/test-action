@@ -49,6 +49,7 @@ import { extractAvgColorFromBlurhash } from '@@/js/extract-avg-color-from-blurha
 import MkImgWithBlurhash from '../MkImgWithBlurhash.vue';
 import MkA from './MkA.vue';
 import { getStaticImageUrl } from '@/utility/media-proxy.js';
+import { appendAvatarCacheKey } from '@/utility/avatar-cache.js';
 import { acct, userPage } from '@/filters/user.js';
 import MkUserOnlineIndicator from '@/components/MkUserOnlineIndicator.vue';
 import { prefer } from '@/preferences.js';
@@ -85,8 +86,8 @@ const bound = computed(() => props.link
 
 const url = computed(() => {
 	if (props.user.avatarUrl == null) return null;
-	if (prefer.s.disableShowingAnimatedImages || prefer.s.dataSaver.avatar) return getStaticImageUrl(props.user.avatarUrl);
-	return props.user.avatarUrl;
+	const avatarUrl = prefer.s.disableShowingAnimatedImages || prefer.s.dataSaver.avatar ? getStaticImageUrl(props.user.avatarUrl) : props.user.avatarUrl;
+	return appendAvatarCacheKey(avatarUrl, props.user.id);
 });
 
 function onClick(ev: MouseEvent): void {

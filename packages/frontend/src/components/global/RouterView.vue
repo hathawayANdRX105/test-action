@@ -35,7 +35,9 @@ import { DI } from '@/di.js';
 import { deepEqual } from '@/utility/deep-equal.js';
 import { assertFrontendAssetsCurrent, queueDisplayStateRestore } from '@/utility/frontend-consistency.js';
 
-const UNCACHED_ROUTES = new Set(['/', '/explore', '/my/notifications', '/search']);
+// Feed-like pages must stay cached so mobile back navigation restores the
+// previous scroll anchor after opening a note.
+const UNCACHED_ROUTES = new Set(['/my/notifications']);
 
 const props = defineProps<{
 	router?: Router;

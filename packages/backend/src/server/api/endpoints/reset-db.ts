@@ -14,16 +14,25 @@ import { resetDb } from '@/misc/reset-db.js';
 import { MetaService } from '@/core/MetaService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { EnvService } from '@/global/EnvService.js';
+import { ApiError } from '../error.js';
 
 export const meta = {
 	tags: ['non-productive'],
 
-	requireCredential: false,
+	requireCredential: true,
+	requireAdmin: true,
+	kind: 'write:admin:meta',
 
 	description: 'Only available when running with <code>NODE_ENV=testing</code>. Reset the database and flush Redis.',
 
 	errors: {
-
+		unavailable: {
+			message: 'This endpoint is only available in the test environment.',
+			code: 'UNAVAILABLE',
+			id: 'e94f708d-8574-44fc-b36b-d025a5ec5712',
+			kind: 'permission',
+			httpStatusCode: 404,
+		},
 	},
 
 	// 2 calls per second
@@ -58,7 +67,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		envService: EnvService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			if (envService.env.NODE_ENV !== 'test') throw new Error('NODE_ENV is not a test');
+			if (envService.env.NODE_ENV !== 'test') throw new ApiError(meta.errors.unavailable);
 
 			const logger = this.loggerService.getLogger('reset-db');
 			logger.info('---- Resetting database...');

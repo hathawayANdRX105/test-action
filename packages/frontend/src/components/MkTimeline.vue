@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <component :is="prefer.s.enablePullToRefresh ? MkPullToRefresh : 'div'" :refresher="() => reloadTimeline()">
-	<MkPagination v-if="paginationQuery" ref="pagingComponent" :pagination="paginationQuery" @queue="emit('queue', $event)">
+	<MkPagination v-if="paginationQuery" ref="pagingComponent" :pagination="paginationQuery" :displayLimit="TIMELINE_DISPLAY_LIMIT" @queue="emit('queue', $event)">
 		<template #empty><MkResult type="empty" :text="i18n.ts.noNotes"/></template>
 
 		<template #default="{ items: notes }">
@@ -72,6 +72,7 @@ import SkTimelineMasonryCard from '@/components/SkTimelineMasonryCard.vue';
 
 // Global timeline style: twitter (default), forum, or masonry.
 const viewMode = computed(() => prefer.r.timelineViewMode.value ?? 'twitter');
+const TIMELINE_DISPLAY_LIMIT = 160;
 // 不同视图模式一屏装的卡片数差异巨大,limit 跟着 viewMode 走:
 // - twitter:大卡,一屏 4~5 条 → 初次 12 就够
 // - forum(Discourse):窄列表,一屏 12~16 条 → 初次 30

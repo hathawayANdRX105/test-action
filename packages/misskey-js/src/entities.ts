@@ -19,6 +19,8 @@ export * from './autogen/models.js';
 export type ID = string;
 export type DateString = string;
 
+export type ChatRoomMembershipRole = 'member' | 'manager';
+
 type NonNullableRecord<T> = {
 	[P in keyof T]-?: NonNullable<T[P]>;
 };

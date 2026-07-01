@@ -19,7 +19,7 @@ import { refreshCurrentAccount, login } from '@/accounts.js';
 import { store } from '@/store.js';
 import { fetchInstance, instance } from '@/instance.js';
 import { deviceKind, updateDeviceKind } from '@/utility/device-kind.js';
-import { reloadChannel } from '@/utility/unison-reload.js';
+import { reloadChannel, unisonReload } from '@/utility/unison-reload.js';
 import { getUrlWithoutLoginId } from '@/utility/login-id.js';
 import { getAccountFromId } from '@/utility/get-account-from-id.js';
 import { deckStore } from '@/ui/deck/deck-store.js';
@@ -28,6 +28,7 @@ import { fetchCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
 import { $i } from '@/i.js';
 import { assertFrontendAssetsCurrent, repairFrontendRuntimeCaches, restoreDisplayStateNow } from '@/utility/frontend-consistency.js';
+import * as os from '@/os.js';
 
 export async function common(createVue: () => Promise<App<Element>>) {
 	console.info(`Universe Federation v${version}`);
@@ -136,6 +137,172 @@ export async function common(createVue: () => Promise<App<Element>>) {
 		if (window.document.visibilityState === 'visible') checkFrontendAssetsSoon();
 	});
 	window.setInterval(checkFrontendAssetsSoon, 5 * 60_000);
+
+	type FrontendDeploymentFingerprint = {
+		version: string;
+		clientEntry: string;
+	};
+
+	const currentFrontendDeployment: FrontendDeploymentFingerprint = {
+		version: typeof (window as { VERSION?: unknown }).VERSION === 'string' ? (window as { VERSION: string }).VERSION : version,
+		clientEntry: typeof (window as { CLIENT_ENTRY?: unknown }).CLIENT_ENTRY === 'string' ? (window as { CLIENT_ENTRY: string }).CLIENT_ENTRY : '',
+	};
+	let frontendUpdateCheckInFlight = false;
+	let frontendUpdatePromptShowing = false;
+	let frontendUpdateReloading = false;
+	const FRONTEND_UPDATE_DECLINED_MS = 24 * 60 * 60_000;
+	const FRONTEND_UPDATE_RELOAD_ATTEMPT_MS = 24 * 60 * 60_000;
+
+	function parseFrontendDeploymentFingerprint(html: string): FrontendDeploymentFingerprint | null {
+		const versionMatch = html.match(/\bvar\s+VERSION\s*=\s*"([^"]+)"/);
+		const entryMatch = html.match(/\bvar\s+CLIENT_ENTRY\s*=\s*"([^"]+)"/);
+		const nextVersion = versionMatch?.[1];
+		const nextEntry = entryMatch?.[1];
+		if (nextVersion == null || nextEntry == null) return null;
+		return {
+			version: nextVersion,
+			clientEntry: nextEntry,
+		};
+	}
+
+	function isDifferentFrontendDeployment(next: FrontendDeploymentFingerprint): boolean {
+		return next.clientEntry.length > 0 && next.clientEntry !== currentFrontendDeployment.clientEntry;
+	}
+
+	function shouldPromptFrontendDeploymentUpdate(next: FrontendDeploymentFingerprint): boolean {
+		return next.version !== currentFrontendDeployment.version;
+	}
+
+	function frontendUpdateDeclinedKey(next: FrontendDeploymentFingerprint): string {
+		return `sharkey:frontend-update-declined:${currentFrontendDeployment.clientEntry}:${next.clientEntry}`;
+	}
+
+	function frontendUpdateReloadingKey(next: FrontendDeploymentFingerprint): string {
+		return `sharkey:frontend-update-reloading:${currentFrontendDeployment.clientEntry}:${next.clientEntry}`;
+	}
+
+	function frontendUpdateReloadedTo(): string | null {
+		return new URL(window.location.href).searchParams.get('_frontendUpdatedTo');
+	}
+
+	function clearFrontendUpdateReloadMarkerIfCurrent(): void {
+		if (frontendUpdateReloadedTo() !== currentFrontendDeployment.clientEntry) return;
+		const url = new URL(window.location.href);
+		url.searchParams.delete('_frontendUpdatedTo');
+		window.history.replaceState(window.history.state, '', url.toString());
+	}
+
+	function markFrontendUpdateReloadAttempt(next: FrontendDeploymentFingerprint): void {
+		const value = Date.now().toString();
+		window.sessionStorage.setItem(frontendUpdateReloadingKey(next), value);
+		window.localStorage.setItem(frontendUpdateReloadingKey(next), value);
+	}
+
+	function wasFrontendUpdateRecentlyDeclined(next: FrontendDeploymentFingerprint): boolean {
+		const declinedAt = Number(
+			window.sessionStorage.getItem(frontendUpdateDeclinedKey(next)) ??
+			window.localStorage.getItem(frontendUpdateDeclinedKey(next)) ??
+			'0',
+		);
+		return Number.isFinite(declinedAt) && Date.now() - declinedAt < FRONTEND_UPDATE_DECLINED_MS;
+	}
+
+	function wasFrontendUpdateReloadRecentlyAttempted(next: FrontendDeploymentFingerprint): boolean {
+		const attemptedAt = Number(
+			window.sessionStorage.getItem(frontendUpdateReloadingKey(next)) ??
+			window.localStorage.getItem(frontendUpdateReloadingKey(next)) ??
+			'0',
+		);
+		return Number.isFinite(attemptedAt) && Date.now() - attemptedAt < FRONTEND_UPDATE_RELOAD_ATTEMPT_MS;
+	}
+
+	async function repairAcceptedFrontendUpdateIfStillStale(next: FrontendDeploymentFingerprint): Promise<void> {
+		if (frontendUpdateReloadedTo() !== next.clientEntry && !wasFrontendUpdateReloadRecentlyAttempted(next)) return;
+
+		await repairFrontendRuntimeCaches(
+			`frontend update did not activate: ${currentFrontendDeployment.clientEntry} -> ${next.clientEntry}`,
+			`frontend-update:${currentFrontendDeployment.clientEntry}:${next.clientEntry}`,
+		);
+	}
+
+	function reloadToFrontendDeployment(next: FrontendDeploymentFingerprint): never {
+		frontendUpdateReloading = true;
+		markFrontendUpdateReloadAttempt(next);
+		const url = new URL(window.location.href);
+		url.searchParams.set('_frontendUpdatedTo', next.clientEntry);
+		unisonReload(url.toString());
+		throw new Error('Reloading frontend for updated deployment.');
+	}
+
+	async function checkFrontendDeploymentUpdate() {
+		if (_DEV_ || frontendUpdateCheckInFlight || frontendUpdatePromptShowing || frontendUpdateReloading) return;
+		frontendUpdateCheckInFlight = true;
+
+		try {
+			const url = new URL(window.location.href);
+			url.searchParams.delete('_frontendUpdatedTo');
+			url.searchParams.set('_frontendUpdateCheck', Date.now().toString());
+			const res = await window.fetch(url.toString(), {
+				method: 'GET',
+				cache: 'no-store',
+				headers: {
+					'X-Frontend-Update-Check': '1',
+				},
+			});
+			if (!res.ok) return;
+
+			const next = parseFrontendDeploymentFingerprint(await res.text());
+			if (next == null || !isDifferentFrontendDeployment(next)) return;
+			await repairAcceptedFrontendUpdateIfStillStale(next);
+			if (!shouldPromptFrontendDeploymentUpdate(next)) return;
+			if (wasFrontendUpdateReloadRecentlyAttempted(next)) return;
+			if (wasFrontendUpdateRecentlyDeclined(next)) return;
+
+			frontendUpdatePromptShowing = true;
+			const { canceled } = await os.confirm({
+				type: 'info',
+				title: i18n.ts.reloadConfirm,
+				text: i18n.ts.youShouldUpgradeClient,
+				okText: i18n.ts.reload,
+				cancelText: i18n.ts.later,
+			});
+			if (canceled) {
+				const value = Date.now().toString();
+				window.sessionStorage.setItem(frontendUpdateDeclinedKey(next), value);
+				window.localStorage.setItem(frontendUpdateDeclinedKey(next), value);
+				return;
+			}
+
+			reloadToFrontendDeployment(next);
+		} catch (err) {
+			if (!frontendUpdateReloading) {
+				console.warn('Failed to check frontend deployment update.', err);
+			}
+		} finally {
+			frontendUpdateCheckInFlight = false;
+			if (!frontendUpdateReloading) {
+				frontendUpdatePromptShowing = false;
+			}
+		}
+	}
+
+	if (!_DEV_) {
+		clearFrontendUpdateReloadMarkerIfCurrent();
+		const scheduleFrontendDeploymentUpdateCheck = () => {
+			window.setTimeout(() => {
+				void checkFrontendDeploymentUpdate();
+			}, 2500);
+		};
+
+		window.setInterval(() => {
+			if (window.document.visibilityState === 'visible') void checkFrontendDeploymentUpdate();
+		}, 60_000);
+		window.addEventListener('focus', scheduleFrontendDeploymentUpdateCheck, { passive: true });
+		window.document.addEventListener('visibilitychange', () => {
+			if (window.document.visibilityState === 'visible') scheduleFrontendDeploymentUpdateCheck();
+		});
+		scheduleFrontendDeploymentUpdateCheck();
+	}
 
 	// If mobile, insert the viewport meta tag
 	if (['smartphone', 'tablet'].includes(deviceKind)) {

@@ -43,7 +43,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, isRef, nextTick, onActivated, onBeforeMount, onBeforeUnmount, onDeactivated, ref, useTemplateRef, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import { useDocumentVisibility } from '@@/js/use-document-visibility.js';
-import { onScrollTop, isHeadVisible, getBodyScrollHeight, getScrollContainer, onScrollBottom, scrollToBottom, scrollInContainer, isTailVisible } from '@@/js/scroll.js';
+import { onScrollTop, isHeadVisible, getScrollContainer, onScrollBottom, scrollToBottom, isTailVisible } from '@@/js/scroll.js';
 import type { ComputedRef, Ref } from 'vue';
 import type { MisskeyEntity } from '@/types/date-separated-list.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -76,13 +76,14 @@ export type Paging<E extends keyof Misskey.Endpoints = keyof Misskey.Endpoints> 
 };
 
 type MisskeyEntityMap = Map<string, MisskeyEntity>;
+type ItemRetentionSide = 'head' | 'tail';
+type ScrollAnchorSnapshot = {
+	id: string;
+	top: number;
+};
 
 function arrayToEntries(entities: MisskeyEntity[]): [string, MisskeyEntity][] {
 	return entities.map(en => [en.id, en]);
-}
-
-function concatMapWithArray(map: MisskeyEntityMap, entities: MisskeyEntity[]): MisskeyEntityMap {
-	return new Map([...map, ...arrayToEntries(entities)]);
 }
 
 </script>
@@ -140,7 +141,7 @@ const {
 	enableInfiniteScroll,
 } = prefer.r;
 
-const scrollableElement = computed(() => rootEl.value ? getScrollContainer(rootEl.value) : window.document.body);
+const scrollableElement = computed(() => rootEl.value ? getScrollContainer(rootEl.value) : null);
 
 const visibility = useDocumentVisibility();
 
@@ -213,6 +214,92 @@ function getActualValue<T>(input: T | Ref<T> | undefined, defaultValue: T) : T {
 	return input;
 }
 
+function retainedItemsLimit(): number {
+	return Math.max(1, props.displayLimit, props.pagination.limit ?? 0, SECOND_FETCH_LIMIT);
+}
+
+function limitItemEntries(entries: [string, MisskeyEntity][], side: ItemRetentionSide): MisskeyEntityMap {
+	const uniqueEntries = Array.from(new Map(entries));
+	const limit = retainedItemsLimit();
+	if (uniqueEntries.length <= limit) return new Map(uniqueEntries);
+
+	return new Map(side === 'head'
+		? uniqueEntries.slice(0, limit)
+		: uniqueEntries.slice(uniqueEntries.length - limit));
+}
+
+function replaceItems(newItems: MisskeyEntity[]): void {
+	items.value = limitItemEntries(arrayToEntries(newItems), 'head');
+}
+
+function findScrollAnchorById(id: string): HTMLElement | null {
+	if (rootEl.value == null) return null;
+
+	for (const el of rootEl.value.querySelectorAll<HTMLElement>('[data-scroll-anchor]')) {
+		if (el.getAttribute('data-scroll-anchor') === id) return el;
+	}
+
+	return null;
+}
+
+function captureVisibleScrollAnchor(): ScrollAnchorSnapshot | null {
+	if (rootEl.value == null) return null;
+
+	const scrollTarget = scrollableElement.value;
+	const containerTop = scrollTarget?.getBoundingClientRect().top ?? 0;
+	const containerHeight = scrollTarget?.getBoundingClientRect().height ?? window.innerHeight;
+	if (containerHeight <= 0) return null;
+	const containerBottom = containerTop + containerHeight;
+
+	const viewPosition = containerTop + (containerHeight / 2);
+	let fallback: ScrollAnchorSnapshot | null = null;
+
+	for (const el of rootEl.value.querySelectorAll<HTMLElement>('[data-scroll-anchor]')) {
+		const id = el.getAttribute('data-scroll-anchor');
+		if (id == null) continue;
+
+		const rect = el.getBoundingClientRect();
+		if (rect.bottom < containerTop || rect.top > containerBottom) continue;
+
+		const snapshot = { id, top: rect.top };
+		if (rect.top <= viewPosition && rect.bottom >= viewPosition) return snapshot;
+		fallback ??= snapshot;
+	}
+
+	return fallback;
+}
+
+function restoreVisibleScrollAnchor(snapshot: ScrollAnchorSnapshot | null): void {
+	if (snapshot == null) return;
+
+	const anchorEl = findScrollAnchorById(snapshot.id);
+	if (anchorEl == null) return;
+
+	const delta = anchorEl.getBoundingClientRect().top - snapshot.top;
+	if (Math.abs(delta) < 0.5) return;
+
+	const scrollTarget = scrollableElement.value;
+	if (scrollTarget != null) {
+		scrollTarget.scroll({
+			top: scrollTarget.scrollTop + delta,
+			behavior: 'instant',
+		});
+		return;
+	}
+
+	window.scroll({
+		top: window.scrollY + delta,
+		behavior: 'instant',
+	});
+}
+
+async function appendItemsWithLimit(newItems: MisskeyEntity[], retentionSide: ItemRetentionSide): Promise<void> {
+	const anchor = captureVisibleScrollAnchor();
+	items.value = limitItemEntries([...Array.from(items.value), ...arrayToEntries(newItems)], retentionSide);
+	await nextTick();
+	restoreVisibleScrollAnchor(anchor);
+}
+
 async function init(): Promise<void> {
 	items.value = new Map();
 	queue.value = new Map();
@@ -232,12 +319,12 @@ async function init(): Promise<void> {
 		}
 
 		if (res.length === 0 || props.pagination.noPaging) {
-			concatItems(res);
+			replaceItems(res);
 			more.value = false;
 			exhausted.value = false;
 		} else {
 			if (props.pagination.reversed) moreFetching.value = true;
-			concatItems(res);
+			replaceItems(res);
 			more.value = res.length >= (props.pagination.limit ?? 10);
 			exhausted.value = !more.value && items.value.size > 0;
 		}
@@ -277,37 +364,20 @@ const fetchMore = async (): Promise<void> => {
 			if (i === 10) item._shouldInsertAd_ = true;
 		}
 
-		const reverseConcat = (_res: typeof res) => {
-			const oldHeight = scrollableElement.value ? scrollableElement.value.scrollHeight : getBodyScrollHeight();
-			const oldScroll = scrollableElement.value ? scrollableElement.value.scrollTop : window.scrollY;
-
-			items.value = concatMapWithArray(items.value, _res);
-
-			return nextTick(() => {
-				if (scrollableElement.value) {
-					scrollInContainer(scrollableElement.value, { top: oldScroll + (scrollableElement.value.scrollHeight - oldHeight), behavior: 'instant' });
-				} else {
-					window.scroll({ top: oldScroll + (getBodyScrollHeight() - oldHeight), behavior: 'instant' });
-				}
-
-				return nextTick();
-			});
-		};
-
 		if (res.length === 0) {
 			if (props.pagination.reversed) {
-				await reverseConcat(res);
+				await appendItemsWithLimit(res, 'tail');
 				more.value = false;
 			} else {
-				items.value = concatMapWithArray(items.value, res);
+				await appendItemsWithLimit(res, 'tail');
 				more.value = false;
 			}
 			exhausted.value = items.value.size > 0;
 		} else {
 			if (props.pagination.reversed) {
-				await reverseConcat(res);
+				await appendItemsWithLimit(res, 'tail');
 			} else {
-				items.value = concatMapWithArray(items.value, res);
+				await appendItemsWithLimit(res, 'tail');
 			}
 			more.value = res.length >= SECOND_FETCH_LIMIT;
 			exhausted.value = !more.value && items.value.size > 0;
@@ -320,31 +390,31 @@ const fetchMore = async (): Promise<void> => {
 const fetchMoreAhead = async (): Promise<void> => {
 	if (!more.value || fetching.value || moreFetching.value || items.value.size === 0) return;
 	moreFetching.value = true;
-	const params = getActualValue<Paging['params']>(props.pagination.params, {});
-	const offsetMode = getActualValue(props.pagination.offsetMode, false);
-	await misskeyApi<MisskeyEntity[]>(props.pagination.endpoint, {
-		...params,
-		limit: SECOND_FETCH_LIMIT,
-		...(offsetMode ? {
-			offset: fetchedItemCount.value,
-		} : {
-			sinceId: Array.from(items.value.keys()).at(-1),
-		}),
-	}).then(res => {
+	try {
+		const params = getActualValue<Paging['params']>(props.pagination.params, {});
+		const offsetMode = getActualValue(props.pagination.offsetMode, false);
+		const res = await misskeyApi<MisskeyEntity[]>(props.pagination.endpoint, {
+			...params,
+			limit: SECOND_FETCH_LIMIT,
+			...(offsetMode ? {
+				offset: fetchedItemCount.value,
+			} : {
+				sinceId: Array.from(items.value.keys()).at(-1),
+			}),
+		});
 		fetchedItemCount.value += res.length;
 		if (res.length === 0) {
-			items.value = concatMapWithArray(items.value, res);
+			await appendItemsWithLimit(res, 'tail');
 			more.value = false;
 			exhausted.value = items.value.size > 0;
 		} else {
-			items.value = concatMapWithArray(items.value, res);
+			await appendItemsWithLimit(res, 'tail');
 			more.value = res.length >= SECOND_FETCH_LIMIT;
 			exhausted.value = !more.value && items.value.size > 0;
 		}
+	} finally {
 		moreFetching.value = false;
-	}, err => {
-		moreFetching.value = false;
-	});
+	}
 };
 
 /**
@@ -391,7 +461,7 @@ function setupHeadStateScrollListener(): void {
 	}
 
 	rememberCurrentHeadState();
-	const scrollTarget = scrollableElement.value;
+	const scrollTarget = scrollableElement.value ?? window;
 	const onScroll = () => rememberCurrentHeadState();
 	scrollTarget.addEventListener('scroll', onScroll, { passive: true });
 	removeHeadStateScrollListener = () => {
@@ -444,21 +514,11 @@ function prepend(item: MisskeyEntity): void {
  * @param newItems 新しいアイテムの配列
  */
 function unshiftItems(newItems: MisskeyEntity[]) {
-	const prevLength = items.value.size;
-	items.value = new Map([...arrayToEntries(newItems), ...Array.from(items.value).slice(0, props.displayLimit)]);
+	const nextEntries = [...arrayToEntries(newItems), ...Array.from(items.value)];
+	const nextLength = new Map(nextEntries).size;
+	items.value = limitItemEntries(nextEntries, 'head');
 	// if we truncated, mark that there are more values to fetch
-	if (items.value.size < prevLength) more.value = true;
-}
-
-/**
- * 古いアイテムをitemsの末尾に追加し、displayLimitを適用する
- * @param oldItems 古いアイテムの配列
- */
-function concatItems(oldItems: MisskeyEntity[]) {
-	const prevLength = items.value.size;
-	items.value = new Map([...Array.from(items.value).slice(0, props.displayLimit), ...arrayToEntries(oldItems)]);
-	// if we truncated, mark that there are more values to fetch
-	if (items.value.size < prevLength) more.value = true;
+	if (items.value.size < nextLength) more.value = true;
 }
 
 function executeQueue() {
@@ -467,14 +527,14 @@ function executeQueue() {
 }
 
 function prependQueue(newItem: MisskeyEntity) {
-	queue.value = new Map([[newItem.id, newItem], ...queue.value].slice(0, props.displayLimit) as [string, MisskeyEntity][]);
+	queue.value = limitItemEntries([[newItem.id, newItem], ...queue.value], 'head');
 }
 
 /*
  * アイテムを末尾に追加する（使うの？）
  */
 const appendItem = (item: MisskeyEntity): void => {
-	items.value.set(item.id, item);
+	items.value = limitItemEntries([...Array.from(items.value), [item.id, item]], 'tail');
 };
 
 const removeItem = (id: string) => {

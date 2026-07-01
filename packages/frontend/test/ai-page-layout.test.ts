@@ -25,4 +25,5 @@ describe('ai page layout', () => {
 		assert.notMatch(aiSource, /function autoGrow\(/);
 		assert.match(aiSource, /\.textarea\s*\{[\s\S]*height:\s*calc\(1\.5em \* 3 \+ 18px\);[\s\S]*min-height:\s*calc\(1\.5em \* 3 \+ 18px\);[\s\S]*max-height:\s*calc\(1\.5em \* 3 \+ 18px\);[\s\S]*overflow-y:\s*auto;/);
 	});
+
 });

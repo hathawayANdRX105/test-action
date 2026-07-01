@@ -12,4 +12,10 @@ describe('post form layout', () => {
 	test('keeps the home composer textarea to four lines', () => {
 		assert.match(postFormSource, /\.homeStyle\s*\{[\s\S]*&\.root \.text\s*\{[\s\S]*height:\s*calc\(1\.55em \* 4\);[\s\S]*max-height:\s*calc\(1\.55em \* 4\);[\s\S]*resize:\s*none;/);
 	});
+
+	test('does not submit while IME composition is active', () => {
+		assert.match(postFormSource, /const isComposing = justEndedComposition\.value \|\| ev\.isComposing \|\| ev\.keyCode === 229;/);
+		assert.match(postFormSource, /if \(isComposing\) return;/);
+		assert.match(postFormSource, /if \(ev\.key === 'Enter' && \(ev\.ctrlKey \|\| ev\.metaKey\) && canPost\.value\)/);
+	});
 });

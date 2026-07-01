@@ -52,14 +52,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkTimeline src="local"/>
 		</div>
 	</div>
-	<div :class="$style.panel">
+	<div v-if="canViewOnlineAnalytics" :class="$style.panel">
 		<XActiveUsersChart/>
 	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import sanitizeHtml from '@/utility/sanitize-html.js';
 import XSigninDialog from '@/components/MkSigninDialog.vue';
@@ -76,8 +76,10 @@ import MkNumber from '@/components/MkNumber.vue';
 import XActiveUsersChart from '@/components/MkVisitorDashboard.ActiveUsersChart.vue';
 import { openInstanceMenu } from '@/ui/_common_/common.js';
 import type { MenuItem } from '@/types/menu.js';
+import { $i } from '@/i.js';
 
 const stats = ref<Misskey.entities.StatsResponse | null>(null);
+const canViewOnlineAnalytics = computed(() => $i?.isModerator === true || $i?.isAdmin === true);
 
 misskeyApi('stats', {}).then((res) => {
 	stats.value = res;

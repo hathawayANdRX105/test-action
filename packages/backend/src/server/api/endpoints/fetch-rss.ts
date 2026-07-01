@@ -22,6 +22,7 @@ export const meta = {
 			id: '88f4356f-719d-4715-b4fc-703a10a812d2',
 			code: 'FETCH_FAILED',
 			message: 'Failed to fetch RSS feed',
+			httpStatusCode: 400,
 		},
 	},
 
@@ -134,47 +135,51 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private httpRequestService: HttpRequestService,
 	) {
 		super(meta, paramDef, async (ps) => {
-			const res = await this.httpRequestService.send(ps.url, {
-				method: 'GET',
-				headers: {
-					Accept: 'application/rss+xml, */*',
-				},
-				timeout: 5000,
-			});
+			try {
+				const res = await this.httpRequestService.send(ps.url, {
+					method: 'GET',
+					headers: {
+						Accept: 'application/rss+xml, */*',
+					},
+					timeout: 5000,
+				});
 
-			const text = await res.text();
-			const feed = parseFeed(text, {
-				xmlMode: true,
-			});
+				const text = await res.text();
+				const feed = parseFeed(text, {
+					xmlMode: true,
+				});
 
-			if (!feed) {
+				if (!feed) {
+					throw new ApiError(meta.errors.fetchFailed);
+				}
+
+				return {
+					type: feed.type,
+					id: feed.id,
+					title: feed.title,
+					link: feed.link,
+					description: feed.description,
+					updated: feed.updated?.toISOString(),
+					author: feed.author,
+					items: feed.items
+						.filter((item): item is FeedItem & { link: string, title: string } => !!item.link && !!item.title)
+						.map(item => ({
+							guid: item.id,
+							title: item.title,
+							link: item.link,
+							description: item.description,
+							pubDate: item.pubDate?.toISOString(),
+							media: (item.media ?? []).map(media => ({
+								medium: media.medium,
+								url: media.url,
+								type: media.type,
+								lang: media.lang,
+							})),
+						})),
+				};
+			} catch {
 				throw new ApiError(meta.errors.fetchFailed);
 			}
-
-			return {
-				type: feed.type,
-				id: feed.id,
-				title: feed.title,
-				link: feed.link,
-				description: feed.description,
-				updated: feed.updated?.toISOString(),
-				author: feed.author,
-				items: feed.items
-					.filter((item): item is FeedItem & { link: string, title: string } => !!item.link && !!item.title)
-					.map(item => ({
-						guid: item.id,
-						title: item.title,
-						link: item.link,
-						description: item.description,
-						pubDate: item.pubDate?.toISOString(),
-						media: item.media.map(media => ({
-							medium: media.medium,
-							url: media.url,
-							type: media.type,
-							lang: media.lang,
-						})),
-					})),
-			};
 		});
 	}
 }

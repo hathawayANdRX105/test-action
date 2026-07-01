@@ -12,7 +12,9 @@ import type { Schema } from '@/misc/json-schema.js';
 export const meta = {
 	tags: ['meta'],
 
-	requireCredential: false,
+	requireCredential: true,
+	requireModerator: true,
+	kind: 'read:admin:show-user',
 
 	allowGet: true,
 	cacheSec: 60,

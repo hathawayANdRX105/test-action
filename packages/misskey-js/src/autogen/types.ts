@@ -6014,6 +6014,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    '/chat/rooms/members/update-role': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * chat/rooms/members/update-role
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['chat___rooms___members___update-role'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     '/chat/rooms/mute': {
         parameters: {
             query?: never;
@@ -6228,6 +6250,28 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:chat*
          */
         post: operations['chat___rooms___user-mutes___list'];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    '/chat/rooms/user-settings/update': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * chat/rooms/user-settings/update
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['chat___rooms___user-settings___update'];
         delete?: never;
         options?: never;
         head?: never;
@@ -14183,6 +14227,10 @@ export type components = {
             memberLimit: number;
             memberLimitOverride?: number | null;
             canManage: boolean;
+            canModerateRoom: boolean;
+            canManageRoomRoles: boolean;
+            canEditRoomProfile: boolean;
+            canDeleteRoom: boolean;
             messageRetentionDays?: number | null;
             slowModeSeconds: number;
             bannedKeywords?: string[];
@@ -14192,6 +14240,8 @@ export type components = {
             isMuted?: boolean;
             /** Format: date-time */
             myMutedUntil?: string | null;
+            myNickname?: string | null;
+            myFolder?: string | null;
         };
         ChatRoomInvitation: {
             id: string;
@@ -14210,6 +14260,8 @@ export type components = {
             user?: components['schemas']['UserLite'] | null;
             roomId: string;
             room?: components['schemas']['ChatRoom'] | null;
+            /** @enum {string} */
+            role: 'member' | 'manager';
             /** Format: date-time */
             mutedUntil?: string | null;
         };
@@ -21926,7 +21978,7 @@ export interface operations {
             content: {
                 'application/json': {
                     /** @default null */
-                    ids?: string[] | null;
+                    ids?: unknown[] | null;
                     /** @default false */
                     all?: boolean;
                 };
@@ -22551,7 +22603,7 @@ export interface operations {
         requestBody: {
             content: {
                 'application/json': {
-                    id: string;
+                    id: unknown;
                 };
             };
         };
@@ -32115,6 +32167,8 @@ export interface operations {
                     withFiles?: boolean;
                     /** @default true */
                     withBots?: boolean;
+                    /** @default false */
+                    includeReplies?: boolean;
                 };
             };
         };
@@ -33695,6 +33749,15 @@ export interface operations {
                     'application/json': components['schemas']['Error'];
                 };
             };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -34181,6 +34244,15 @@ export interface operations {
                     'application/json': components['schemas']['Error'];
                 };
             };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -34494,6 +34566,15 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35330,6 +35411,15 @@ export interface operations {
                     'application/json': components['schemas']['Error'];
                 };
             };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -35805,6 +35895,11 @@ export interface operations {
                     sinceId?: string;
                     /** Format: misskey:id */
                     untilId?: string;
+                    /** @enum {string} */
+                    role?: 'member' | 'manager';
+                    /** Format: misskey:id */
+                    userId?: string;
+                    query?: string;
                 };
             };
         };
@@ -35816,6 +35911,82 @@ export interface operations {
                 };
                 content: {
                     'application/json': components['schemas']['ChatRoomMembership'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'chat___rooms___members___update-role': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                    /** @enum {string} */
+                    role: 'member' | 'manager';
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['ChatRoomMembership'];
                 };
             };
             /** @description Client error */
@@ -36154,6 +36325,15 @@ export interface operations {
                     'application/json': components['schemas']['Error'];
                 };
             };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -36219,6 +36399,15 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -36568,6 +36757,80 @@ export interface operations {
                 };
                 content: {
                     'application/json': components['schemas']['ChatRoomUserMuting'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'chat___rooms___user-settings___update': {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    nickname?: string | null;
+                    folder?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['ChatRoom'];
                 };
             };
             /** @description Client error */
@@ -49929,6 +50192,11 @@ export interface operations {
                 'application/json': {
                     /** @default 6 */
                     limit?: number;
+                    /**
+                     * @default all
+                     * @enum {string}
+                     */
+                    scope?: 'all' | 'local' | 'global';
                 };
             };
         };
@@ -52821,7 +53089,7 @@ export interface operations {
             };
         };
     };
-    'notes___translate-batch': {
+    notes___translate: {
         parameters: {
             query?: never;
             header?: never;
@@ -52831,7 +53099,8 @@ export interface operations {
         requestBody: {
             content: {
                 'application/json': {
-                    noteIds: string[];
+                    /** Format: misskey:id */
+                    noteId: string;
                     targetLang: string;
                 };
             };
@@ -52844,12 +53113,8 @@ export interface operations {
                 };
                 content: {
                     'application/json': {
-                        translations: {
-                            [key: string]: {
-                                sourceLang?: string;
-                                text?: string;
-                            } | false;
-                        };
+                        sourceLang?: string;
+                        text?: string;
                     };
                 };
             };
@@ -52880,6 +53145,15 @@ export interface operations {
                     'application/json': components['schemas']['Error'];
                 };
             };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
             /** @description Too many requests */
             429: {
                 headers: {
@@ -52900,7 +53174,7 @@ export interface operations {
             };
         };
     };
-    notes___translate: {
+    'notes___translate-batch': {
         parameters: {
             query?: never;
             header?: never;
@@ -52910,8 +53184,7 @@ export interface operations {
         requestBody: {
             content: {
                 'application/json': {
-                    /** Format: misskey:id */
-                    noteId: string;
+                    noteIds: string[];
                     targetLang: string;
                 };
             };
@@ -52924,8 +53197,9 @@ export interface operations {
                 };
                 content: {
                     'application/json': {
-                        sourceLang?: string;
-                        text?: string;
+                        translations: {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };
