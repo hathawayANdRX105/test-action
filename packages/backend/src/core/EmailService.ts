@@ -9,13 +9,13 @@ import juice from 'juice';
 import { load as cheerio } from 'cheerio/slim';
 import { nanoid } from 'nanoid';
 import { Inject, Injectable } from '@nestjs/common';
-import { Not, IsNull } from 'typeorm';
+import { Not, IsNull, Raw } from 'typeorm';
 import { validate as validateEmail } from 'deep-email-validator';
 import { UtilityService } from '@/core/UtilityService.js';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
 import type Logger from '@/logger.js';
-import type { MiMeta, MiUserProfile, UserProfilesRepository, MetasRepository } from '@/models/_.js';
+import type { MiMeta, MiUserProfile, UserProfilesRepository, MetasRepository, UserPendingsRepository } from '@/models/_.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { bindThis } from '@/decorators.js';
@@ -36,6 +36,9 @@ export class EmailService {
 		@Inject(DI.userProfilesRepository)
 		private userProfilesRepository: UserProfilesRepository,
 
+		@Inject(DI.userPendingsRepository)
+		private userPendingsRepository: UserPendingsRepository,
+
 		@Inject(DI.metasRepository)
 		private metasRepository: MetasRepository,
 
@@ -46,6 +49,11 @@ export class EmailService {
 		private readonly internalEventService: InternalEventService,
 	) {
 		this.logger = this.loggerService.getLogger('email');
+	}
+
+	@bindThis
+	public normalizeEmailAddress(emailAddress: string): string {
+		return emailAddress.trim().toLowerCase();
 	}
 
 	@bindThis
@@ -190,6 +198,8 @@ export class EmailService {
 		available: boolean;
 		reason: null | 'used' | 'format' | 'disposable' | 'mx' | 'smtp' | 'banned' | 'network' | 'blacklist' | 'notAllowed';
 	}> {
+		emailAddress = this.normalizeEmailAddress(emailAddress);
+
 		if (!this.utilityService.validateEmailFormat(emailAddress)) {
 			return {
 				available: false,
@@ -197,12 +207,25 @@ export class EmailService {
 			};
 		}
 
-		const exist = await this.userProfilesRepository.existsBy({
-			emailVerified: true,
-			email: emailAddress,
-		});
+		const exist = await this.userProfilesRepository.createQueryBuilder('profile')
+			.innerJoin('profile.user', 'account')
+			.where('"profile"."emailVerified" = TRUE')
+			.andWhere('LOWER(TRIM("profile"."email")) = :email', { email: emailAddress })
+			.andWhere('"account"."isDeleted" = FALSE')
+			.getExists();
 
 		if (exist) {
+			return {
+				available: false,
+				reason: 'used',
+			};
+		}
+
+		const pending = await this.userPendingsRepository.existsBy({
+			email: Raw(alias => `LOWER(TRIM(${alias})) = :email`, { email: emailAddress }),
+		});
+
+		if (pending) {
 			return {
 				available: false,
 				reason: 'used',

@@ -57,6 +57,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const exist = await this.usersRepository.countBy({
 				host: IsNull(),
 				usernameLower: ps.username.toLowerCase(),
+				isDeleted: false,
 			});
 
 			const exist2 = await this.usedUsernamesRepository.countBy({ username: ps.username.toLowerCase() });

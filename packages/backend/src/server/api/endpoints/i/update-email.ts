@@ -101,8 +101,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.incorrectTotp);
 			}
 
-			if (ps.email != null) {
-				const res = await this.emailService.validateEmailForAccount(ps.email);
+			const email = ps.email == null ? null : this.emailService.normalizeEmailAddress(ps.email);
+
+			if (email != null) {
+				const res = await this.emailService.validateEmailForAccount(email);
 				if (!res.available) {
 					throw new ApiError(meta.errors.unavailable);
 				}
@@ -111,7 +113,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			await this.userProfilesRepository.update(me.id, {
-				email: ps.email,
+				email,
 				emailVerified: false,
 				emailVerifyCode: null,
 			});
@@ -124,7 +126,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// Publish meUpdated event
 			await this.globalEventService.publishMainStream(me.id, 'meUpdated', iObj);
 
-			if (ps.email != null) {
+			if (email != null) {
 				const code = secureRndstr(16, { chars: L_CHARS });
 
 				await this.userProfilesRepository.update(me.id, {
@@ -133,7 +135,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				const link = `${this.config.url}/verify-email/${code}`;
 
-				trackPromise(this.emailService.sendEmail(ps.email, 'Email verification',
+				trackPromise(this.emailService.sendEmail(email, 'Email verification',
 					`To verify email, please click this link:<br><a href="${link}">${link}</a>`,
 					`To verify email, please click this link: ${link}`));
 			}

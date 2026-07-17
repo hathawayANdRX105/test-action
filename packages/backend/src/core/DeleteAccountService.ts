@@ -9,7 +9,6 @@ import { QueueService } from '@/core/QueueService.js';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import { isSystemAccount } from '@/misc/is-system-account.js';
-import { isRemoteUser } from '@/models/User.js';
 import { IdentifiableError, errorCodes } from '@/misc/identifiable-error.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { InternalEventService } from '@/global/InternalEventService.js';
@@ -60,10 +59,9 @@ export class DeleteAccountService {
 		await this.internalEventService.emit('userUpdated', { id: user.id });
 		await this.internalEventService.emit('userChangeDeletedState', { id: user.id, isDeleted: true, token: user.token, uri: user.uri, usernameLower: user.username.toLowerCase(), host: user.host });
 
-		// 3. *then* finally start the background job
-		return await this.queueService.createDeleteAccountJob(user, {
-			// soft-delete remote users, otherwise they may get re-created by federation.
-			soft: isRemoteUser(user),
-		});
+			// 3. *then* finally start the background job
+			return await this.queueService.createDeleteAccountJob(user, {
+				soft: true,
+			});
 	}
 }

@@ -6,7 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { In, IsNull, MoreThan } from 'typeorm';
 import { DI } from '@/di-symbols.js';
-import type { DriveFilesRepository, NoteReactionsRepository, NotesRepository, UserProfilesRepository, UsersRepository, NoteScheduleRepository, MiNoteSchedule, FollowingsRepository, FollowRequestsRepository, BlockingsRepository, MutingsRepository, ClipsRepository, ClipNotesRepository, LatestNotesRepository, NoteEditsRepository, NoteFavoritesRepository, PollVotesRepository, PollsRepository, SigninsRepository, UserIpsRepository, RegistryItemsRepository, MiUser } from '@/models/_.js';
+import type { DriveFilesRepository, NoteReactionsRepository, NotesRepository, UserProfilesRepository, UsersRepository, NoteScheduleRepository, MiNoteSchedule, FollowingsRepository, FollowRequestsRepository, BlockingsRepository, MutingsRepository, ClipsRepository, ClipNotesRepository, LatestNotesRepository, NoteEditsRepository, NoteFavoritesRepository, PollVotesRepository, PollsRepository, SigninsRepository, UserIpsRepository, RegistryItemsRepository, UsedUsernamesRepository, MiUser } from '@/models/_.js';
 import type Logger from '@/logger.js';
 import { DriveService } from '@/core/DriveService.js';
 import type { MiDriveFile } from '@/models/DriveFile.js';
@@ -37,6 +37,9 @@ export class DeleteAccountProcessorService {
 
 		@Inject(DI.userProfilesRepository)
 		private userProfilesRepository: UserProfilesRepository,
+
+		@Inject(DI.usedUsernamesRepository)
+		private usedUsernamesRepository: UsedUsernamesRepository,
 
 		@Inject(DI.notesRepository)
 		private notesRepository: NotesRepository,
@@ -410,66 +413,71 @@ export class DeleteAccountProcessorService {
 				userId: user.id,
 			});
 
-			// soft指定されている場合は物理削除しない
-			if (job.data.soft) {
-				await this.usersRepository.update({ id: user.id }, {
-					followersCount: 0,
-					followingCount: 0,
-					notesCount: 0,
-					avatarId: null,
-					avatarUrl: null,
-					avatarBlurhash: null,
-					bannerId: null,
-					bannerUrl: null,
-					bannerBlurhash: null,
-					backgroundId: null,
-					backgroundUrl: null,
-					backgroundBlurhash: null,
-					avatarDecorations: [],
-					tags: [],
-					emojis: [],
-					score: 0, // WTF is this?
-					noindex: true,
-					isLocked: true,
-					isExplorable: false,
-					requireSigninToViewContents: true,
-					makeNotesFollowersOnlyBefore: null,
-					makeNotesHiddenBefore: null,
-					chatScope: 'none',
-					featured: null,
-					followersUri: null,
-					enableRss: false,
-					allowUnsignedFetch: 'never',
-				});
-				await this.internalEventService.emit('userUpdated', { id: user.id });
-				await this.userProfilesRepository.update({ userId: user.id }, {
-					location: null,
-					birthday: null,
-					listenbrainz: null,
-					description: null,
-					followedMessage: null,
-					fields: [],
-					lang: null,
-					publicReactions: false,
-					followersVisibility: 'private',
-					followingVisibility: 'private',
-					clientData: {},
-					room: {}, // TODO isn't this obsolete?
-					autoAcceptFollowed: false,
-					noCrawle: true,
-					preventAiLearning: true,
-					defaultSensitive: true,
-					autoSensitive: false,
-					pinnedPageId: null,
-					mutedWords: [],
-					hardMutedWords: [],
-					mutedInstances: [],
-					notificationRecieveConfig: {},
-					defaultCW: null,
-				});
-				await this.internalEventService.emit('updateUserProfile', { userId: user.id, keys: null });
-			} else {
-				await this.usersRepository.delete({ id: user.id });
+			await this.usersRepository.update({ id: user.id }, {
+				followersCount: 0,
+				followingCount: 0,
+				notesCount: 0,
+				avatarId: null,
+				avatarUrl: null,
+				avatarBlurhash: null,
+				bannerId: null,
+				bannerUrl: null,
+				bannerBlurhash: null,
+				backgroundId: null,
+				backgroundUrl: null,
+				backgroundBlurhash: null,
+				avatarDecorations: [],
+				tags: [],
+				emojis: [],
+				score: 0, // WTF is this?
+				noindex: true,
+				isLocked: true,
+				isExplorable: false,
+				requireSigninToViewContents: true,
+				makeNotesFollowersOnlyBefore: null,
+				makeNotesHiddenBefore: null,
+				chatScope: 'none',
+				featured: null,
+				followersUri: null,
+				enableRss: false,
+				allowUnsignedFetch: 'never',
+			});
+			await this.internalEventService.emit('userUpdated', { id: user.id });
+			await this.userProfilesRepository.update({ userId: user.id }, {
+				location: null,
+				birthday: null,
+				listenbrainz: null,
+				description: null,
+				followedMessage: null,
+				fields: [],
+				lang: null,
+				publicReactions: false,
+				followersVisibility: 'private',
+				followingVisibility: 'private',
+				clientData: {},
+				room: {}, // TODO isn't this obsolete?
+				autoAcceptFollowed: false,
+				noCrawle: true,
+				preventAiLearning: true,
+				defaultSensitive: true,
+				autoSensitive: false,
+				pinnedPageId: null,
+				mutedWords: [],
+				hardMutedWords: [],
+				mutedInstances: [],
+				notificationRecieveConfig: {},
+				defaultCW: null,
+				email: null,
+				emailVerified: false,
+				emailVerifyCode: null,
+			});
+			await this.internalEventService.emit('updateUserProfile', { userId: user.id, keys: null });
+
+			if (isLocalUser(user)) {
+				await this.usedUsernamesRepository.createQueryBuilder('used_username')
+					.delete()
+					.where('lower("username") = :username', { username: user.username.toLowerCase() })
+					.execute();
 			}
 
 			this.logger.info('Account data deleted');

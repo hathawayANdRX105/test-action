@@ -10,7 +10,7 @@ import { StatusError } from '@misskey-dev/summaly/built/utils/status-error.js';
 import { IsNull, Not } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
-import { HttpRequestService } from '@/core/HttpRequestService.js';
+import { HttpRequestService, isPrivateUrl } from '@/core/HttpRequestService.js';
 import { UrlPreviewProxyService } from '@/core/UrlPreviewProxyService.js';
 import type Logger from '@/logger.js';
 import { query } from '@/misc/prelude/url.js';
@@ -74,6 +74,7 @@ type PreviewRoute = {
 type AuthArray = [user: MiLocalUser | null | undefined, app: MiAccessToken | null | undefined, actor: MiLocalUser | string];
 
 const URL_PREVIEW_ERROR_CACHE_SECONDS = 300;
+const URL_PREVIEW_PRIVATE_ADDRESS_BLOCKED_ID = 'b5740453-3a4d-4bb6-a9d8-51eb2dc490b0';
 
 // Up to 100 requests, then 20 / second (at 4 / 200ms rate)
 const previewLimit: Keyed<BucketRateLimit> = {
@@ -192,6 +193,11 @@ export class UrlPreviewService {
 			return;
 		}
 
+		if (await this.isPrivatePreviewUrl(urlObj)) {
+			this.renderPrivatePreviewUrlBlocked(reply);
+			return;
+		}
+
 		// Check rate limit
 		const auth = await this.authenticate(request);
 		if (!await this.checkRateLimit(auth, reply)) {
@@ -224,6 +230,11 @@ export class UrlPreviewService {
 			this.validateUrls(summary);
 
 			// Repeat check, since redirects are allowed.
+			if (await this.isPrivatePreviewUrl(new URL(summary.url))) {
+				this.renderPrivatePreviewUrlBlocked(reply);
+				return;
+			}
+
 			if (this.utilityService.isBlockedHost(this.meta.blockedHosts, new URL(summary.url).host)) {
 				return reply.code(403).send({
 					error: {
@@ -459,6 +470,27 @@ export class UrlPreviewService {
 		});
 
 		return this.httpRequestService.getJson<LocalSummalyResult>(`${proxy}?${queryStr}`, 'application/json, */*', undefined, true);
+	}
+
+	private async isPrivatePreviewUrl(url: URL): Promise<boolean> {
+		try {
+			return await isPrivateUrl(url, this.httpRequestService.lookup);
+		} catch (err) {
+			this.logger.warn(`Blocking preview of ${url.href}: failed to resolve host: ${renderInlineError(err)}`);
+			return true;
+		}
+	}
+
+	private renderPrivatePreviewUrlBlocked(reply: FastifyReply): FastifyReply {
+		reply.header('Cache-Control', `max-age=${URL_PREVIEW_ERROR_CACHE_SECONDS}`);
+
+		return reply.code(403).send({
+			error: {
+				message: 'URL preview target is not allowed',
+				code: 'URL_PREVIEW_PRIVATE_ADDRESS_BLOCKED',
+				id: URL_PREVIEW_PRIVATE_ADDRESS_BLOCKED_ID,
+			},
+		});
 	}
 
 	private validateUrls(summary: LocalSummalyResult) {

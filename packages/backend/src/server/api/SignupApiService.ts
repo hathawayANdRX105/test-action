@@ -139,7 +139,7 @@ export class SignupApiService {
 		const host: string | null = this.envService.env.NODE_ENV === 'test' ? (body['host'] ?? null) : null;
 		const invitationCode = body['invitationCode'];
 		const reason = body['reason'];
-		const emailAddress = body['emailAddress'];
+		const emailAddress = typeof body['emailAddress'] === 'string' ? this.emailService.normalizeEmailAddress(body['emailAddress']) : body['emailAddress'];
 
 		if (this.meta.emailRequiredForSignup) {
 			if (emailAddress == null || typeof emailAddress !== 'string') {
@@ -203,7 +203,7 @@ export class SignupApiService {
 		}
 
 		if (this.meta.emailRequiredForSignup) {
-			if (await this.usersRepository.exists({ where: { usernameLower: username.toLowerCase(), host: IsNull() } })) {
+			if (await this.usersRepository.exists({ where: { usernameLower: username.toLowerCase(), host: IsNull(), isDeleted: false } })) {
 				throw new FastifyReplyError(400, 'DUPLICATED_USERNAME');
 			}
 
@@ -330,6 +330,16 @@ export class SignupApiService {
 				throw new FastifyReplyError(400, 'EXPIRED');
 			}
 
+			const emailAddress = this.emailService.normalizeEmailAddress(pendingUser.email);
+			if (await this.userProfilesRepository.createQueryBuilder('profile')
+				.innerJoin('profile.user', 'account')
+				.where('"profile"."emailVerified" = TRUE')
+				.andWhere('LOWER(TRIM("profile"."email")) = :email', { email: emailAddress })
+				.andWhere('"account"."isDeleted" = FALSE')
+				.getExists()) {
+				throw new FastifyReplyError(400, 'DUPLICATED_EMAIL');
+			}
+
 			const { account, secret } = await this.signupService.signup({
 				username: pendingUser.username,
 				passwordHash: pendingUser.password,
@@ -343,7 +353,7 @@ export class SignupApiService {
 			const profile = await this.userProfilesRepository.findOneByOrFail({ userId: account.id });
 
 			await this.userProfilesRepository.update({ userId: profile.userId }, {
-				email: pendingUser.email,
+				email: emailAddress,
 				emailVerified: true,
 				emailVerifyCode: null,
 			});

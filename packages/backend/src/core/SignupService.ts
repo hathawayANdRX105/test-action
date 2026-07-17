@@ -83,7 +83,7 @@ export class SignupService {
 		const secret = generateNativeUserToken();
 
 		// Check username duplication
-		if (await this.usersRepository.exists({ where: { usernameLower: username.toLowerCase(), host: IsNull() } })) {
+		if (await this.usersRepository.exists({ where: { usernameLower: username.toLowerCase(), host: IsNull(), isDeleted: false } })) {
 			throw new Error('DUPLICATED_USERNAME');
 		}
 
@@ -123,6 +123,7 @@ export class SignupService {
 			const exist = await transactionalEntityManager.findOneBy(MiUser, {
 				usernameLower: username.toLowerCase(),
 				host: IsNull(),
+				isDeleted: false,
 			});
 
 			if (exist) throw new Error(' the username is already used');
@@ -166,4 +167,3 @@ export class SignupService {
 		return { account, secret };
 	}
 }
-

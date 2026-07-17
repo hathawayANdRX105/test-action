@@ -37,7 +37,7 @@ export class DownloadService {
 	}
 
 	@bindThis
-	public async downloadUrl(url: string, path: string, options: { timeout?: number, operationTimeout?: number, maxSize?: number, agent?: Got.Agents } = {} ): Promise<{
+	public async downloadUrl(url: string, path: string, options: { timeout?: number, operationTimeout?: number, maxSize?: number, agent?: Got.Agents, isLocalAddressAllowed?: boolean } = {} ): Promise<{
 		filename: string;
 	}> {
 		// Allow fragments for backwards compatibility
@@ -48,6 +48,7 @@ export class DownloadService {
 		const timeout = options.timeout ?? 30 * 1000;
 		const operationTimeout = options.operationTimeout ?? 60 * 1000;
 		const maxSize = options.maxSize ?? this.config.maxFileSize;
+		const isLocalAddressAllowed = options.isLocalAddressAllowed ?? false;
 
 		const urlObj = new URL(url);
 		let filename = urlObj.pathname.split('/').pop() ?? 'untitled';
@@ -66,8 +67,8 @@ export class DownloadService {
 				request: operationTimeout,	// whole operation timeout
 			},
 			agent: options.agent ?? {
-				http: this.httpRequestService.getAgentForHttp(urlObj, true),
-				https: this.httpRequestService.getAgentForHttps(urlObj, true),
+				http: this.httpRequestService.getAgentForHttp(urlObj, isLocalAddressAllowed),
+				https: this.httpRequestService.getAgentForHttps(urlObj, isLocalAddressAllowed),
 			},
 			http2: false,	// default
 			retry: {
