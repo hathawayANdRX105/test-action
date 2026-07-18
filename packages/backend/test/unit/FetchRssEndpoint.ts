@@ -4,10 +4,16 @@
  */
 
 import { describe, expect, jest, test } from '@jest/globals';
-import FetchRssEndpoint from '@/server/api/endpoints/fetch-rss.js';
+import FetchRssEndpoint, { FETCH_RSS_MAX_ITEMS, FETCH_RSS_MAX_TEXT_LENGTH } from '@/server/api/endpoints/fetch-rss.js';
 
 describe('fetch-rss endpoint', () => {
-	function createEndpoint(send: jest.Mock) {
+	type HttpSend = (url: string, options: {
+		method?: string,
+		headers?: Record<string, string>,
+		timeout?: number,
+	}) => Promise<{ text?: () => Promise<string> }>;
+
+	function createEndpoint(send: ReturnType<typeof jest.fn<HttpSend>>) {
 		const httpRequestService = {
 			send,
 		};
@@ -16,7 +22,7 @@ describe('fetch-rss endpoint', () => {
 	}
 
 	test('maps rejected RSS fetches to a client API error instead of an internal error', async () => {
-		const send = jest.fn(async () => {
+		const send = jest.fn<HttpSend>(async () => {
 			throw new Error('invalid url http://feeds.example.test/rss: unsupported protocol http:');
 		});
 		const endpoint = createEndpoint(send);
@@ -35,7 +41,7 @@ describe('fetch-rss endpoint', () => {
 	});
 
 	test('rejects non-feed responses as fetch failures', async () => {
-		const send = jest.fn(async () => ({
+		const send = jest.fn<HttpSend>(async () => ({
 			text: jest.fn(async () => '<html><body>not a feed</body></html>'),
 		}));
 		const endpoint = createEndpoint(send);
@@ -49,7 +55,7 @@ describe('fetch-rss endpoint', () => {
 	});
 
 	test('parses valid RSS and defaults missing media to an empty list', async () => {
-		const send = jest.fn(async () => ({
+		const send = jest.fn<HttpSend>(async () => ({
 			text: jest.fn(async () => `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 	<channel>
@@ -82,5 +88,34 @@ describe('fetch-rss endpoint', () => {
 				media: [],
 			}],
 		});
+	});
+
+	test('limits RSS items and truncates large text fields', async () => {
+		const longDescription = 'x'.repeat(FETCH_RSS_MAX_TEXT_LENGTH + 100);
+		const items = Array.from({ length: FETCH_RSS_MAX_ITEMS + 10 }, (_, i) => `
+		<item>
+			<title>Example Item ${i}</title>
+			<link>https://example.test/item-${i}</link>
+			<description>${longDescription}</description>
+		</item>`).join('');
+		const send = jest.fn<HttpSend>(async () => ({
+			text: jest.fn(async () => `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+	<channel>
+		<title>Example Feed</title>
+		<link>https://example.test/</link>
+		<description>Example description</description>
+		${items}
+	</channel>
+</rss>`),
+		}));
+		const endpoint = createEndpoint(send);
+
+		const result = await endpoint.exec({
+			url: 'https://example.test/rss',
+		}, null as never, null);
+
+		expect(result.items).toHaveLength(FETCH_RSS_MAX_ITEMS);
+		expect(result.items[0].description).toHaveLength(FETCH_RSS_MAX_TEXT_LENGTH);
 	});
 });

@@ -7,8 +7,18 @@ import { Injectable } from '@nestjs/common';
 import { parseFeed } from 'htmlparser2';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
+import { PUBLIC_URL_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { ApiError } from '../error.js';
 import type { FeedItem } from 'domutils';
+
+export const FETCH_RSS_MAX_ITEMS = 100;
+export const FETCH_RSS_MAX_MEDIA_ITEMS = 16;
+export const FETCH_RSS_MAX_TEXT_LENGTH = 4096;
+
+function truncateText(value: string | undefined): string | undefined {
+	if (value == null || value.length <= FETCH_RSS_MAX_TEXT_LENGTH) return value;
+	return value.slice(0, FETCH_RSS_MAX_TEXT_LENGTH);
+}
 
 export const meta = {
 	tags: ['meta'],
@@ -124,7 +134,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		url: { type: 'string' },
+		url: { type: 'string', maxLength: PUBLIC_URL_MAX_LENGTH },
 	},
 	required: ['url'],
 } as const;
@@ -156,20 +166,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				return {
 					type: feed.type,
 					id: feed.id,
-					title: feed.title,
+					title: truncateText(feed.title),
 					link: feed.link,
-					description: feed.description,
+					description: truncateText(feed.description),
 					updated: feed.updated?.toISOString(),
-					author: feed.author,
+					author: truncateText(feed.author),
 					items: feed.items
 						.filter((item): item is FeedItem & { link: string, title: string } => !!item.link && !!item.title)
+						.slice(0, FETCH_RSS_MAX_ITEMS)
 						.map(item => ({
 							guid: item.id,
-							title: item.title,
+							title: truncateText(item.title),
 							link: item.link,
-							description: item.description,
+							description: truncateText(item.description),
 							pubDate: item.pubDate?.toISOString(),
-							media: (item.media ?? []).map(media => ({
+							media: (item.media ?? []).slice(0, FETCH_RSS_MAX_MEDIA_ITEMS).map(media => ({
 								medium: media.medium,
 								url: media.url,
 								type: media.type,

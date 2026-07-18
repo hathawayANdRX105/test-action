@@ -5,10 +5,12 @@
 
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import { ApPersonService } from '@/core/activitypub/models/ApPersonService.js';
-import { GetterService } from '@/server/api/GetterService.js';
 import { CacheService } from '@/core/CacheService.js';
+import { QueueService } from '@/core/QueueService.js';
+import { TimeService } from '@/global/TimeService.js';
 import { ApiError } from '@/server/api/error.js';
+
+const UPDATE_REMOTE_USER_COOLDOWN_MS = 1000 * 60 * 60 * 24;
 
 export const meta = {
 	tags: ['federation'],
@@ -43,9 +45,9 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
-		private getterService: GetterService,
-		private apPersonService: ApPersonService,
 		private readonly cacheService: CacheService,
+		private readonly queueService: QueueService,
+		private readonly timeService: TimeService,
 	) {
 		super(meta, paramDef, async (ps) => {
 			const user = await this.cacheService.findOptionalRemoteUserById(ps.userId);
@@ -54,7 +56,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchUser);
 			}
 
-			await this.apPersonService.updatePerson(user.uri!);
+			if (user.lastFetchedAt && this.timeService.now - user.lastFetchedAt.getTime() < UPDATE_REMOTE_USER_COOLDOWN_MS) return;
+
+			await this.queueService.createUpdateUserJob(user.id);
 		});
 	}
 }
