@@ -4,35 +4,41 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="[$style.root, { [$style.collapsed]: collapsed }]">
-	<div :class="{ [$style.clickToOpen]: prefer.s.clickToOpen }" @click.stop="prefer.s.clickToOpen ? noteclick(note.id) : undefined">
-		<span v-if="note.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
-		<span v-if="note.deletedAt" style="opacity: 0.5">({{ i18n.ts.deletedNote }})</span>
-		<div>
-			<MkA v-if="note.replyId" :class="$style.reply" :to="`/notes/${note.replyId}`" @click.stop><i class="ph-arrow-bend-left-up ph-bold ph-lg"></i></MkA>
-			<!-- 替换模式 + 译文已就绪 → 隐藏原文 -->
-			<Mfm v-if="note.text && !hideOriginalText" :text="note.text" :author="note.user" :nyaize="'respect'" :isAnim="allowAnim" :emojiUrls="note.emojis" :files="note.files"/>
+	<div :class="$style.root">
+		<div :class="[$style.collapseArea, { [$style.collapsed]: collapsed }]">
+			<div :class="{ [$style.clickToOpen]: prefer.s.clickToOpen }" @click.stop="prefer.s.clickToOpen ? noteclick(note.id) : undefined">
+				<span v-if="note.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
+				<span v-if="note.deletedAt" style="opacity: 0.5">({{ i18n.ts.deletedNote }})</span>
+				<div>
+					<MkA v-if="note.replyId" :class="$style.reply" :to="`/notes/${note.replyId}`" @click.stop><i class="ph-arrow-bend-left-up ph-bold ph-lg"></i></MkA>
+					<!-- 替换模式 + 译文已就绪 → 隐藏原文 -->
+					<Mfm v-if="note.text && !hideOriginalText" :text="note.text" :author="note.user" :nyaize="'respect'" :isAnim="allowAnim" :emojiUrls="note.emojis" :files="note.files"/>
+				</div>
+				<MkButton v-if="!allowAnim && animated && !hideFiles" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-play ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.play }}</MkButton>
+				<MkButton v-else-if="!prefer.s.animatedMfm && allowAnim && animated && !hideFiles" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-stop ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.stop }}</MkButton>
+				<SkNoteTranslation :note="note" :translation="translation" :translating="translating" :replaceMode="hideOriginalText"></SkNoteTranslation>
+				<MkA v-if="note.renoteId" :class="$style.rp" :to="`/notes/${note.renoteId}`" @click.stop>RN: ...</MkA>
+			</div>
+			<details v-if="filesForGrid.length > 0" :open="!prefer.s.collapseFiles && !hideFiles">
+				<summary>({{ i18n.tsx.withNFiles({ n: filesForGrid.length }) }})</summary>
+				<MkMediaList :mediaList="filesForGrid"/>
+			</details>
+			<details v-if="note.poll">
+				<summary>{{ i18n.ts.poll }}</summary>
+				<MkPoll :noteId="note.id" :poll="note.poll" :author="note.user" :emojiUrls="note.emojis"/>
+			</details>
 		</div>
-		<MkButton v-if="!allowAnim && animated && !hideFiles" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-play ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.play }}</MkButton>
-		<MkButton v-else-if="!prefer.s.animatedMfm && allowAnim && animated && !hideFiles" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-stop ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.stop }}</MkButton>
-		<SkNoteTranslation :note="note" :translation="translation" :translating="translating" :replaceMode="hideOriginalText"></SkNoteTranslation>
-		<MkA v-if="note.renoteId" :class="$style.rp" :to="`/notes/${note.renoteId}`" @click.stop>RN: ...</MkA>
+		<button v-if="isLong && collapsed" :class="$style.fade" class="_button" @click.stop="collapsed = false">
+			<span :class="$style.fadeLabel">
+				{{ i18n.ts.showMore }} <i class="ti ti-chevron-down"></i>
+			</span>
+		</button>
+		<button v-else-if="isLong && !collapsed" :class="$style.showLess" class="_button" @click.stop="collapsed = true">
+			<span :class="$style.showLessLabel">
+				{{ i18n.ts.showLess }} <i class="ti ti-chevron-up"></i>
+			</span>
+		</button>
 	</div>
-	<details v-if="filesForGrid.length > 0" :open="!prefer.s.collapseFiles && !hideFiles">
-		<summary>({{ i18n.tsx.withNFiles({ n: filesForGrid.length }) }})</summary>
-		<MkMediaList :mediaList="filesForGrid"/>
-	</details>
-	<details v-if="note.poll">
-		<summary>{{ i18n.ts.poll }}</summary>
-		<MkPoll :noteId="note.id" :poll="note.poll" :author="note.user" :emojiUrls="note.emojis"/>
-	</details>
-	<button v-if="isLong && collapsed" :class="$style.fade" class="_button" @click.stop="collapsed = false">
-		<span :class="$style.fadeLabel">{{ i18n.ts.showMore }}</span>
-	</button>
-	<button v-else-if="isLong && !collapsed" :class="$style.showLess" class="_button" @click.stop="collapsed = true">
-		<span :class="$style.showLessLabel">{{ i18n.ts.showLess }}</span>
-	</button>
-</div>
 </template>
 
 <script lang="ts" setup>
@@ -108,36 +114,62 @@ watch(() => props.expandAllCws, (expandAllCws) => {
 <style lang="scss" module>
 .root {
 	overflow-wrap: break-word;
+}
 
+.collapseArea {
 	&.collapsed {
 		position: relative;
 		max-height: 9em;
 		overflow: clip;
 
-		> .fade {
-			display: block;
+		&::after {
+			content: '';
 			position: absolute;
+			right: 0;
 			bottom: 0;
 			left: 0;
-			width: 100%;
 			height: 64px;
-
-			> .fadeLabel {
-				display: inline-block;
-				background: var(--MI_THEME-panel);
-				padding: 6px 10px;
-				font-size: 0.8em;
-				border-radius: var(--MI-radius-ellipse);
-				box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
-			}
-
-			&:hover {
-				> .fadeLabel {
-					background: var(--MI_THEME-panelHighlight);
-				}
-			}
+			pointer-events: none;
+			z-index: 1;
+			background-color: var(--MI_THEME-panel);
+			-webkit-mask-image: -webkit-linear-gradient(0deg, #000, transparent);
+			mask-image: linear-gradient(0deg, #000, transparent);
+			transition: background-color 0.1s ease;
 		}
 	}
+}
+
+.fade {
+	display: block;
+	position: relative;
+	z-index: 2;
+	width: 100%;
+	margin-top: 6px;
+
+}
+
+.root:hover > .fade > .fadeLabel {
+	background: var(--MI_THEME-panelHighlight);
+}
+
+.root:hover > .collapseArea::after {
+	background-color: var(--MI_THEME-panelHighlight);
+}
+
+.fadeLabel {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: var(--MI_THEME-panel);
+	transition: background 0.1s ease;
+	padding: 6px 10px;
+	font-size: 0.8em;
+	border-radius: var(--MI-radius-ellipse);
+	box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
+}
+
+.fade:is(:hover, :focus-visible) > .fadeLabel {
+	background: var(--MI_THEME-panelHighlight);
 }
 
 .reply {
@@ -163,7 +195,9 @@ watch(() => props.expandAllCws, (expandAllCws) => {
 }
 
 .showLessLabel {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 	background: var(--MI_THEME-popup);
 	padding: 6px 10px;
 	font-size: 0.8em;

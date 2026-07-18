@@ -82,39 +82,45 @@ Displays a note in the Sharkey style. Used to show the "main" note in a given co
 					/>
 					<MkCwButton v-model="showContent" :text="appearNote.text" :renote="appearNote.renote" :files="appearNote.files" :poll="appearNote.poll" style="margin: 4px 0;" @click.stop/>
 				</p>
-				<div v-show="appearNote.cw == null || showContent" :class="[{ [$style.contentCollapsed]: collapsed }]">
-					<div :class="$style.text">
-						<span v-if="appearNote.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
-						<Mfm
-							v-if="appearNote.text && !hideOriginalText"
-							:parsedNodes="parsed"
-							:text="appearNote.text"
-							:author="appearNote.user"
-							:nyaize="'respect'"
-							:emojiUrls="appearNote.emojis"
-							:enableEmojiMenu="true"
-							:enableEmojiMenuReaction="true"
-							:isAnim="allowAnim"
-							:isBlock="true"
-							:files="appearNote.files"
-						/>
-						<SkNoteTranslation :note="appearNote" :translation="translation" :translating="translating" :replaceMode="hideOriginalText"></SkNoteTranslation>
-						<MkButton v-if="!allowAnim && animated" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-play ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.play }}</MkButton>
-						<MkButton v-else-if="!prefer.s.animatedMfm && allowAnim && animated" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-stop ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.stop }}</MkButton>
+				<div v-show="appearNote.cw == null || showContent">
+					<div :class="[{ [$style.contentCollapsed]: collapsed }]">
+						<div :class="$style.text">
+							<span v-if="appearNote.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
+							<Mfm
+								v-if="appearNote.text && !hideOriginalText"
+								:parsedNodes="parsed"
+								:text="appearNote.text"
+								:author="appearNote.user"
+								:nyaize="'respect'"
+								:emojiUrls="appearNote.emojis"
+								:enableEmojiMenu="true"
+								:enableEmojiMenuReaction="true"
+								:isAnim="allowAnim"
+								:isBlock="true"
+								:files="appearNote.files"
+							/>
+							<SkNoteTranslation :note="appearNote" :translation="translation" :translating="translating" :replaceMode="hideOriginalText"></SkNoteTranslation>
+							<MkButton v-if="!allowAnim && animated" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-play ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.play }}</MkButton>
+							<MkButton v-else-if="!prefer.s.animatedMfm && allowAnim && animated" :class="$style.playMFMButton" :small="true" @click="animatedMFM()" @click.stop><i class="ph-stop ph-bold ph-lg "></i> {{ i18n.ts._animatedMFM.stop }}</MkButton>
+						</div>
+						<div v-if="filesForGrid.length > 0">
+							<MkMediaList ref="galleryEl" :mediaList="filesForGrid" @click.stop/>
+						</div>
+						<MkPoll v-if="appearNote.poll" :noteId="appearNote.id" :poll="appearNote.poll" :local="!appearNote.user.host" :author="appearNote.user" :emojiUrls="appearNote.emojis" :class="$style.poll" @click.stop/>
+						<div v-if="instance.enableUrlPreview" :class="[$style.urlPreview, '_gaps_s']" @click.stop>
+							<SkUrlPreviewGroup :sourceUrls="urls" :sourceNote="appearNote" :compact="true" :detail="false" :showAsQuote="!appearNote.user.rejectQuotes" :skipNoteIds="selfNoteIds" @expandMute="n => emit('expandMute', n)"/>
+						</div>
+						<div v-if="appearNote.renote" :class="$style.quote"><SkNoteSimple :note="appearNote.renote" :class="$style.quoteNote"/></div>
 					</div>
-					<div v-if="filesForGrid.length > 0">
-						<MkMediaList ref="galleryEl" :mediaList="filesForGrid" @click.stop/>
-					</div>
-					<MkPoll v-if="appearNote.poll" :noteId="appearNote.id" :poll="appearNote.poll" :local="!appearNote.user.host" :author="appearNote.user" :emojiUrls="appearNote.emojis" :class="$style.poll" @click.stop/>
-					<div v-if="instance.enableUrlPreview" :class="[$style.urlPreview, '_gaps_s']" @click.stop>
-						<SkUrlPreviewGroup :sourceUrls="urls" :sourceNote="appearNote" :compact="true" :detail="false" :showAsQuote="!appearNote.user.rejectQuotes" :skipNoteIds="selfNoteIds" @expandMute="n => emit('expandMute', n)"/>
-					</div>
-					<div v-if="appearNote.renote" :class="$style.quote"><SkNoteSimple :note="appearNote.renote" :class="$style.quoteNote"/></div>
 					<button v-if="isLong && collapsed" :class="$style.collapsed" class="_button" @click.stop @click="collapsed = false">
-						<span :class="$style.collapsedLabel">{{ i18n.ts.showMore }}</span>
+						<span :class="$style.collapsedLabel">
+							{{ i18n.ts.showMore }} <i class="ti ti-chevron-down"></i>
+						</span>
 					</button>
 					<button v-else-if="isLong && !collapsed" :class="$style.showLess" class="_button" @click.stop @click="collapsed = true">
-						<span :class="$style.showLessLabel">{{ i18n.ts.showLess }}</span>
+						<span :class="$style.showLessLabel">
+							{{ i18n.ts.showLess }} <i class="ti ti-chevron-up"></i>
+						</span>
 					</button>
 				</div>
 				<MkA v-if="appearNote.channel && !inChannel" :class="$style.channel" :to="`/channels/${appearNote.channel.id}`"><i class="ti ti-device-tv"></i> {{ appearNote.channel.name }}</MkA>
@@ -1158,7 +1164,9 @@ function emitUpdReaction(emoji: string, delta: number) {
 }
 
 .showLessLabel {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 	background: var(--MI_THEME-popup);
 	padding: 6px 10px;
 	font-size: 0.8em;
@@ -1170,26 +1178,49 @@ function emitUpdReaction(emoji: string, delta: number) {
 	position: relative;
 	max-height: 9em;
 	overflow: clip;
+
+	&::after {
+		content: '';
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		height: 64px;
+		pointer-events: none;
+		z-index: 1;
+		background-color: var(--MI_THEME-panel);
+		-webkit-mask-image: -webkit-linear-gradient(0deg, #000, transparent);
+		mask-image: linear-gradient(0deg, #000, transparent);
+		transition: background-color 0.1s ease;
+	}
 }
 
 .collapsed {
 	display: block;
-	position: absolute;
-	bottom: 0;
-	left: 0;
+	position: relative;
 	z-index: 2;
 	width: 100%;
-	height: 64px;
-	//background: linear-gradient(0deg, var(--MI_THEME-panel), color(from var(--MI_THEME-panel) srgb r g b / 0));
+	margin-top: 6px;
 
-	&:hover > .collapsedLabel {
+	&:is(:hover, :focus-visible) > .collapsedLabel {
 		background: var(--MI_THEME-panelHighlight);
 	}
 }
 
+.root:hover .collapsed > .collapsedLabel {
+	background: var(--MI_THEME-panelHighlight);
+}
+
+.root:hover .contentCollapsed::after {
+	background-color: var(--MI_THEME-panelHighlight);
+}
+
 .collapsedLabel {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 	background: var(--MI_THEME-panel);
+	transition: background 0.1s ease;
 	padding: 6px 10px;
 	font-size: 0.8em;
 	border-radius: var(--MI-radius-ellipse);
