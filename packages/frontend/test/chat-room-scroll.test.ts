@@ -563,7 +563,7 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /const CHAT_RECOVERY_FETCH_TIMEOUT_MS = 10000;/);
 		assert.match(roomSource, /limit: TIMELINE_RECONCILE_LIMIT/);
 		assert.match(roomSource, /function reconcileLocalMessagesWithLatestWindow\(latestWindow: Misskey\.entities\.ChatMessageLite\[\]\)/);
-		assert.match(roomSource, /findMissingChatMessageIdsInLatestWindow\(messages\.value, latestWindow, \{[\s\S]*limit: TIMELINE_RECONCILE_LIMIT,[\s\S]*isPending: isPendingMessage/);
+		assert.match(roomSource, /findMissingChatMessageIdsInLatestWindow\(messages\.value, latestWindow, \{[\s\S]*limit: TIMELINE_RECONCILE_LIMIT,[\s\S]*isPending: isLocalSendMessage/);
 		assert.match(roomSource, /findMissingChatMessageIdsInLatestWindow\(pendingIncomingMessages, latestWindow, \{[\s\S]*limit: TIMELINE_RECONCILE_LIMIT/);
 		assert.match(roomSource, /findMissingChatMessageIdsInLatestWindow\(detachedIncomingMessages, latestWindow, \{[\s\S]*limit: TIMELINE_RECONCILE_LIMIT/);
 		assert.match(roomSource, /const initialSinceId = options\?\.sinceId \?\? findNewestPersistedMessageId\(\);/);

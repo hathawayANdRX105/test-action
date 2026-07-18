@@ -192,7 +192,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</button>
 				</div>
 			</Transition>
-			<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" ref="formEl" :user="user" :room="room" :replyTarget="replyTarget" :quoteTarget="quoteTarget" :class="$style.form" @sending="onSendingMessage" @sent="onSentMessage" @sendFailed="onSendMessageFailed" @restoreReferences="onRestoreReferences" @clearReply="replyTarget = null" @clearQuote="quoteTarget = null"/>
+			<XForm v-if="!initializing && !initializeError && !joinRequiredRoom" ref="formEl" :user="user" :room="room" :replyTarget="replyTarget" :quoteTarget="quoteTarget" :class="$style.form" @sending="onSendingMessage" @sent="onSentMessage" @beforeSendFailureRecovery="onBeforeSendFailureRecovery" @sendFailed="onSendMessageFailed" @restoreReferences="onRestoreReferences" @clearReply="replyTarget = null" @clearQuote="quoteTarget = null"/>
 		</div>
 	</div>
 </div>
@@ -246,7 +246,7 @@ export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'from
 	replyUnavailable?: boolean;
 	quoteUnavailable?: boolean;
 	clientId?: string;
-	sendStatus?: 'pending';
+	sendStatus?: 'pending' | 'failed';
 	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
 		user: Misskey.entities.UserLite | null;
 	})[];
@@ -1278,14 +1278,18 @@ function isPendingMessage(message: NormalizedChatMessage): boolean {
 	return message.sendStatus === 'pending';
 }
 
+function isLocalSendMessage(message: NormalizedChatMessage): boolean {
+	return message.sendStatus === 'pending' || message.sendStatus === 'failed';
+}
+
 function findNewestPersistedMessageId(): string | undefined {
-	return messages.value.find(message => !isPendingMessage(message))?.id;
+	return messages.value.find(message => !isLocalSendMessage(message))?.id;
 }
 
 function findOldestPersistedMessageId(): string | undefined {
 	for (let i = messages.value.length - 1; i >= 0; i--) {
 		const message = messages.value[i];
-		if (!isPendingMessage(message)) return message.id;
+		if (!isLocalSendMessage(message)) return message.id;
 	}
 
 	return undefined;
@@ -1420,7 +1424,7 @@ function reconcileLocalMessagesWithLatestWindow(latestWindow: Misskey.entities.C
 	const missingIds = new Set<string>([
 		...findMissingChatMessageIdsInLatestWindow(messages.value, latestWindow, {
 			limit: TIMELINE_RECONCILE_LIMIT,
-			isPending: isPendingMessage,
+			isPending: isLocalSendMessage,
 		}),
 		...findMissingChatMessageIdsInLatestWindow(pendingIncomingMessages, latestWindow, {
 			limit: TIMELINE_RECONCILE_LIMIT,
@@ -1479,7 +1483,7 @@ function removeMatchingPendingMessagesFrom(current: NormalizedChatMessage[], inc
 	const incomingKeys = new Set(incoming.map(message => outgoingMessageKey(message)));
 	let removed = false;
 	const next = current.filter(message => {
-		if (!isPendingMessage(message) || !incomingKeys.has(outgoingMessageKey(message))) return true;
+		if (!isLocalSendMessage(message) || !incomingKeys.has(outgoingMessageKey(message))) return true;
 		removed = true;
 		return false;
 	});
@@ -1499,7 +1503,7 @@ function adoptPendingMessagesFrom(current: NormalizedChatMessage[], incoming: No
 
 	const pendingIndexByKey = new Map<string, number>();
 	for (let i = 0; i < current.length; i++) {
-		if (isPendingMessage(current[i])) {
+		if (isLocalSendMessage(current[i])) {
 			pendingIndexByKey.set(outgoingMessageKey(current[i]), i);
 		}
 	}
@@ -1524,8 +1528,18 @@ function adoptPendingMessagesFrom(current: NormalizedChatMessage[], incoming: No
 	return { next: mutated ? next : current, consumedIncomingIds: consumed };
 }
 
+function hasConfirmedLocalMessage(clientId: string): boolean {
+	return messages.value.some(message => message.clientId === clientId && !isLocalSendMessage(message));
+}
+
 function removePendingMessage(clientId: string) {
-	messages.value = messages.value.filter(message => message.clientId !== clientId);
+	messages.value = messages.value.filter(message => !(message.clientId === clientId && isPendingMessage(message)));
+}
+
+function markPendingMessageFailed(clientId: string) {
+	messages.value = messages.value.map(message => message.clientId === clientId && isPendingMessage(message)
+		? { ...message, sendStatus: 'failed' }
+		: message);
 }
 
 function removeMatchingPendingMessage(message: NormalizedChatMessage) {
@@ -1552,8 +1566,6 @@ function onSentMessage(message: Misskey.entities.ChatMessageLite, clientId?: str
 		if (idx >= 0) {
 			const adopted: NormalizedChatMessage = { ...normalized, clientId };
 			messages.value = [...messages.value.slice(0, idx), adopted, ...messages.value.slice(idx + 1)];
-			replyTarget.value = null;
-			quoteTarget.value = null;
 			void revealLatestMessagesAfterLayout({ behavior: 'instant' });
 			return;
 		}
@@ -1563,12 +1575,25 @@ function onSentMessage(message: Misskey.entities.ChatMessageLite, clientId?: str
 	// fallback:没有 clientId,或没匹配到 pending(理论上不该发生),走旧的 remove+prepend 路径
 	removeMatchingPendingMessage(normalized);
 	prependMessage(normalized);
-	replyTarget.value = null;
-	quoteTarget.value = null;
 	void revealLatestMessagesAfterLayout({ behavior: 'instant' });
 }
 
-function onSendMessageFailed(clientId: string) {
+function onBeforeSendFailureRecovery(clientId: string, options: { skipCurrentSnapshot: boolean }) {
+	if (hasConfirmedLocalMessage(clientId)) {
+		options.skipCurrentSnapshot = true;
+	}
+}
+
+function onSendMessageFailed(clientId: string, options?: { restored?: boolean; currentSnapshotConfirmed?: boolean }) {
+	if (options?.currentSnapshotConfirmed === true || hasConfirmedLocalMessage(clientId)) {
+		return;
+	}
+
+	if (options?.restored === false) {
+		markPendingMessageFailed(clientId);
+		return;
+	}
+
 	removePendingMessage(clientId);
 }
 

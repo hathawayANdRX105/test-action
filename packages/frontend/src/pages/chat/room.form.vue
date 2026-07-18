@@ -105,7 +105,8 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(ev: 'sending', message: NormalizedChatMessage): void;
 	(ev: 'sent', message: Misskey.entities.ChatMessageLite, clientId: string): void;
-	(ev: 'sendFailed', clientId: string): void;
+	(ev: 'beforeSendFailureRecovery', clientId: string, options: { skipCurrentSnapshot: boolean }): void;
+	(ev: 'sendFailed', clientId: string, options: { restored: boolean; currentSnapshotConfirmed: boolean }): void;
 	(ev: 'restoreReferences', payload: { replyTarget: NormalizedChatMessage | null; quoteTarget: NormalizedChatMessage | null }): void;
 	(ev: 'clearReply'): void;
 	(ev: 'clearQuote'): void;
@@ -118,10 +119,22 @@ type SendTarget =
 type SendSnapshot = {
 	clientId: string;
 	target: SendTarget;
+	composerRevision: number;
 	text: string;
 	file: Misskey.entities.DriveFile | null;
 	replyTarget: NormalizedChatMessage | null;
 	quoteTarget: NormalizedChatMessage | null;
+};
+
+type ChatMessageDraft = {
+	updatedAt: Date | string;
+	data: {
+		text?: string;
+		file?: Misskey.entities.DriveFile | null;
+		files?: Misskey.entities.DriveFile[];
+		replyTarget?: NormalizedChatMessage | null;
+		quoteTarget?: NormalizedChatMessage | null;
+	};
 };
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
@@ -141,6 +154,8 @@ let autocompleteInstance: Autocomplete | null = null;
 let focusScrollTimers: number[] = [];
 let compositionEndGuardTimer: number | undefined;
 let sendSerial = 0;
+let draftSavePaused = false;
+let composerRevision = 0;
 
 // ミュート期限切れの自動解除のために定期的に更新する
 const now = ref(Date.now());
@@ -169,7 +184,12 @@ function getDraftKey(): string | null {
 	return null;
 }
 
-watch([text, files], saveDraft, { deep: true });
+watch([text, files, () => props.replyTarget, () => props.quoteTarget], () => {
+	if (!draftSavePaused) {
+		composerRevision++;
+	}
+	saveDraft();
+}, { deep: true });
 
 async function onPaste(ev: ClipboardEvent) {
 	if (!ev.clipboardData) return;
@@ -403,6 +423,7 @@ function createSendSnapshot(target: SendTarget): SendSnapshot {
 	return {
 		clientId: `${Date.now()}-${++sendSerial}`,
 		target,
+		composerRevision,
 		text: text.value,
 		file: null,
 		replyTarget: props.replyTarget ?? null,
@@ -418,6 +439,7 @@ function createSendSnapshots(target: SendTarget): SendSnapshot[] {
 	return files.value.map((attachedFile, index) => ({
 		clientId: `${Date.now()}-${++sendSerial}`,
 		target,
+		composerRevision,
 		text: index === 0 ? text.value : '',
 		file: attachedFile,
 		replyTarget: index === 0 ? props.replyTarget ?? null : null,
@@ -425,11 +447,11 @@ function createSendSnapshots(target: SendTarget): SendSnapshot[] {
 	}));
 }
 
-function createOptimisticMessage(snapshot: SendSnapshot): NormalizedChatMessage {
+function createOptimisticMessage(snapshot: SendSnapshot, sendStatus: 'pending' | 'failed' = 'pending'): NormalizedChatMessage {
 	return {
 		id: `~chat-pending-${snapshot.clientId}`,
 		clientId: snapshot.clientId,
-		sendStatus: 'pending',
+		sendStatus,
 		createdAt: new Date().toISOString(),
 		fromUserId: $i.id,
 		fromUser: $i,
@@ -481,8 +503,20 @@ async function send() {
 
 				emit('sent', message, snapshot.clientId);
 			} catch (err) {
-				emit('sendFailed', snapshot.clientId);
-				restoreSnapshotsIfIdle(snapshots.slice(index));
+				const recovery = { skipCurrentSnapshot: false };
+				emit('beforeSendFailureRecovery', snapshot.clientId, recovery);
+				const snapshotsToRecover = recovery.skipCurrentSnapshot ? snapshots.slice(index + 1) : snapshots.slice(index);
+				const restored = restoreSnapshotsIfIdle(snapshotsToRecover);
+				emit('sendFailed', snapshot.clientId, {
+					restored,
+					currentSnapshotConfirmed: recovery.skipCurrentSnapshot,
+				});
+				if (!restored) {
+					for (const unsentSnapshot of snapshots.slice(index + 1)) {
+						emit('sending', createOptimisticMessage(unsentSnapshot, 'failed'));
+					}
+				}
+				if (recovery.skipCurrentSnapshot && snapshotsToRecover.length === 0) return;
 				throw err;
 			}
 		}
@@ -519,16 +553,21 @@ async function send() {
 }
 
 function clear() {
+	draftSavePaused = true;
 	text.value = '';
 	files.value = [];
 	emit('clearReply');
 	emit('clearQuote');
 	deleteDraft();
+	nextTick(() => {
+		draftSavePaused = false;
+	});
 }
 
-function restoreSnapshotsIfIdle(snapshots: SendSnapshot[]) {
-	if (snapshots.length === 0 || text.value !== '' || files.value.length > 0) return;
+function restoreSnapshotsIfIdle(snapshots: SendSnapshot[]): boolean {
+	if (snapshots.length === 0 || !canRestoreSnapshots(snapshots[0])) return false;
 
+	draftSavePaused = false;
 	text.value = snapshots[0].text;
 	files.value = snapshots
 		.map(snapshot => snapshot.file)
@@ -537,6 +576,20 @@ function restoreSnapshotsIfIdle(snapshots: SendSnapshot[]) {
 		replyTarget: snapshots[0].replyTarget,
 		quoteTarget: snapshots[0].quoteTarget,
 	});
+	nextTick(saveDraft);
+	return true;
+}
+
+function canRestoreSnapshots(snapshot: SendSnapshot) {
+	if (isUploading.value || composerRevision !== snapshot.composerRevision) return false;
+	if (text.value !== '' || files.value.length > 0) return false;
+
+	const currentReplyId = props.replyTarget?.id ?? null;
+	const currentQuoteId = props.quoteTarget?.id ?? null;
+	const snapshotReplyId = snapshot.replyTarget?.id ?? null;
+	const snapshotQuoteId = snapshot.quoteTarget?.id ?? null;
+
+	return (currentReplyId == null || currentReplyId === snapshotReplyId) && (currentQuoteId == null || currentQuoteId === snapshotQuoteId);
 }
 
 function getReferenceText(message: NormalizedChatMessage | Misskey.entities.ChatMessageLite) {
@@ -544,12 +597,14 @@ function getReferenceText(message: NormalizedChatMessage | Misskey.entities.Chat
 }
 
 function saveDraft() {
+	if (draftSavePaused) return;
+
 	const draftKey = getDraftKey();
 	if (draftKey == null) return;
 
-	const drafts = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}');
+	const drafts = getChatMessageDrafts();
 
-	if (!canSend.value) {
+	if (muteState.value != null || !hasDraftContent()) {
 		delete drafts[draftKey];
 	} else {
 		drafts[draftKey] = {
@@ -557,6 +612,8 @@ function saveDraft() {
 			data: {
 				text: text.value,
 				files: files.value,
+				replyTarget: props.replyTarget ?? null,
+				quoteTarget: props.quoteTarget ?? null,
 			},
 		};
 	}
@@ -568,11 +625,24 @@ function deleteDraft() {
 	const draftKey = getDraftKey();
 	if (draftKey == null) return;
 
-	const drafts = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}');
+	const drafts = getChatMessageDrafts();
 
 	delete drafts[draftKey];
 
 	miLocalStorage.setItem('chatMessageDrafts', JSON.stringify(drafts));
+}
+
+function hasDraftContent() {
+	return text.value.trim().length > 0 || files.value.length > 0 || props.replyTarget != null || props.quoteTarget != null;
+}
+
+function getChatMessageDrafts(): Record<string, ChatMessageDraft> {
+	try {
+		const drafts = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}');
+		return drafts != null && typeof drafts === 'object' && !Array.isArray(drafts) ? drafts : {};
+	} catch {
+		return {};
+	}
 }
 
 async function insertEmoji(ev: MouseEvent) {
@@ -620,10 +690,16 @@ onMounted(() => {
 
 	// 書きかけの投稿を復元
 	const draftKey = getDraftKey();
-	const draft = draftKey == null ? null : JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}')[draftKey];
-	if (draft) {
-		text.value = draft.data.text;
+	const draft = draftKey == null ? null : getChatMessageDrafts()[draftKey];
+	if (draft?.data != null) {
+		text.value = typeof draft.data.text === 'string' ? draft.data.text : '';
 		files.value = Array.isArray(draft.data.files) ? draft.data.files : (draft.data.file != null ? [draft.data.file] : []);
+		if (draft.data.replyTarget != null || draft.data.quoteTarget != null) {
+			emit('restoreReferences', {
+				replyTarget: draft.data.replyTarget ?? null,
+				quoteTarget: draft.data.quoteTarget ?? null,
+			});
+		}
 	}
 });
 
