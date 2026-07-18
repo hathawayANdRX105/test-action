@@ -31,6 +31,8 @@ export function chatMessageMentionCacheKey(messageId: MiChatMessage['id']): stri
 
 @Injectable()
 export class ChatEntityService {
+	private readonly roomMemberCountLoads = new Map<MiChatRoom['id'], Promise<number>>();
+
 	constructor(
 		@Inject(DI.chatMessagesRepository)
 		private chatMessagesRepository: ChatMessagesRepository,
@@ -480,6 +482,25 @@ export class ChatEntityService {
 	}
 
 	@bindThis
+	private async getRoomMemberCount(roomId: MiChatRoom['id']): Promise<number> {
+		const loading = this.roomMemberCountLoads.get(roomId);
+		if (loading != null) return await loading;
+
+		const load = this.chatRoomMembershipsRepository
+			.countBy({ roomId })
+			.then(count => count + 1);
+		this.roomMemberCountLoads.set(roomId, load);
+
+		try {
+			return await load;
+		} finally {
+			if (this.roomMemberCountLoads.get(roomId) === load) {
+				this.roomMemberCountLoads.delete(roomId);
+			}
+		}
+	}
+
+	@bindThis
 	public async packRoom(
 		src: MiChatRoom['id'] | MiChatRoom,
 		me?: { id: MiUser['id'] },
@@ -497,7 +518,7 @@ export class ChatEntityService {
 		const userSetting = me != null ? (options?._hint_?.userSettings?.get(room.id) ?? await this.chatRoomUserSettingsRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
 		const isJoined = me != null && (me.id === room.ownerId || membership != null);
 		const [memberCount, isAdministrator, isModerator, avatarUrl] = await Promise.all([
-			this.chatRoomMembershipsRepository.countBy({ roomId: room.id }).then(count => count + 1),
+			this.getRoomMemberCount(room.id),
 			me != null ? this.roleService.isAdministrator(me) : false,
 			me != null ? this.roleService.isModerator(me) : false,
 			this.getRoomAvatarUrl(room),

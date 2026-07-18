@@ -291,6 +291,67 @@ describe('ChatEntityService', () => {
 		expect(packed.isJoined).toBe(true);
 	});
 
+	test('coalesces concurrent member-count loads while packing the same room', async () => {
+		const ctx = createService();
+		let resolveCount: (count: number) => void = () => {};
+		const countStarted = new Promise<void>(resolve => {
+			ctx.chatRoomMembershipsRepository.countBy.mockImplementationOnce(() => {
+				resolve();
+				return new Promise<number>(resolveCount_ => {
+					resolveCount = resolveCount_;
+				});
+			});
+		});
+		const room = {
+			id: 'room-concurrent-count',
+			name: 'concurrent count room',
+			description: null,
+			joinMode: 'open',
+			ownerId: 'me',
+			owner: { id: 'me' },
+			memberLimitOverride: null,
+			messageRetentionDays: null,
+		};
+
+		const packedRooms = Promise.all([
+			ctx.service.packRoom(room, { id: 'me' }),
+			ctx.service.packRoom(room, { id: 'me' }),
+			ctx.service.packRoom(room, { id: 'me' }),
+		]);
+
+		await countStarted;
+		expect(ctx.chatRoomMembershipsRepository.countBy).toHaveBeenCalledTimes(1);
+
+		resolveCount(2);
+		await expect(packedRooms).resolves.toEqual(expect.arrayContaining([
+			expect.objectContaining({ memberCount: 3 }),
+			expect.objectContaining({ memberCount: 3 }),
+			expect.objectContaining({ memberCount: 3 }),
+		]));
+	});
+
+	test('clears a failed member-count load so a later room pack retries', async () => {
+		const ctx = createService();
+		ctx.chatRoomMembershipsRepository.countBy
+			.mockRejectedValueOnce(new Error('database unavailable'))
+			.mockResolvedValueOnce(2);
+		const room = {
+			id: 'room-count-retry',
+			name: 'retry count room',
+			description: null,
+			joinMode: 'open',
+			ownerId: 'me',
+			owner: { id: 'me' },
+			memberLimitOverride: null,
+			messageRetentionDays: null,
+		};
+
+		await expect(ctx.service.packRoom(room, { id: 'me' })).rejects.toThrow('database unavailable');
+		await expect(ctx.service.packRoom(room, { id: 'me' })).resolves.toEqual(expect.objectContaining({ memberCount: 3 }));
+
+		expect(ctx.chatRoomMembershipsRepository.countBy).toHaveBeenCalledTimes(2);
+	});
+
 	test('repairs missing room avatar URLs while packing a room', async () => {
 		const ctx = createService();
 		ctx.driveFilesRepository.findBy.mockResolvedValueOnce([{
