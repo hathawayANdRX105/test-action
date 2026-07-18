@@ -16,7 +16,10 @@ export const meta = {
 
 export const paramDef = {
 	type: 'object',
-	properties: {},
+	properties: {
+		limit: { type: 'integer', minimum: 1, maximum: 100, default: 100 },
+		offset: { type: 'integer', minimum: 0, default: 0 },
+	},
 	required: [],
 } as const;
 
@@ -26,7 +29,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private readonly aiService: AiService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			return await this.aiService.listConversations(me.id);
+			return await this.aiService.listConversations(me.id, {
+				limit: ps.limit,
+				offset: ps.offset,
+			});
 		});
 	}
 }

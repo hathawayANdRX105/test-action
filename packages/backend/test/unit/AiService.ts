@@ -46,7 +46,17 @@ describe('AiService', () => {
 			}),
 		};
 		const aiConversationsRepository = {
-			find: jest.fn(async ({ where }: any) => Array.from(conversations.values()).filter(conversation => conversation.userId === where.userId)),
+			find: jest.fn(async ({ where, order, skip = 0, take }: any) => Array.from(conversations.values())
+				.filter(conversation => conversation.userId === where.userId)
+				.slice()
+				.sort((a, b) => {
+					const updatedAtDirection = order?.updatedAt === 'ASC' ? 1 : -1;
+					const updatedAtCompare = (a.updatedAt.getTime() - b.updatedAt.getTime()) * updatedAtDirection;
+					if (updatedAtCompare !== 0) return updatedAtCompare;
+					const idDirection = order?.id === 'ASC' ? 1 : -1;
+					return a.id.localeCompare(b.id) * idDirection;
+				})
+				.slice(skip, take === undefined ? undefined : skip + take)),
 			findOneBy: jest.fn(async ({ id, userId }: { id: string; userId: string }) => {
 				const conversation = conversations.get(id);
 				return conversation?.userId === userId ? conversation : null;
@@ -63,11 +73,17 @@ describe('AiService', () => {
 			}),
 		};
 		const aiMessagesRepository = {
-			find: jest.fn(async ({ where, take }: any) => messages
+			find: jest.fn(async ({ where, order, skip = 0, take }: any) => messages
 				.filter(message => message.conversationId === where.conversationId && message.userId === where.userId)
 				.slice()
-				.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
-				.slice(0, take)),
+				.sort((a, b) => {
+					const createdAtDirection = order?.createdAt === 'DESC' ? -1 : 1;
+					const createdAtCompare = (a.createdAt.getTime() - b.createdAt.getTime()) * createdAtDirection;
+					if (createdAtCompare !== 0) return createdAtCompare;
+					const idDirection = order?.id === 'DESC' ? -1 : 1;
+					return a.id.localeCompare(b.id) * idDirection;
+				})
+				.slice(skip, take === undefined ? undefined : skip + take)),
 			insertOne: jest.fn(async (message: any) => {
 				messages.push(message);
 				return message;
@@ -225,6 +241,68 @@ describe('AiService', () => {
 			defaultProviderId: 'provider2',
 			providers: [expect.objectContaining({ id: 'provider2' })],
 		});
+	});
+	it('paginates conversations by updated time', async () => {
+		const { service, conversations } = createService();
+
+		for (let i = 1; i <= 3; i++) {
+			conversations.set(`conversation${i}`, {
+				id: `conversation${i}`,
+				userId: 'user1',
+				title: `Chat ${i}`,
+				providerId: 'provider1',
+				model: 'gpt-4o',
+				systemPrompt: null,
+				createdAt: new Date(i),
+				updatedAt: new Date(i),
+			});
+		}
+		conversations.set('other-user-conversation', {
+			id: 'other-user-conversation',
+			userId: 'user2',
+			title: 'Other chat',
+			providerId: 'provider1',
+			model: 'gpt-4o',
+			systemPrompt: null,
+			createdAt: new Date(4),
+			updatedAt: new Date(4),
+		});
+
+		const page = await Reflect.apply(service.listConversations, service, ['user1', { limit: 1, offset: 1 }]);
+
+		expect(page.map((conversation: any) => conversation.id)).toEqual(['conversation2']);
+	});
+
+	it('paginates messages in chronological order', async () => {
+		const { service, conversations, messages } = createService();
+		conversations.set('conversation1', {
+			id: 'conversation1',
+			userId: 'user1',
+			title: 'Chat',
+			providerId: 'provider1',
+			model: 'gpt-4o',
+			systemPrompt: null,
+			createdAt: new Date(0),
+			updatedAt: new Date(0),
+		});
+
+		for (let i = 1; i <= 4; i++) {
+			messages.push({
+				id: `message${i}`,
+				conversationId: 'conversation1',
+				userId: 'user1',
+				role: i % 2 === 0 ? 'assistant' : 'user',
+				content: `Message ${i}`,
+				attachments: [],
+				usage: null,
+				error: null,
+				createdAt: new Date(i),
+			});
+		}
+
+		const page = await Reflect.apply(service.listMessages, service, ['user1', 'conversation1', { limit: 2, offset: 1 }]);
+
+		expect(page.map((message: any) => message.id)).toEqual(['message2', 'message3']);
 	});
 
 	it('saves user and assistant messages from a streaming response', async () => {

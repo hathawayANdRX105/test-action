@@ -66,6 +66,11 @@ type StreamChatParams = {
 	onDelta?: (text: string) => void | Promise<void>;
 };
 
+type AiListOptions = {
+	limit?: number;
+	offset?: number;
+};
+
 const MAX_AI_ATTACHMENTS = 8;
 const MAX_AI_CONTEXT_MESSAGES = 100;
 const MAX_AI_MODELS = 100;
@@ -76,6 +81,9 @@ const MAX_AI_SYSTEM_PROMPT_LENGTH = 12000;
 const MAX_AI_TITLE_LENGTH = 256;
 const MAX_AI_SSE_BUFFER_LENGTH = 1024 * 1024;
 const MAX_AI_ASSISTANT_CONTENT_LENGTH = 200000;
+const MAX_AI_CONVERSATION_LIST_LIMIT = 100;
+const MAX_AI_MESSAGE_LIST_LIMIT = 500;
+const MAX_AI_LIST_OFFSET = 100000;
 
 export type PackedAiProvider = {
 	id: string;
@@ -433,11 +441,14 @@ export class AiService {
 	}
 
 	@bindThis
-	public async listConversations(userId: MiUser['id']): Promise<PackedAiConversation[]> {
+	public async listConversations(userId: MiUser['id'], options: AiListOptions = {}): Promise<PackedAiConversation[]> {
+		const limit = this.clampInt(options.limit, 1, MAX_AI_CONVERSATION_LIST_LIMIT, MAX_AI_CONVERSATION_LIST_LIMIT);
+		const offset = this.clampInt(options.offset, 0, MAX_AI_LIST_OFFSET, 0);
 		const conversations = await this.aiConversationsRepository.find({
 			where: { userId },
-			order: { updatedAt: 'DESC' },
-			take: 100,
+			order: { updatedAt: 'DESC', id: 'DESC' },
+			skip: offset,
+			take: limit,
 		});
 		return conversations.map(this.packConversation);
 	}
@@ -491,14 +502,17 @@ export class AiService {
 	}
 
 	@bindThis
-	public async listMessages(userId: MiUser['id'], conversationId: MiAiConversation['id']): Promise<PackedAiMessage[]> {
+	public async listMessages(userId: MiUser['id'], conversationId: MiAiConversation['id'], options: AiListOptions = {}): Promise<PackedAiMessage[]> {
+		const limit = this.clampInt(options.limit, 1, MAX_AI_MESSAGE_LIST_LIMIT, MAX_AI_MESSAGE_LIST_LIMIT);
+		const offset = this.clampInt(options.offset, 0, MAX_AI_LIST_OFFSET, 0);
 		await this.getOwnedConversation(userId, conversationId);
 		const messages = await this.aiMessagesRepository.find({
 			where: { conversationId, userId },
-			order: { createdAt: 'ASC', id: 'ASC' },
-			take: 500,
+			order: { createdAt: 'DESC', id: 'DESC' },
+			skip: offset,
+			take: limit,
 		});
-		return messages.map(this.packMessage);
+		return messages.reverse().map(this.packMessage);
 	}
 
 	@bindThis

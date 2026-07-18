@@ -18,6 +18,8 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		conversationId: { type: 'string', format: 'misskey:id' },
+		limit: { type: 'integer', minimum: 1, maximum: 500, default: 500 },
+		offset: { type: 'integer', minimum: 0, default: 0 },
 	},
 	required: ['conversationId'],
 } as const;
@@ -28,7 +30,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private readonly aiService: AiService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			return await this.aiService.listMessages(me.id, ps.conversationId);
+			return await this.aiService.listMessages(me.id, ps.conversationId, {
+				limit: ps.limit,
+				offset: ps.offset,
+			});
 		});
 	}
 }
