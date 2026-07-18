@@ -167,7 +167,16 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		const snapshot = readSnapshot(storageKey) ?? (latestSnapshotStorageKey === storageKey ? latestSnapshot : null);
 		if (snapshot == null) return null;
 		if (storageKey == null) return snapshot;
-		return restoreArmed || (snapshot.restoreOnNextVisit && wasLatestRouteChangeFromNoteTo(router, routeFullPath)) ? snapshot : null;
+		return snapshot.restoreOnNextVisit && (restoreArmed || wasLatestRouteChangeFromNoteTo(router, routeFullPath)) ? snapshot : null;
+	}
+
+	function loadLatestSnapshotForCurrentKey(): void {
+		const storageKey = getStorageKey();
+		const storedSnapshot = readSnapshot(storageKey);
+		if (storedSnapshot == null) return;
+
+		latestSnapshot = storedSnapshot;
+		latestSnapshotStorageKey = storageKey;
 	}
 
 	function clearRestoreTimers(): void {
@@ -245,8 +254,14 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 			return true;
 		}
 
+		const targetScrollTop = Math.max(0, snapshot.scrollTop);
+		if (targetScrollTop > 0) {
+			const maxScrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+			if (maxScrollTop < targetScrollTop - 1) return false;
+		}
+
 		scrollContainer.scrollTo({
-			top: snapshot.scrollTop,
+			top: targetScrollTop,
 			behavior: 'instant',
 		});
 		return true;
@@ -257,7 +272,9 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		const snapshot = loadSnapshot();
 		if (snapshot == null) {
 			ready = true;
-			restoreArmed = false;
+			if (!wasLatestRouteChangeFromNoteTo(router, routeFullPath)) {
+				restoreArmed = false;
+			}
 			return;
 		}
 
@@ -299,6 +316,12 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		}
 	}
 
+	watch(() => getStorageKey(), (storageKey, oldStorageKey) => {
+		if (storageKey === oldStorageKey) return;
+		loadLatestSnapshotForCurrentKey();
+		nextTick(scheduleRestore);
+	});
+
 	router.useListener('change', ({ beforeFullPath, fullPath }) => {
 		if (beforeFullPath === routeFullPath && isNotePath(fullPath)) {
 			captureAnchor?.();
@@ -325,12 +348,9 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		el.addEventListener('click', onScroll, captureOptions);
 		captureAnchor = onScroll;
 		const storageKey = getStorageKey();
-		const storedSnapshot = readSnapshot(storageKey);
-		if (storedSnapshot == null) {
+		loadLatestSnapshotForCurrentKey();
+		if (latestSnapshot == null || latestSnapshotStorageKey !== storageKey) {
 			onScroll();
-		} else {
-			latestSnapshot = storedSnapshot;
-			latestSnapshotStorageKey = storageKey;
 		}
 		nextTick(scheduleRestore);
 

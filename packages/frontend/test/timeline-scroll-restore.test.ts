@@ -5,8 +5,10 @@
 
 import { cleanup, render } from '@testing-library/vue';
 import { defineComponent, h, nextTick, ref } from 'vue';
+import type { Ref as VueRef } from 'vue';
 import { afterEach, assert, beforeEach, describe, test, vi } from 'vitest';
 import paginationSource from '@/components/MkPagination.vue?raw';
+import followingRecentNotesSource from '@/components/SkFollowingRecentNotes.vue?raw';
 import timelineSource from '@/components/MkTimeline.vue?raw';
 import pageWithHeaderSource from '@/components/global/PageWithHeader.vue?raw';
 import routerViewSource from '@/components/global/RouterView.vue?raw';
@@ -104,22 +106,44 @@ function installScrollGeometry(scrollContainer: HTMLElement, options: {
 	return scrollTo;
 }
 
-async function renderScrollKeeper(key = 'timeline:home') {
+async function renderScrollKeeper(key: string | VueRef<string> = 'timeline:home', withAnchors = true) {
 	const { useScrollPositionKeeper } = await import('@/use/use-scroll-position-keeper.js');
 	const TestComponent = defineComponent({
 		setup() {
 			const rootEl = ref<HTMLElement | null>(null);
 			useScrollPositionKeeper(rootEl, { key });
 
-			return () => h('div', { ref: rootEl, 'data-testid': 'scroll-container' }, [
-				h('article', { 'data-scroll-anchor': 'note-1' }, 'note 1'),
-				h('article', { 'data-scroll-anchor': 'note-2' }, 'note 2'),
-				h('article', { 'data-scroll-anchor': 'note-3' }, 'note 3'),
-			]);
+			const notes = withAnchors
+				? [
+					h('article', { 'data-scroll-anchor': 'note-1' }, 'note 1'),
+					h('article', { 'data-scroll-anchor': 'note-2' }, 'note 2'),
+					h('article', { 'data-scroll-anchor': 'note-3' }, 'note 3'),
+				]
+				: [
+					h('article', 'note 1'),
+					h('article', 'note 2'),
+					h('article', 'note 3'),
+				];
+
+			return () => h('div', { ref: rootEl, 'data-testid': 'scroll-container' }, notes);
 		},
 	});
 	const result = render(TestComponent);
 	return result;
+}
+
+function installScrollRange(scrollContainer: HTMLElement, metrics: {
+	scrollHeight: number;
+	clientHeight: number;
+}): void {
+	Object.defineProperty(scrollContainer, 'scrollHeight', {
+		get: () => metrics.scrollHeight,
+		configurable: true,
+	});
+	Object.defineProperty(scrollContainer, 'clientHeight', {
+		get: () => metrics.clientHeight,
+		configurable: true,
+	});
 }
 
 beforeEach(() => {
@@ -167,11 +191,13 @@ describe('timeline scroll restoration', () => {
 		assert.match(scrollKeeperSource, /el\.addEventListener\('pointerdown', onScroll, captureOptions\);/);
 		assert.match(scrollKeeperSource, /el\.addEventListener\('click', onScroll, captureOptions\);/);
 		assert.match(scrollKeeperSource, /const snapshot = readSnapshot\(storageKey\) \?\? \(latestSnapshotStorageKey === storageKey \? latestSnapshot : null\);/);
-		assert.match(scrollKeeperSource, /const storedSnapshot = readSnapshot\(storageKey\);[\s\S]*if \(storedSnapshot == null\) \{[\s\S]*onScroll\(\);[\s\S]*\} else \{[\s\S]*latestSnapshot = storedSnapshot;[\s\S]*latestSnapshotStorageKey = storageKey;[\s\S]*\}/);
+		assert.match(scrollKeeperSource, /function loadLatestSnapshotForCurrentKey\(\): void \{[\s\S]*const storedSnapshot = readSnapshot\(storageKey\);[\s\S]*latestSnapshot = storedSnapshot;[\s\S]*latestSnapshotStorageKey = storageKey;[\s\S]*\}/);
+		assert.match(scrollKeeperSource, /watch\(\(\) => getStorageKey\(\), \([\s\S]*loadLatestSnapshotForCurrentKey\(\);[\s\S]*nextTick\(scheduleRestore\);[\s\S]*\}\);/);
 		assert.match(scrollKeeperSource, /if \(scrollAnchorEl == null\) return false;/);
+		assert.match(scrollKeeperSource, /const maxScrollTop = scrollContainer\.scrollHeight - scrollContainer\.clientHeight;[\s\S]*if \(maxScrollTop < targetScrollTop - 1\) return false;/);
 		assert.match(scrollKeeperSource, /new MutationObserver\(\(\) => \{[\s\S]*tryRestore\(\);[\s\S]*\}\);/);
 		assert.match(scrollKeeperSource, /const RESTORE_OBSERVER_TIMEOUT = 2000;/);
-		assert.include(scrollKeeperSource, 'return restoreArmed || (snapshot.restoreOnNextVisit && wasLatestRouteChangeFromNoteTo(router, routeFullPath)) ? snapshot : null;');
+		assert.include(scrollKeeperSource, 'return snapshot.restoreOnNextVisit && (restoreArmed || wasLatestRouteChangeFromNoteTo(router, routeFullPath)) ? snapshot : null;');
 		assert.match(scrollKeeperSource, /onDeactivated\(\(\) => \{[\s\S]*captureAnchor\?\.\(\);[\s\S]*clearRestoreTimers\(\);[\s\S]*ready = false;[\s\S]*\}\);/);
 	});
 
@@ -183,7 +209,7 @@ describe('timeline scroll restoration', () => {
 		assert.match(scrollKeeperSource, /ensureRouteTransitionTracking\(router\);/);
 		assert.match(scrollKeeperSource, /const routeFullPath = router\.getCurrentFullPath\(\);/);
 		assert.include(scrollKeeperSource, 'return /^\\/notes\\/[^/?#]+/.test(path);');
-		assert.include(scrollKeeperSource, 'snapshot.restoreOnNextVisit && wasLatestRouteChangeFromNoteTo(router, routeFullPath)');
+		assert.include(scrollKeeperSource, 'snapshot.restoreOnNextVisit && (restoreArmed || wasLatestRouteChangeFromNoteTo(router, routeFullPath))');
 		assert.match(scrollKeeperSource, /if \(beforeFullPath === routeFullPath && isNotePath\(fullPath\)\) \{[\s\S]*captureAnchor\?\.\(\);[\s\S]*writeLatestSnapshot\(true\);[\s\S]*persistForNoteReturn = true;/);
 		assert.match(scrollKeeperSource, /if \(fullPath === routeFullPath && isNotePath\(beforeFullPath\)\) \{[\s\S]*restoreArmed = true;/);
 		assert.match(scrollKeeperSource, /writeLatestSnapshot\(persistForNoteReturn\);[\s\S]*persistForNoteReturn = false;/);
@@ -274,6 +300,81 @@ describe('timeline scroll restoration', () => {
 		assert.equal(scrollTo.mock.calls.length, 0);
 	});
 
+	test('waits for an async scroll key before restoring a note-return anchor', async () => {
+		const storageKey = 'sharkey:scroll-position:account-a:user%3Auser-id%3Anotes';
+		window.sessionStorage.setItem(storageKey, JSON.stringify({
+			anchorId: 'note-2',
+			anchorTop: 120,
+			scrollTop: 100,
+			updatedAt: Date.now(),
+			restoreOnNextVisit: true,
+		}));
+
+		const key = ref('user:acct:notes');
+		const result = await renderScrollKeeper(key);
+		const scrollContainer = result.getByTestId('scroll-container');
+		const scrollTo = installScrollGeometry(scrollContainer, {
+			scrollTop: 100,
+			anchorTops: {
+				'note-1': 160,
+				'note-2': 260,
+				'note-3': 360,
+			},
+		});
+
+		emitRouteChange('/notes/note-2', '/timeline');
+		await nextTick();
+		await vi.runOnlyPendingTimersAsync();
+		assert.equal(scrollTo.mock.calls.length, 0);
+
+		key.value = 'user:user-id:notes';
+		await nextTick();
+		await vi.runOnlyPendingTimersAsync();
+
+		assert.equal(scrollContainer.scrollTop, 240);
+		assert.deepEqual(scrollTo.mock.calls[0]?.[0], {
+			top: 240,
+			behavior: 'instant',
+		});
+	});
+
+	test('waits for scroll range before using the scrollTop fallback', async () => {
+		const storageKey = 'sharkey:scroll-position:account-a:plain%3Afeed';
+		window.sessionStorage.setItem(storageKey, JSON.stringify({
+			anchorId: null,
+			anchorTop: null,
+			scrollTop: 180,
+			updatedAt: Date.now(),
+			restoreOnNextVisit: true,
+		}));
+
+		const result = await renderScrollKeeper('plain:feed', false);
+		const scrollContainer = result.getByTestId('scroll-container');
+		const metrics = {
+			scrollHeight: 200,
+			clientHeight: 100,
+		};
+		installScrollRange(scrollContainer, metrics);
+		const scrollTo = installScrollGeometry(scrollContainer, {
+			scrollTop: 0,
+			anchorTops: {},
+		});
+
+		emitRouteChange('/notes/note-2', '/timeline');
+		await nextTick();
+		await vi.advanceTimersByTimeAsync(0);
+		assert.equal(scrollTo.mock.calls.length, 0);
+
+		metrics.scrollHeight = 360;
+		await vi.advanceTimersByTimeAsync(50);
+
+		assert.equal(scrollContainer.scrollTop, 180);
+		assert.deepEqual(scrollTo.mock.calls[0]?.[0], {
+			top: 180,
+			behavior: 'instant',
+		});
+	});
+
 	test('keeps mobile feed surfaces cached when returning from a note page', () => {
 		const uncachedRoutesLine = routerViewSource.match(/const UNCACHED_ROUTES = [^\n]+/)?.[0] ?? '';
 
@@ -315,6 +416,7 @@ describe('timeline scroll restoration', () => {
 		assert.include(searchPageSource, ':scrollKey="`search:${tab}:${query}:${origin}:${userId ?? \'\'}:${username ?? \'\'}:${host ?? \'\'}`"');
 		assert.include(followingFeedPageSource, 'const feedScrollKey = computed(() => `following-feed:list:${userList.value}:${withNonPublic.value}:${withQuotes.value}:${withBots.value}:${withReplies.value}:${onlyFiles.value}`);');
 		assert.include(followingFeedPageSource, 'const userScrollKey = computed(() => selectedUserId.value == null ? null : `following-feed:user:${selectedUserId.value}:${userList.value}:${withNonPublic.value}:${withQuotes.value}:${withBots.value}:${withReplies.value}:${onlyFiles.value}`);');
+		assert.include(followingRecentNotesSource, ':data-scroll-anchor="note.id"');
 	});
 
 	test('clears frontend cache without forcing a full reload to the top', () => {
