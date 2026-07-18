@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="[]" :tabs="[]" :swipable="false" :hideTitle="true">
+<PageWithHeader :actions="[]" :tabs="[]" :swipable="false" :hideTitle="true" :scrollKey="exploreScrollKey">
 	<div :class="$style.exploreShell">
 		<main :class="$style.exploreMain" @wheel.passive="onMainWheel">
 			<header :class="$style.exploreHeader">
@@ -101,7 +101,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<section v-if="noteResults.length > 0" :class="$style.resultSection">
 						<div :class="$style.resultSectionTitle">{{ i18n.ts.notes }}</div>
 						<div class="_gaps">
-							<DynamicNote v-for="note in noteResults" :key="note.id" :note="note" :withHardMute="true"/>
+							<DynamicNote v-for="note in noteResults" :key="note.id" :note="note" :withHardMute="true" :data-scroll-anchor="note.id"/>
 						</div>
 					</section>
 				</div>
@@ -229,13 +229,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<!-- viewMode 跟首页 timeline 一致;切了视图风格立刻生效。数据用原 activeNotes,不再客户端 scope 过滤 -->
 					<div v-if="viewMode === 'masonry'" :class="$style.masonryGrid">
-						<SkTimelineMasonryCard v-for="note in activeNotes" :key="note.id" :note="note"/>
+						<SkTimelineMasonryCard v-for="note in activeNotes" :key="note.id" :note="note" :data-scroll-anchor="note.id"/>
 					</div>
 					<div v-else-if="viewMode === 'forum'" :class="$style.forumList">
-						<SkTimelineForumItem v-for="note in activeNotes" :key="note.id" :note="note"/>
+						<SkTimelineForumItem v-for="note in activeNotes" :key="note.id" :note="note" :data-scroll-anchor="note.id"/>
 					</div>
 					<div v-else class="_gaps" :class="$style.noteList">
-						<DynamicNote v-for="note in activeNotes" :key="note.id" :note="note" :withHardMute="true"/>
+						<DynamicNote v-for="note in activeNotes" :key="note.id" :note="note" :withHardMute="true" :data-scroll-anchor="note.id"/>
 					</div>
 				</section>
 
@@ -449,6 +449,7 @@ const exploreTabs = computed(() => [{
 const searchEmpty = computed(() => !searchLoading.value && submittedQuery.value.length > 0 && noteResults.value.length === 0 && userResults.value.length === 0 && tagResults.value.length === 0);
 const searchHistoryRows = computed(() => searchHistory.value.filter(term => term !== submittedQuery.value).slice(0, 4));
 const filteredTrendRows = computed(() => buildSearchTrendRows(searchTrends.value, 10));
+const exploreScrollKey = computed(() => `explore:${tab.value}:${exploreScope.value}:${viewMode.value}:${submittedQuery.value || '__recommended__'}`);
 const featureNote = computed(() => {
 	const candidates = uniqueNotes([
 		...categoryNotes.value,

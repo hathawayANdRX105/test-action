@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :displayBackButton="true" :tabs="headerTabs" :actions="headerActions" :swipable="isTouchUsing" :page="'user'">
+<PageWithHeader v-model:tab="tab" :displayBackButton="true" :tabs="headerTabs" :actions="headerActions" :swipable="isTouchUsing" :page="'user'" :scrollKey="userScrollKey">
 	<div v-if="user">
 		<XHome v-if="tab === 'home'" :user="user" @unfoldFiles="() => { tab = 'files'; }"/>
 		<div v-else-if="tab === 'notes'" class="_spacer" style="--MI_SPACER-w: 800px;">
@@ -66,6 +66,7 @@ const tab = ref(props.page);
 
 const user = ref<null | Misskey.entities.UserDetailed>(CTX_USER);
 const error = ref<any>(null);
+const userScrollKey = computed(() => `user:${user.value?.id ?? props.acct}:${tab.value}`);
 
 const muteOverrides = useMuteOverrides();
 

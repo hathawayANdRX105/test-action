@@ -32,15 +32,17 @@ const props = withDefaults(defineProps<PageHeaderProps & {
 	swipable?: boolean;
 	page?: string;
 	spacer?: boolean;
+	scrollKey?: string;
 }>(), {
 	reversed: false,
 	swipable: true,
 	page: undefined,
 	spacer: false,
+	scrollKey: undefined,
 });
 
 const pageHeaderProps = computed(() => {
-	const { reversed, spacer, ...rest } = props;
+	const { reversed, spacer, scrollKey, ...rest } = props;
 	rest.tabs = normalizedTabs.value;
 	rest.tab = tab.value;
 	return rest;
@@ -49,10 +51,11 @@ const pageHeaderProps = computed(() => {
 const tab = defineModel<string>('tab');
 const normalizedTabs = computed(() => props.tabs ?? []);
 const rootEl = useTemplateRef('rootEl');
-
-useScrollPositionKeeper(rootEl, { reversed: props.reversed });
-
 const router = useRouter();
+const defaultScrollKey = router.getCurrentFullPath();
+const scrollKey = computed(() => props.scrollKey ?? defaultScrollKey);
+
+useScrollPositionKeeper(rootEl, { reversed: props.reversed, key: scrollKey });
 
 router.useListener('same', () => {
 	scrollToTop();

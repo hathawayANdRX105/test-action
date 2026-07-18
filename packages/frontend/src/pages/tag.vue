@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="headerActions" :displayBackButton="true" :tabs="headerTabs">
+<PageWithHeader :actions="headerActions" :displayBackButton="true" :tabs="headerTabs" :scrollKey="`tag:${tag}`">
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
 		<MkNotes ref="notes" class="" :pagination="pagination"/>
 	</div>

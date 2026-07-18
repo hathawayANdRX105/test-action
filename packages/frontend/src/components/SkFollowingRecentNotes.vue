@@ -13,7 +13,7 @@ List that displays the most recent note from each followed user, in order, with 
 		<template #default="{ items: notes }">
 			<!-- TODO replace with SkDateSeparatedList when merged -->
 			<MkDateSeparatedList v-slot="{ item: note }" :items="notes" :class="$style.panel" :noGap="true">
-				<SkFollowingFeedEntry :note="note" :class="props.selectedUserId == note.userId && $style.selected" @select="u => selectUser(u.id)"/>
+				<SkFollowingFeedEntry :note="note" :class="props.selectedUserId == note.userId && $style.selected" :data-scroll-anchor="note.id" @select="u => selectUser(u.id)"/>
 			</MkDateSeparatedList>
 		</template>
 	</MkPagination>

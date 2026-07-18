@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader ref="pageComponent" :actions="headerActions" :tabs="[]" :swipable="false" :hideTitle="true">
+<PageWithHeader ref="pageComponent" :actions="headerActions" :tabs="[]" :swipable="false" :hideTitle="true" :scrollKey="channelScrollKey">
 	<div v-if="channel" class="xChannelWideShell" :class="$style.shell">
 		<main :class="$style.main" @wheel.passive="onMainWheel">
 			<section class="_panel" :class="$style.hero" :style="heroStyle">
@@ -400,6 +400,7 @@ const featuredPagination = computed(() => ({
 }));
 
 const timelineKey = computed(() => `${props.channelId}:${withRenotes.value}:${onlyFiles.value}`);
+const channelScrollKey = computed(() => `channel:${props.channelId}:${tab.value}:${timelineKey.value}`);
 const canSearchQuery = computed(() => searchQuery.value.trim().length > 0);
 const channelTrendRows = computed(() => buildSearchTrendRows(collectChannelTrends(), 10));
 const channelHotNotes = computed(() => getChannelHotNotes(previewHotNotes.value, previewRecentNotes.value, 10));
