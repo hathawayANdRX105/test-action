@@ -55,11 +55,19 @@ provide(DI.viewId, viewId);
 const currentDepth = inject(DI.routerCurrentDepth, 0);
 provide(DI.routerCurrentDepth, currentDepth + 1);
 
+type CacheablePageComponent = Component & {
+	pageCacheKey?: string;
+};
+
+function getPageKey(component: Component, fullPath: string): string {
+	return (component as CacheablePageComponent).pageCacheKey ?? fullPath;
+}
+
 const current = router.current!;
 const currentPageComponent = shallowRef('component' in current.route ? current.route.component : MkLoadingPage);
 const currentPageProps = ref(current.props);
 const currentRoutePath = ref(current.route.path);
-const key = ref(router.getCurrentFullPath());
+const key = ref(getPageKey(currentPageComponent.value, router.getCurrentFullPath()));
 const isCacheable = computed(() => !UNCACHED_ROUTES.has(currentRoutePath.value));
 
 router.useListener('change', ({ resolved }) => {
@@ -71,7 +79,7 @@ router.useListener('change', ({ resolved }) => {
 	function _() {
 		currentPageComponent.value = resolvedComponent;
 		currentPageProps.value = resolved.props;
-		key.value = currentRouter.getCurrentFullPath();
+		key.value = getPageKey(resolvedComponent, currentRouter.getCurrentFullPath());
 		currentRoutePath.value = resolved.route.path;
 	}
 

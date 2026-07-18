@@ -21,6 +21,11 @@ function chatPage(...args: Parameters<typeof page>) {
 	return $i?.policies.chatAvailability !== 'unavailable' ? page(...args) : page(() => import('@/pages/not-found.vue'));
 }
 
+const ChatIndexPage = Object.assign(
+	chatPage(() => import('@/pages/chat/index.vue')),
+	{ pageCacheKey: 'chat' },
+);
+
 export const ROUTE_DEF = [{
 	name: 'index',
 	path: '/',
@@ -54,7 +59,7 @@ export const ROUTE_DEF = [{
 	component: page(() => import('@/pages/clip.vue')),
 }, {
 	path: '/chat',
-	component: chatPage(() => import('@/pages/chat/index.vue')),
+	component: ChatIndexPage,
 	loginRequired: true,
 }, {
 	path: '/ai',
@@ -62,14 +67,14 @@ export const ROUTE_DEF = [{
 	loginRequired: true,
 }, {
 	path: '/chat/user/:userId',
-	component: chatPage(() => import('@/pages/chat/index.vue')),
+	component: ChatIndexPage,
 	loginRequired: true,
 	query: {
 		messageId: 'messageId',
 	},
 }, {
 	path: '/chat/room/:roomId',
-	component: chatPage(() => import('@/pages/chat/index.vue')),
+	component: ChatIndexPage,
 	loginRequired: true,
 	query: {
 		messageId: 'messageId',
