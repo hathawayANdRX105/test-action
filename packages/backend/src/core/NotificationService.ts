@@ -12,6 +12,7 @@ import { DI } from '@/di-symbols.js';
 import type { UsersRepository, MiUserProfile } from '@/models/_.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiNotification } from '@/models/Notification.js';
+import type { Packed } from '@/misc/json-schema.js';
 import { bindThis } from '@/decorators.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { PushNotificationService } from '@/core/PushNotificationService.js';
@@ -27,6 +28,12 @@ import { TimeService } from '@/global/TimeService.js';
 @Injectable()
 export class NotificationService implements OnApplicationShutdown {
 	#shutdownController = new AbortController();
+	#pendingUnreadChecks: {
+		notifieeId: MiUser['id'];
+		redisId: string;
+		packed: Packed<'Notification'>;
+	}[] = [];
+	#unreadFlushScheduled = false;
 
 	constructor(
 		@Inject(DI.config)
@@ -194,20 +201,12 @@ export class NotificationService implements OnApplicationShutdown {
 		// Publish notification event
 		await this.globalEventService.publishMainStream(notifieeId, 'notification', packed);
 
-		// TODO this is terrible, need to rework this to not make a redis fetch *for every single duplicate*
 		// 2秒経っても(今回作成した)通知が既読にならなかったら「未読の通知がありますよ」イベントを発行する
 		// テスト通知の場合は即時発行
+		// Batch delayed latest-read checks so high fanout does one mget per flush, not get×N.
 		const interval = notification.type === 'test' ? 0 : 2000;
-		this.timeService.startPromiseTimer(interval, 'unread notification', { signal: this.#shutdownController.signal }).then(async () => {
-			const latestReadNotificationId = await this.redisClient.get(`latestReadNotification:${notifieeId}`);
-			if (latestReadNotificationId && (latestReadNotificationId >= redisId)) return;
-
-			await this.globalEventService.publishMainStream(notifieeId, 'unreadNotification', packed);
-			await this.pushNotificationService.pushNotification(notifieeId, 'notification', packed);
-
-			// TODO uncomment if the emailWhatever methods ever get implemented
-			// if (type === 'follow') await this.emailNotificationFollow(notifieeId, await this.cacheService.findUserById(notifierId!));
-			// if (type === 'receiveFollowRequest') await this.emailNotificationReceiveFollowRequest(notifieeId, await this.cacheService.findUserById(notifierId!));
+		this.timeService.startPromiseTimer(interval, 'unread notification', { signal: this.#shutdownController.signal }).then(() => {
+			this.enqueueUnreadNotificationCheck(notifieeId, redisId, packed);
 		}, () => { /* aborted, ignore it */ });
 
 		return notification;
@@ -254,6 +253,50 @@ export class NotificationService implements OnApplicationShutdown {
 	@bindThis
 	public dispose(): void {
 		this.#shutdownController.abort();
+	}
+
+	private enqueueUnreadNotificationCheck(
+		notifieeId: MiUser['id'],
+		redisId: string,
+		packed: Packed<'Notification'>,
+	): void {
+		this.#pendingUnreadChecks.push({ notifieeId, redisId, packed });
+		if (this.#unreadFlushScheduled) return;
+		this.#unreadFlushScheduled = true;
+		// ponytail: setImmediate check-phase barrier coalesces same-deadline native timer enqueues
+		setImmediate(() => {
+			trackPromise(this.flushUnreadNotificationChecks());
+		});
+	}
+
+	@bindThis
+	private async flushUnreadNotificationChecks(): Promise<void> {
+		this.#unreadFlushScheduled = false;
+		const candidates = this.#pendingUnreadChecks;
+		this.#pendingUnreadChecks = [];
+		if (candidates.length === 0) return;
+
+		const keys = [...new Set(candidates.map(c => `latestReadNotification:${c.notifieeId}`))];
+		// ChatService empty-array guard pattern
+		if (keys.length === 0) return;
+
+		const values = await this.redisClient.mget(...keys);
+		const latestByKey = new Map(keys.map((key, i) => [key, values[i]]));
+
+		const errors: unknown[] = [];
+		for (const { notifieeId, redisId, packed } of candidates) {
+			const latestReadNotificationId = latestByKey.get(`latestReadNotification:${notifieeId}`) ?? null;
+			if (latestReadNotificationId && (latestReadNotificationId >= redisId)) continue;
+
+			try {
+				await this.globalEventService.publishMainStream(notifieeId, 'unreadNotification', packed);
+				await this.pushNotificationService.pushNotification(notifieeId, 'notification', packed);
+			} catch (err) {
+				errors.push(err);
+			}
+		}
+		if (errors.length === 1) throw errors[0];
+		if (errors.length > 1) throw new AggregateError(errors);
 	}
 
 	private toXListId(id: string, offset: number): string {
