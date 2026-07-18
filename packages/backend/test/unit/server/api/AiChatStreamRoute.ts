@@ -72,6 +72,7 @@ function createApiCallService(
 	apiAccessMode: 'open' | 'closed',
 	nodeEnv: 'test' | 'production' = 'test',
 	developerRateLimit: RateLimitInfo = unblockedRateLimit,
+	apiPublicPermissions = ['write:account'],
 ) {
 	const meta = {
 		id: 'meta-1',
@@ -79,7 +80,7 @@ function createApiCallService(
 		apiAccessMode,
 		apiAllowDeveloperTokens: true,
 		apiNoApprovalPermissions: ['write:account'],
-		apiPublicPermissions: ['write:account'],
+		apiPublicPermissions,
 		apiWriteTokenRateLimit: 60,
 		apiDefaultTokenRateLimit: 60,
 		rootUserId: null,
@@ -118,12 +119,14 @@ function createRouteContext({
 	tokenStatus = 'active',
 	tokenInfo = true,
 	developerRateLimit = unblockedRateLimit,
+	apiPublicPermissions = ['write:account'],
 }: {
 	apiAccessMode?: 'open' | 'closed';
 	nodeEnv?: 'test' | 'production';
 	tokenStatus?: string;
 	tokenInfo?: boolean;
 	developerRateLimit?: RateLimitInfo;
+	apiPublicPermissions?: string[];
 } = {}) {
 	const user = { id: 'user-1' } as never;
 	const token = tokenInfo ? {
@@ -133,7 +136,7 @@ function createRouteContext({
 		status: tokenStatus,
 		app: null,
 	} as never : null;
-	const apiCallService = createApiCallService(apiAccessMode, nodeEnv, developerRateLimit);
+	const apiCallService = createApiCallService(apiAccessMode, nodeEnv, developerRateLimit, apiPublicPermissions);
 	const guardSpy = jest.spyOn(apiCallService, 'assertDeveloperApiAccess');
 	const aiService = {
 		streamChat: jest.fn(async () => ({ id: 'assistant-message-1' })),
@@ -228,6 +231,23 @@ describe('/ai/chat-stream', () => {
 		expect(context.guardSpy).toHaveBeenCalledWith('write:account', context.user, context.token as never, reply as never);
 		expect(state.statusCode).toBe(403);
 		expect(state.payload).toMatchObject({ error: { code: 'API_ACCESS_CLOSED' } });
+		expect(context.aiService.streamChat).not.toHaveBeenCalled();
+		expect(reply.raw.writeHead).not.toHaveBeenCalled();
+	});
+
+	test('rejects a developer token when the public write scope is disabled before it starts an AI stream', async () => {
+		const context = createRouteContext({ apiPublicPermissions: [] });
+		const { reply, state } = createReply();
+
+		await context.handler({
+			headers: { authorization: 'Bearer developer-token' },
+			body: { content: 'hello' },
+			ip: '127.0.0.1',
+		}, reply);
+
+		expect(context.guardSpy).toHaveBeenCalledWith('write:account', context.user, context.token as never, reply as never);
+		expect(state.statusCode).toBe(403);
+		expect(state.payload).toMatchObject({ error: { code: 'API_SCOPE_DISABLED' } });
 		expect(context.aiService.streamChat).not.toHaveBeenCalled();
 		expect(reply.raw.writeHead).not.toHaveBeenCalled();
 	});
