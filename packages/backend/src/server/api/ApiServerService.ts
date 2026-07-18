@@ -261,6 +261,9 @@ export class ApiServerService {
 					});
 				}
 
+				if (tokenInfo) {
+					await this.apiCallService.assertDeveloperApiAccess('write:account', user, tokenInfo, reply);
+				}
 				const rateLimit = await this.rateLimiterService.limit(aiChatStreamRateLimit, user ?? getIpHash(request.ip));
 				sendRateLimitHeaders(reply, rateLimit);
 				if (rateLimit.blocked) {

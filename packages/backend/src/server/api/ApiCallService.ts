@@ -469,7 +469,7 @@ export class ApiCallService {
 		}
 
 		if (token) {
-			await this.assertDeveloperApiAccess(ep, user, token, reply);
+			await this.assertDeveloperApiAccess(ep.meta.kind, user, token, reply);
 		}
 
 		// Cast non JSON input
@@ -518,8 +518,8 @@ export class ApiCallService {
 	}
 
 	@bindThis
-	private async assertDeveloperApiAccess(
-		ep: IEndpoint,
+	public async assertDeveloperApiAccess(
+		kind: IEndpointMeta['kind'] | undefined,
 		user: MiLocalUser | null | undefined,
 		token: MiAccessToken,
 		reply: FastifyReply,
@@ -552,19 +552,19 @@ export class ApiCallService {
 			}
 		}
 
-		if (ep.meta.kind && !isAdminApiScope(ep.meta.kind)) {
+		if (kind && !isAdminApiScope(kind)) {
 			const allowedPermissions = getApiPublicPermissions(apiMeta);
-			if (!allowedPermissions.includes(ep.meta.kind)) {
+			if (!allowedPermissions.includes(kind)) {
 				throw new ApiError(apiAccessErrors.apiScopeDisabled);
 			}
 		}
 
 		const rateLimitPerMinute = token.rateLimitPerMinute
 			?? token.app?.rateLimitPerMinute
-			?? (isWriteApiScope(ep.meta.kind) ? apiMeta.apiWriteTokenRateLimit : apiMeta.apiDefaultTokenRateLimit);
+			?? (isWriteApiScope(kind) ? apiMeta.apiWriteTokenRateLimit : apiMeta.apiDefaultTokenRateLimit);
 		if (rateLimitPerMinute > 0 && this.envService.env.NODE_ENV !== 'test') {
 			const info = await this.rateLimiterService.limit({
-				key: `developer-api:${token.id}:${isWriteApiScope(ep.meta.kind) ? 'write' : 'read'}`,
+				key: `developer-api:${token.id}:${isWriteApiScope(kind) ? 'write' : 'read'}`,
 				duration: 1000 * 60,
 				max: Math.max(1, rateLimitPerMinute),
 			}, user ?? token.userId);
