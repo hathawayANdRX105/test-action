@@ -198,7 +198,7 @@ const slowModeSeconds = ref<number | string>(props.room.slowModeSeconds ?? 0);
 const keywordsText = ref((props.room.bannedKeywords ?? []).join('\n'));
 const keywordMuteSeconds = ref<number | string>(props.room.keywordMuteSeconds ?? 0);
 const announcement = ref(props.room.announcement);
-// 有正文时默认置顶，保证聊天区能立刻看到（用户仍可关掉开关）
+// 有正文时默认置顶；普通成员无法关闭聊天页横幅，仅管理员在此开关/清空
 const announcementPinned = ref(props.room.announcementPinned || (props.room.announcement ?? '').trim().length > 0);
 const announcementChanged = computed(() => announcement.value !== props.room.announcement || announcementPinned.value !== props.room.announcementPinned);
 const bans = ref<Misskey.entities.ChatRoomsBansListResponse>([]);

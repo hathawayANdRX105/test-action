@@ -5,6 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div class="_gaps" :class="$style.root">
+	<!-- 公告页签：仅历史记录；置顶由「管理」控制，普通用户不可关聊天页横幅 -->
 	<div v-if="currentText" :class="$style.section">
 		<div :class="$style.sectionHead">
 			<div :class="$style.sectionTitle">
@@ -12,13 +13,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<span v-if="room.announcementPinned" :class="$style.badge">{{ i18n.ts._chat.pinAnnouncement }}</span>
 			</div>
 			<button
+				v-if="canManage"
 				type="button"
 				class="_button"
-				:class="[$style.pinBtn, { [$style.pinBtnActive]: room.announcementPinned }]"
+				:class="$style.deleteBtn"
 				:disabled="busy"
-				@click="setPinnedCurrent(!room.announcementPinned)"
+				@click="deleteCurrent"
 			>
-				{{ room.announcementPinned ? i18n.ts._chat.unpinFromChat : i18n.ts._chat.pinToChat }}
+				{{ i18n.ts.delete }}
 			</button>
 		</div>
 		<div :class="$style.card">
@@ -33,18 +35,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.meta">
 					<span :class="$style.time">{{ formatTime(item.createdAt) }}</span>
 					<button
+						v-if="canManage"
 						type="button"
 						class="_button"
-						:class="$style.pinBtn"
+						:class="$style.deleteBtn"
 						:disabled="busy"
-						@click="pinHistoryItem(item)"
+						@click="deleteHistoryItem(item)"
 					>
-						{{ i18n.ts._chat.pinToChat }}
+						{{ i18n.ts.delete }}
 					</button>
 				</div>
 				<div :class="$style.cardText">{{ item.text }}</div>
 			</div>
 		</div>
+	</div>
+
+	<div v-if="!currentText && history.length === 0" :class="$style.empty">
+		{{ i18n.ts._chat.announcementHistoryEmpty }}
 	</div>
 </div>
 </template>
@@ -64,12 +71,11 @@ type HistoryItem = {
 
 const props = defineProps<{
 	room: Misskey.entities.ChatRoom;
+	canManage?: boolean;
 }>();
 
 const emit = defineEmits<{
 	(ev: 'updated', room: Misskey.entities.ChatRoom): void;
-	/** 置顶到聊天后，清除本机永久关闭状态并切到聊天页 */
-	(ev: 'pinnedToChat'): void;
 }>();
 
 const busy = ref(false);
@@ -89,37 +95,47 @@ function formatTime(iso: string): string {
 	}
 }
 
-async function setPinnedCurrent(pinned: boolean) {
-	if (busy.value) return;
-	const text = currentText.value;
-	if (text.length === 0) return;
+/** 管理员删除当前公告（归档进历史，聊天页横幅随之消失） */
+async function deleteCurrent() {
+	if (!props.canManage || busy.value) return;
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		title: i18n.ts.delete,
+		text: i18n.ts._chat.deleteCurrentAnnouncementConfirm,
+	});
+	if (canceled) return;
+
 	busy.value = true;
 	try {
 		const updated = await os.apiWithDialog('chat/rooms/update', {
 			roomId: props.room.id,
-			announcement: text,
-			announcementPinned: pinned,
+			announcement: '',
+			announcementPinned: false,
 		});
 		emit('updated', updated);
-		if (pinned) emit('pinnedToChat');
 	} finally {
 		busy.value = false;
 	}
 }
 
-async function pinHistoryItem(item: HistoryItem) {
-	if (busy.value) return;
-	const text = (item.text ?? '').trim();
-	if (text.length === 0) return;
+/** 管理员删除一条历史记录 */
+async function deleteHistoryItem(item: HistoryItem) {
+	if (!props.canManage || busy.value) return;
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		title: i18n.ts.delete,
+		text: i18n.ts._chat.deleteAnnouncementHistoryConfirm,
+	});
+	if (canceled) return;
+
 	busy.value = true;
 	try {
+		const next = history.value.filter(h => h.id !== item.id);
 		const updated = await os.apiWithDialog('chat/rooms/update', {
 			roomId: props.room.id,
-			announcement: text,
-			announcementPinned: true,
+			announcementHistory: next,
 		});
 		emit('updated', updated);
-		emit('pinnedToChat');
 	} finally {
 		busy.value = false;
 	}
@@ -198,20 +214,20 @@ async function pinHistoryItem(item: HistoryItem) {
 	color: var(--MI_THEME-fg);
 }
 
-.pinBtn {
+.deleteBtn {
 	flex: 0 0 auto;
 	padding: 4px 10px;
 	font-size: 0.78em;
 	font-weight: 700;
 	line-height: 1.2;
 	border-radius: 999px;
-	color: var(--MI_THEME-accent);
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 35%, var(--MI_THEME-divider));
-	background: color-mix(in srgb, var(--MI_THEME-accent) 10%, transparent);
+	color: var(--MI_THEME-error);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-error) 35%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-error) 10%, transparent);
 	cursor: pointer;
 
 	&:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--MI_THEME-accent) 18%, transparent);
+		background: color-mix(in srgb, var(--MI_THEME-error) 18%, transparent);
 	}
 
 	&:disabled {
@@ -220,9 +236,10 @@ async function pinHistoryItem(item: HistoryItem) {
 	}
 }
 
-.pinBtnActive {
-	color: var(--MI_THEME-fg);
-	border-color: color-mix(in srgb, var(--MI_THEME-divider) 80%, transparent);
-	background: color-mix(in srgb, var(--MI_THEME-panel) 80%, transparent);
+.empty {
+	padding: 24px 12px;
+	text-align: center;
+	font-size: 0.9em;
+	opacity: 0.7;
 }
 </style>

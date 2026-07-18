@@ -7,19 +7,21 @@
 
 import { assert, describe, test } from 'vitest';
 import roomSource from '@/pages/chat/room.vue?raw';
+import announcementsSource from '@/pages/chat/room.announcements.vue?raw';
 
 describe('chat room announcement', () => {
-	test('renders the pinned announcement as a collapsible accessible card', () => {
+	test('renders the pinned announcement as a collapsible accessible card for all members', () => {
 		assert.match(roomSource, /showPinnedAnnouncement/);
 		assert.match(roomSource, /if \(r\.announcementPinned !== true\) return false;/);
-		assert.match(roomSource, /if \(announcementDismissedFingerprint\.value == null\) return true;/);
+		assert.match(roomSource, /\(r\.announcement \?\? ''\)\.trim\(\)\.length > 0/);
 		assert.match(roomSource, /:aria-expanded="announcementExpanded"/);
 		assert.match(roomSource, /@click="toggleAnnouncement"/);
 		assert.match(roomSource, /v-if="!announcementExpanded" :class="\$style\.announcementPreviewBlock"/);
 		assert.match(roomSource, /:class="\$style\.announcementFade"/);
 		assert.match(roomSource, /:class="\$style\.announcementEllipsis"/);
-		assert.match(roomSource, /onAnnouncementPinnedToChat/);
-		assert.match(roomSource, /chatRoomAnnouncementDismissed:v3:/);
+		// 普通用户不可永久关闭
+		assert.doesNotMatch(roomSource, /permanentlyDismissAnnouncement/);
+		assert.doesNotMatch(roomSource, /chatRoomAnnouncementDismissed/);
 	});
 
 	test('persists announcement expanded state per room', () => {
@@ -29,15 +31,14 @@ describe('chat room announcement', () => {
 		assert.match(roomSource, /window\.localStorage\.setItem\(getAnnouncementExpandedStorageKey\(room\.value\.id\), announcementExpanded\.value \? '1' : '0'\)/);
 	});
 
-	test('supports permanent dismiss per user and content fingerprint', () => {
-		assert.match(roomSource, /const CHAT_ROOM_ANNOUNCEMENT_DISMISSED_KEY_PREFIX = 'chatRoomAnnouncementDismissed:v3:';/);
-		assert.match(roomSource, /announcementDismissedFingerprint/);
-		assert.match(roomSource, /function permanentlyDismissAnnouncement/);
-		assert.match(roomSource, /permanentlyCloseAnnouncement/);
-		assert.match(roomSource, /:class="\$style\.announcementDismiss"/);
-		// 确认后才隐藏横幅，并切到公告页签（服务端公告不删除）
-		assert.match(roomSource, /tab\.value = 'announcements'/);
-		assert.match(roomSource, /if \(canceled\) return;/);
+	test('announcements tab is history-only with manager delete', () => {
+		assert.match(roomSource, /key: 'announcements'/);
+		assert.match(roomSource, /XAnnouncements/);
+		assert.match(roomSource, /:canManage="canManageRoomUsers"/);
+		assert.match(announcementsSource, /deleteCurrent/);
+		assert.match(announcementsSource, /deleteHistoryItem/);
+		assert.match(announcementsSource, /canManage/);
+		assert.doesNotMatch(announcementsSource, /pinToChat|setPinnedCurrent|pinHistoryItem/);
 	});
 
 	test('adds announcements history tab after management', () => {

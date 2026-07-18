@@ -6707,7 +6707,7 @@ export interface Locale extends ILocale {
          */
         "announcementHistory": string;
         /**
-         * No announcement history yet. When the room announcement is updated, previous versions appear here.
+         * No announcement history yet. When managers publish or update the room announcement, previous versions appear here.
          */
         "announcementHistoryEmpty": string;
         /**
@@ -6738,6 +6738,14 @@ export interface Locale extends ILocale {
          * Unpin from chat
          */
         "unpinFromChat": string;
+        /**
+         * Delete the current room announcement? It will be archived to history and the chat pin banner will be removed. Managers only.
+         */
+        "deleteCurrentAnnouncementConfirm": string;
+        /**
+         * Delete this history entry? This cannot be undone. Managers only.
+         */
+        "deleteAnnouncementHistoryConfirm": string;
     };
     "_recommendation": {
         /**

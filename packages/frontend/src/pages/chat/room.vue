@@ -29,7 +29,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i :class="headerActions[0].icon"></i>
 		</button>
 	</div>
-	<div v-show="tab === 'chat'" ref="chatPaneEl" :class="$style.chatPane">
+	<!-- 聊天页签：置顶公告固定在标签栏下方、消息滚动区上方（不参与消息列表滚动） -->
+	<div v-show="tab === 'chat'" :class="$style.chatColumn">
 		<div
 			v-if="showPinnedAnnouncement"
 			:class="[$style.announcement, { [$style.announcementIsExpanded]: announcementExpanded }]"
@@ -61,16 +62,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-if="announcementExpanded" :class="[$style.announcementText, $style.announcementTextExpanded]">{{ room!.announcement }}</div>
 				</div>
 			</button>
-			<button
-				v-if="announcementExpanded"
-				type="button"
-				class="_button"
-				:class="$style.announcementDismiss"
-				@click.stop="permanentlyDismissAnnouncement"
-			>
-				{{ i18n.ts._chat.permanentlyCloseAnnouncement }}
-			</button>
 		</div>
+		<div ref="chatPaneEl" :class="$style.chatPane">
 		<div class="_gaps">
 			<div v-if="initializing">
 				<MkLoading/>
@@ -147,7 +140,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<MkInfo v-if="$i.policies.chatAvailability !== 'available'" warn>{{ $i.policies.chatAvailability === 'readonly' ? i18n.ts._chat.chatIsReadOnlyForThisAccountOrServer : i18n.ts._chat.chatNotAvailableForThisAccountOrServer }}</MkInfo>
 		</div>
-	</div>
+		</div><!-- chatPane: 仅消息区滚动 -->
+	</div><!-- chatColumn: 置顶公告 + 消息区 -->
 
 	<Transition name="fade">
 		<button v-show="tab === 'chat' && (isContextMode || showScrollToLatestButton) && !showIndicator" class="_buttonPrimary" :class="$style.toLatestButton" :title="i18n.ts.bottom" @click="onIndicatorClick">
@@ -185,7 +179,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div v-if="tab === 'announcements'" :class="$style.tabPane">
 		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 100%;">
-			<XAnnouncements v-if="room != null" :room="room" @updated="onRoomUpdated" @pinnedToChat="onAnnouncementPinnedToChat"/>
+			<XAnnouncements v-if="room != null" :room="room" :canManage="canManageRoomUsers" @updated="onRoomUpdated"/>
 		</div>
 	</div>
 
@@ -332,8 +326,6 @@ const headerTitle = computed(() => {
 });
 
 const CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX = 'chatRoomAnnouncementExpanded:';
-// v3：作废旧版永久关闭记录，避免误隐藏
-const CHAT_ROOM_ANNOUNCEMENT_DISMISSED_KEY_PREFIX = 'chatRoomAnnouncementDismissed:v3:';
 // 4px 只用于"真的贴底"的自动跟随,避免用户往上拉时被拽回底部。
 // 接近底部时展示/补齐最新消息用更宽的 160px:移动端图片/头像晚加载和手指轻微位移
 // 很容易让 latestDistance 飘到 80px 以上,之前会错误显示"新消息"而不是直接补出来。
@@ -434,66 +426,22 @@ const canDeleteAnyMessage = computed(() => {
 const canManageRoomUsers = computed(() => (room.value?.canModerateRoom ?? room.value?.canManage) === true);
 const canManageRoomRoles = computed(() => room.value?.canManageRoomRoles === true);
 
-// 仅在用户确认「永久关闭」后写入；未确认前横幅必须显示
-const announcementDismissedFingerprint = ref<string | null>(null);
-
 function getAnnouncementExpandedStorageKey(roomId: string) {
 	return `${CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX}${roomId}`;
-}
-
-function getAnnouncementDismissedStorageKey(roomId: string) {
-	return `${CHAT_ROOM_ANNOUNCEMENT_DISMISSED_KEY_PREFIX}${$i.id}:${roomId}`;
-}
-
-function getAnnouncementFingerprint(text: string) {
-	let hash = 0;
-	for (let i = 0; i < text.length; i++) {
-		hash = ((hash << 5) - hash) + text.charCodeAt(i);
-		hash |= 0;
-	}
-	return `${text.length}:${hash}`;
 }
 
 function restoreAnnouncementExpanded(roomId: string) {
 	announcementExpanded.value = window.localStorage.getItem(getAnnouncementExpandedStorageKey(roomId)) === '1';
 }
 
-/**
- * 只有 localStorage 里保存的指纹与「当前公告正文」完全一致时，才恢复为已关闭。
- * 房间未加载完 / 公告已更新时一律视为未关闭。
- */
-function restoreAnnouncementDismissed(roomId: string) {
-	const text = (room.value?.announcement ?? '').trim();
-	if (text.length === 0) {
-		announcementDismissedFingerprint.value = null;
-		return;
-	}
-	const raw = window.localStorage.getItem(getAnnouncementDismissedStorageKey(roomId));
-	if (raw != null && raw !== '' && raw === getAnnouncementFingerprint(text)) {
-		announcementDismissedFingerprint.value = raw;
-	} else {
-		announcementDismissedFingerprint.value = null;
-		if (raw != null && raw !== '') {
-			window.localStorage.removeItem(getAnnouncementDismissedStorageKey(roomId));
-		}
-	}
-}
-
+// 聊天页「聊天」标签内容区顶部固定横幅（标签栏下、消息列表上）。
+// 条件：服务端置顶 + 有正文。普通用户不可关闭；管理员在「管理」改置顶。
 const showPinnedAnnouncement = computed(() => {
 	const r = room.value;
 	if (r == null) return false;
-	// 聊天页横幅：服务端置顶 + 有正文 + 本机未确认永久关闭
 	if (r.announcementPinned !== true) return false;
-	const text = (r.announcement ?? '').trim();
-	if (text.length === 0) return false;
-	if (announcementDismissedFingerprint.value == null) return true;
-	return announcementDismissedFingerprint.value !== getAnnouncementFingerprint(text);
+	return (r.announcement ?? '').trim().length > 0;
 });
-
-function clearAnnouncementDismissed(roomId: string) {
-	announcementDismissedFingerprint.value = null;
-	window.localStorage.removeItem(getAnnouncementDismissedStorageKey(roomId));
-}
 
 function toggleAnnouncement() {
 	if (room.value == null) return;
@@ -501,44 +449,14 @@ function toggleAnnouncement() {
 	window.localStorage.setItem(getAnnouncementExpandedStorageKey(room.value.id), announcementExpanded.value ? '1' : '0');
 }
 
-async function permanentlyDismissAnnouncement() {
-	if (room.value == null) return;
-	const text = (room.value.announcement ?? '').trim();
-	if (text.length === 0) return;
-
-	const { canceled } = await os.confirm({
-		type: 'question',
-		title: i18n.ts._chat.permanentlyCloseAnnouncement,
-	});
-	if (canceled) return;
-
-	// 只隐藏聊天区横幅，不删服务端公告；跳转到「公告」页签查看
-	const fp = getAnnouncementFingerprint(text);
-	announcementDismissedFingerprint.value = fp;
-	window.localStorage.setItem(getAnnouncementDismissedStorageKey(room.value.id), fp);
-	announcementExpanded.value = false;
-	window.localStorage.setItem(getAnnouncementExpandedStorageKey(room.value.id), '0');
-	tab.value = 'announcements';
-}
-
-function onAnnouncementPinnedToChat() {
-	if (room.value == null) return;
-	// 主动置顶时清除本机永久关闭，保证聊天页立刻显示
-	clearAnnouncementDismissed(room.value.id);
-	announcementExpanded.value = false;
-	tab.value = 'chat';
-}
-
 watch(
 	() => [room.value?.id, room.value?.announcement, room.value?.announcementPinned] as const,
 	([roomId]) => {
 		if (roomId == null) {
 			announcementExpanded.value = false;
-			announcementDismissedFingerprint.value = null;
 			return;
 		}
 		restoreAnnouncementExpanded(roomId);
-		restoreAnnouncementDismissed(roomId);
 	},
 );
 
@@ -3234,11 +3152,27 @@ definePage(computed(() => {
 	z-index: 1000;
 }
 
+/* 固定在「聊天」页签顶部（标签栏下、消息滚动区上），不随消息列表滚走 */
+.chatColumn {
+	min-height: 0;
+	height: 100%;
+	width: 100%;
+	max-width: 100%;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background:
+		radial-gradient(circle at 20px 20px, light-dark(rgb(0 0 0 / 0.035), rgb(255 255 255 / 0.035)) 1px, transparent 1px),
+		var(--chat-room-surface);
+	background-size: 22px 22px, auto;
+	border-inline: solid 1px var(--chat-room-border);
+}
+
 .announcement {
 	--announcement-surface: color-mix(in srgb, var(--MI_THEME-panel) 94%, var(--MI_THEME-bg));
 
-	position: sticky;
-	top: 0;
+	flex: 0 0 auto;
+	position: relative;
 	z-index: 900;
 	display: grid;
 	gap: 0;
@@ -3673,7 +3607,8 @@ definePage(computed(() => {
 }
 
 .chatPane {
-	height: 100%;
+	flex: 1 1 auto;
+	height: auto;
 	min-height: 0;
 	width: 100%;
 	max-width: 100%;
@@ -3689,11 +3624,9 @@ definePage(computed(() => {
 	scrollbar-gutter: stable;
 	display: flex;
 	flex-direction: column;
-	background:
-		radial-gradient(circle at 20px 20px, light-dark(rgb(0 0 0 / 0.035), rgb(255 255 255 / 0.035)) 1px, transparent 1px),
-		var(--chat-room-surface);
-	background-size: 22px 22px, auto;
-	border-inline: solid 1px var(--chat-room-border);
+	/* 背景改由 .chatColumn 承担，避免与置顶条割裂 */
+	background: transparent;
+	border-inline: none;
 }
 
 .chatPane > :global(._gaps) {

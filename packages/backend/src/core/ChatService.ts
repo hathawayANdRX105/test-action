@@ -2416,6 +2416,13 @@ export class ChatService {
 		isSilenced?: boolean;
 		announcement?: string;
 		announcementPinned?: boolean;
+		/** Manager-only: replace announcement history (e.g. delete one history entry). */
+		announcementHistory?: {
+			id: string;
+			text: string;
+			createdAt: string;
+			pinned: boolean;
+		}[];
 		avatarId?: MiDriveFile['id'] | null;
 		slowModeSeconds?: number;
 		bannedKeywords?: string[];
@@ -2447,7 +2454,18 @@ export class ChatService {
 
 		// Archive previous announcement text when it changes (history tab).
 		const MAX_CHAT_ROOM_ANNOUNCEMENT_HISTORY = 50;
-		if (params.announcement !== undefined) {
+		if (params.announcementHistory !== undefined) {
+			// Explicit history replace (admin delete of history items)
+			setParams.announcementHistory = params.announcementHistory
+				.filter(item => item != null && typeof item.text === 'string' && item.text.trim().length > 0)
+				.map(item => ({
+					id: typeof item.id === 'string' && item.id.length > 0 ? item.id : this.idService.gen(),
+					text: item.text.slice(0, 2048),
+					createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
+					pinned: item.pinned === true,
+				}))
+				.slice(0, MAX_CHAT_ROOM_ANNOUNCEMENT_HISTORY);
+		} else if (params.announcement !== undefined) {
 			const nextAnnouncement = params.announcement;
 			const prevAnnouncement = room.announcement ?? '';
 			if (prevAnnouncement.trim() !== '' && prevAnnouncement !== nextAnnouncement) {

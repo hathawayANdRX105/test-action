@@ -61,6 +61,20 @@ export const paramDef = {
 		isSilenced: { type: 'boolean' },
 		announcement: { type: 'string', maxLength: 2048 },
 		announcementPinned: { type: 'boolean' },
+		announcementHistory: {
+			type: 'array',
+			maxItems: 50,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string' },
+					text: { type: 'string', maxLength: 2048 },
+					createdAt: { type: 'string' },
+					pinned: { type: 'boolean' },
+				},
+				required: ['text', 'createdAt'],
+			},
+		},
 		avatarId: { type: 'string', format: 'misskey:id', nullable: true },
 		slowModeSeconds: { type: 'integer', minimum: 0, maximum: 86400 },
 		bannedKeywords: { type: 'array', items: { type: 'string', maxLength: 256 }, maxItems: 100 },
@@ -98,6 +112,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				isSilenced: ps.isSilenced,
 				announcement: ps.announcement,
 				announcementPinned: ps.announcementPinned,
+				announcementHistory: ps.announcementHistory,
 				avatarId: ps.avatarId,
 				slowModeSeconds: ps.slowModeSeconds,
 				bannedKeywords: ps.bannedKeywords,

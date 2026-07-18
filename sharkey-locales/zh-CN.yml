@@ -20,7 +20,7 @@ _initialTutorial:
 
 _chat:
   announcementHistory: "公告"
-  announcementHistoryEmpty: "暂无历史公告。群公告被更新后，旧版本会出现在这里。"
+  announcementHistoryEmpty: "暂无历史公告。管理员在「管理」中发布/更新公告后，旧版本会出现在这里。"
   announcementHistoryCurrent: "当前"
   announcementHistoryPast: "历史"
   permanentlyCloseAnnouncement: "永久关闭"
@@ -28,3 +28,5 @@ _chat:
   noCurrentAnnouncement: "当前没有公告"
   pinToChat: "置顶到聊天"
   unpinFromChat: "取消聊天置顶"
+  deleteCurrentAnnouncementConfirm: "删除当前群公告？当前内容会进入历史记录，聊天页置顶横幅将关闭。仅管理员可操作。"
+  deleteAnnouncementHistoryConfirm: "删除这条历史公告？删除后不可恢复。仅管理员可操作。"
