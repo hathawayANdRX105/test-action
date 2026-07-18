@@ -1011,6 +1011,14 @@ export class Connection extends SkEventSource<ConnectionEvents> {
 		const ch: Channel = channelService.create(id, this);
 		this.channels.set(id, ch);
 		const valid = await ch.init(params ?? {});
+		// A disconnect can remove the channel while its asynchronous initialization is pending.
+		// In that case init may have registered listeners after the first dispose, so dispose it once
+		// more before returning to avoid leaving an untracked subscription behind.
+		if (this.channels.get(id) !== ch) {
+			if (ch.dispose) ch.dispose();
+			return;
+		}
+
 		if (valid === false) {
 			this.disconnectChannel(id);
 			return;

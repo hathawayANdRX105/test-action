@@ -117,3 +117,46 @@ describe('Connection websocket backpressure', () => {
 		expect(Connection.shouldCloseForBackpressure(MaxWsBufferedAmount + 1)).toBe(true);
 	});
 });
+
+describe('Connection channel initialization', () => {
+	test('disposes a channel again when it disconnects while initialization is pending', async () => {
+		let resolveInit: (valid: boolean) => void;
+		let subscribed = false;
+		const channel: any = {
+			init: jest.fn(() => new Promise<boolean>(resolve => {
+				resolveInit = valid => {
+					subscribed = true;
+					resolve(valid);
+				};
+			})),
+			dispose: jest.fn(() => {
+				subscribed = false;
+			}),
+		};
+		const connection: any = {
+			channels: new Map(),
+			channelsService: {
+				getChannelService: jest.fn(() => ({
+					requireCredential: false,
+					create: jest.fn(() => channel),
+				})),
+			},
+			client: { token: null },
+			sendMessageToWs: jest.fn(),
+		};
+
+		const connect = Connection.prototype.connectChannel.call(connection, 'channel-id', {}, 'chatRoom', true);
+		expect(connection.channels.get('channel-id')).toBe(channel);
+
+		Connection.prototype.disconnectChannel.call(connection, 'channel-id');
+		expect(channel.dispose).toHaveBeenCalledTimes(1);
+
+		resolveInit!(true);
+		await connect;
+
+		expect(subscribed).toBe(false);
+		expect(channel.dispose).toHaveBeenCalledTimes(2);
+		expect(connection.channels.has('channel-id')).toBe(false);
+		expect(connection.sendMessageToWs).not.toHaveBeenCalled();
+	});
+});
