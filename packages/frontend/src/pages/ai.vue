@@ -690,14 +690,19 @@ function copyMessage(content: string | null) {
 	os.toast(i18n.ts.copiedToClipboard);
 }
 
-function regenerateFrom(message: AiMessage) {
+async function regenerateFrom(message: AiMessage) {
 	const index = messages.value.findIndex(item => item.id === message.id);
 	const userMessage = [...messages.value.slice(0, index)].reverse().find(item => item.role === 'user');
 	if (!userMessage?.content) return;
+
+	const tail = messages.value.slice(index).filter(item => !isTemp(item));
+	for (const item of tail) {
+		await misskeyApi('ai/messages/delete', { messageId: item.id });
+	}
+	messages.value = messages.value.slice(0, index);
 	draft.value = userMessage.content;
-	nextTick(() => {
-		void sendMessage();
-	});
+	await nextTick();
+	await sendMessage();
 }
 
 async function editMessage(message: AiMessage) {
