@@ -15,6 +15,8 @@ import type { RenderResult } from '@testing-library/vue';
 import type * as Misskey from 'misskey-js';
 import XForm from '@/pages/chat/room.form.vue';
 import formSource from '@/pages/chat/room.form.vue?raw';
+import messageSource from '@/pages/chat/XMessage.vue?raw';
+import roomSource from '@/pages/chat/room.vue?raw';
 import type { NormalizedChatMessage } from '@/pages/chat/room.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { selectFiles } from '@/utility/select-file.js';
@@ -33,7 +35,7 @@ const { me, preferState, uploadsRef } = vi.hoisted(() => ({
 		uploadFolder: null,
 	},
 	uploadsRef: {
-		value: [],
+		value: [] as Array<{ id: string; name?: string; img?: string; progressValue?: number; progressMax?: number }>,
 	},
 }));
 
@@ -243,6 +245,7 @@ function renderControlledForm(options: {
 	quoteTarget?: NormalizedChatMessage | null;
 	onSending?: ReturnType<typeof vi.fn>;
 	onSent?: ReturnType<typeof vi.fn>;
+	onBeforeSendFailureRecovery?: ReturnType<typeof vi.fn>;
 	onSendFailed?: ReturnType<typeof vi.fn>;
 } = {}) {
 	const replyTarget = ref<NormalizedChatMessage | null>(options.replyTarget ?? null);
@@ -272,6 +275,7 @@ function renderControlledForm(options: {
 				quoteTarget: quoteTarget.value,
 				onSending: options.onSending,
 				onSent: options.onSent,
+				onBeforeSendFailureRecovery: options.onBeforeSendFailureRecovery,
 				onSendFailed: options.onSendFailed,
 				onClearReply,
 				onClearQuote,
@@ -418,6 +422,7 @@ describe('chat room form', () => {
 
 		assert.strictEqual(textarea.value, 'retry this');
 		assert.strictEqual(onSendFailed.mock.calls.length, 1);
+		assert.deepStrictEqual(onSendFailed.mock.calls[0][1], { restored: true, currentSnapshotConfirmed: false });
 		assert.deepStrictEqual(onRestoreReferences.mock.calls[0][0], {
 			replyTarget: null,
 			quoteTarget,
@@ -449,9 +454,133 @@ describe('chat room form', () => {
 			quoteTarget: null,
 		});
 		assert.strictEqual(onSendFailed.mock.calls.length, 1);
+		assert.deepStrictEqual(onSendFailed.mock.calls[0][1], { restored: true, currentSnapshotConfirmed: false });
 		const restoredDraft = readChatDrafts()['user:other'];
 		assert.strictEqual(restoredDraft?.data.text, 'retry reply');
 		assert.strictEqual(restoredDraft?.data.replyTarget?.id, replyTarget.id);
+	});
+
+	test('does not restore an already stream-confirmed send after the HTTP request rejects', async () => {
+		const request = deferred<Misskey.entities.ChatMessageLite>();
+		vi.mocked(misskeyApi).mockReturnValueOnce(request.promise as ReturnType<typeof misskeyApi>);
+		const onBeforeSendFailureRecovery = vi.fn((_clientId: string, options: { skipCurrentSnapshot: boolean }) => {
+			options.skipCurrentSnapshot = true;
+		});
+		const onSendFailed = vi.fn();
+		const form = renderForm({ onBeforeSendFailureRecovery, onSendFailed });
+		const textarea = form.container.querySelector<HTMLTextAreaElement>('textarea');
+		assert.exists(textarea);
+
+		await fireEvent.update(textarea, 'already confirmed');
+		await fireEvent.keyDown(textarea, { key: 'Enter' });
+		await flushPromises();
+
+		request.reject({ code: 'NETWORK_TIMEOUT' });
+		await flushPromises();
+
+		assert.strictEqual(textarea.value, '');
+		assert.strictEqual(readChatDrafts()['user:other'], undefined);
+		assert.strictEqual(onBeforeSendFailureRecovery.mock.calls.length, 1);
+		assert.deepStrictEqual(onSendFailed.mock.calls[0][1], { restored: false, currentSnapshotConfirmed: true });
+	});
+
+	test('reports unrestored failures so the parent can keep a failed local message', async () => {
+		const request = deferred<Misskey.entities.ChatMessageLite>();
+		vi.mocked(misskeyApi).mockReturnValueOnce(request.promise as ReturnType<typeof misskeyApi>);
+		const onSendFailed = vi.fn();
+		const form = renderForm({ onSendFailed });
+		const textarea = form.container.querySelector<HTMLTextAreaElement>('textarea');
+		assert.exists(textarea);
+
+		await fireEvent.update(textarea, 'first attempt');
+		await fireEvent.keyDown(textarea, { key: 'Enter' });
+		await flushPromises();
+		await fireEvent.update(textarea, 'new draft');
+		await flushPromises();
+
+		request.reject({ code: 'BLOCKED_BY_KEYWORD' });
+		await flushPromises();
+
+		assert.strictEqual(textarea.value, 'new draft');
+		assert.strictEqual(onSendFailed.mock.calls.length, 1);
+		assert.deepStrictEqual(onSendFailed.mock.calls[0][1], { restored: false, currentSnapshotConfirmed: false });
+		assert.strictEqual(readChatDrafts()['user:other']?.data.text, 'new draft');
+	});
+
+	test('keeps unsent attachments visible as failed local messages when a multi-file send cannot be restored', async () => {
+		const firstFile = createDriveFile('first.png');
+		const secondFile = createDriveFile('second.png');
+		const request = deferred<Misskey.entities.ChatMessageLite>();
+		vi.mocked(selectFiles).mockResolvedValueOnce([firstFile, secondFile]);
+		vi.mocked(misskeyApi).mockReturnValueOnce(request.promise as ReturnType<typeof misskeyApi>);
+		const onSending = vi.fn();
+		const onSendFailed = vi.fn();
+		const form = renderForm({ onSending, onSendFailed });
+		const textarea = form.container.querySelector<HTMLTextAreaElement>('textarea');
+		const sendButton = Array.from(form.container.querySelectorAll<HTMLButtonElement>('button')).at(-1);
+		assert.exists(textarea);
+		assert.exists(sendButton);
+
+		await fireEvent.click(form.getByTitle('Attach file'));
+		await flushPromises();
+		await fireEvent.update(textarea, 'album');
+		await fireEvent.click(sendButton);
+		await flushPromises();
+		await fireEvent.update(textarea, 'new draft');
+		await flushPromises();
+
+		request.reject({ code: 'BLOCKED_BY_KEYWORD' });
+		await flushPromises();
+
+		assert.strictEqual(vi.mocked(misskeyApi).mock.calls.length, 1);
+		assert.strictEqual(onSending.mock.calls.length, 2);
+		assert.strictEqual((onSending.mock.calls[0][0] as { sendStatus?: string; file?: Misskey.entities.DriveFile | null }).sendStatus, 'pending');
+		assert.strictEqual((onSending.mock.calls[0][0] as { file?: Misskey.entities.DriveFile | null }).file?.id, firstFile.id);
+		assert.strictEqual((onSending.mock.calls[1][0] as { sendStatus?: string; file?: Misskey.entities.DriveFile | null }).sendStatus, 'failed');
+		assert.strictEqual((onSending.mock.calls[1][0] as { file?: Misskey.entities.DriveFile | null }).file?.id, secondFile.id);
+		assert.deepStrictEqual(onSendFailed.mock.calls[0][1], { restored: false, currentSnapshotConfirmed: false });
+		assert.strictEqual(textarea.value, 'new draft');
+	});
+
+	test('does not restore a failed send into a composer that is uploading the next draft attachment', async () => {
+		const request = deferred<Misskey.entities.ChatMessageLite>();
+		const upload = deferred<Misskey.entities.DriveFile>();
+		vi.mocked(misskeyApi).mockReturnValueOnce(request.promise as ReturnType<typeof misskeyApi>);
+		vi.mocked(uploadFile).mockReturnValueOnce(Object.assign(upload.promise, { id: 'upload-next' }) as ReturnType<typeof uploadFile>);
+		uploadsRef.value = [{
+			id: 'upload-next',
+			name: 'next.png',
+			img: '',
+		}];
+		const onSendFailed = vi.fn();
+		const form = renderForm({ onSendFailed });
+		const textarea = form.container.querySelector<HTMLTextAreaElement>('textarea');
+		assert.exists(textarea);
+
+		await fireEvent.update(textarea, 'old failed text');
+		await fireEvent.keyDown(textarea, { key: 'Enter' });
+		await flushPromises();
+		await fireEvent.paste(textarea, {
+			clipboardData: {
+				items: [
+					{ kind: 'file', getAsFile: () => new File(['next'], 'next.png', { type: 'image/png' }) },
+				],
+			},
+		});
+		await flushPromises();
+
+		request.reject({ code: 'BLOCKED_BY_KEYWORD' });
+		await flushPromises();
+
+		assert.deepStrictEqual(onSendFailed.mock.calls[0][1], { restored: false, currentSnapshotConfirmed: false });
+		assert.strictEqual(textarea.value, '');
+
+		upload.resolve(createDriveFile('next.png'));
+		await flushPromises();
+
+		assert.strictEqual(textarea.value, '');
+		assert.strictEqual(form.container.querySelectorAll('[data-chat-attached-file]').length, 1);
+		assert.ok(form.container.querySelector('[data-chat-attached-file]')?.textContent?.includes('next.png'));
 	});
 
 	test('ignores duplicate send attempts while a request is in flight', async () => {
@@ -669,6 +798,54 @@ describe('chat room form', () => {
 		const savedDraft = readChatDrafts()['user:other'];
 		assert.strictEqual(savedDraft?.data.text, '');
 		assert.strictEqual(savedDraft?.data.replyTarget?.id, replyTarget.id);
+	});
+
+	test('ignores malformed draft storage when restoring and saving', async () => {
+		localStorage.setItem('chatMessageDrafts', 'null');
+		const form = renderForm();
+		await flushPromises();
+		const textarea = form.container.querySelector<HTMLTextAreaElement>('textarea');
+		assert.exists(textarea);
+
+		assert.strictEqual(textarea.value, '');
+
+		await fireEvent.update(textarea, 'safe draft');
+		await flushPromises();
+
+		assert.strictEqual(readChatDrafts()['user:other']?.data.text, 'safe draft');
+	});
+
+	test('keeps unrestored failed sends as local messages instead of dropping them', () => {
+		assert.match(roomSource, /sendStatus\?: 'pending' \| 'failed';/);
+		assert.match(roomSource, /function isLocalSendMessage\(message: NormalizedChatMessage\): boolean \{[\s\S]*message\.sendStatus === 'pending' \|\| message\.sendStatus === 'failed';/);
+		assert.match(roomSource, /isPending: isLocalSendMessage/);
+		assert.match(roomSource, /function markPendingMessageFailed\(clientId: string\) \{[\s\S]*sendStatus: 'failed'/);
+		assert.match(roomSource, /function onSendMessageFailed\(clientId: string, options\?: \{ restored\?: boolean; currentSnapshotConfirmed\?: boolean \}\) \{[\s\S]*markPendingMessageFailed\(clientId\);/);
+		assert.match(messageSource, /const isFailed = computed\(\(\) => \(props\.message as MessageWithSendState\)\.sendStatus === 'failed'\);/);
+		assert.match(messageSource, /v-else-if="isFailed"/);
+		assert.match(messageSource, /v-if="!isLocalSendState"/);
+		assert.match(messageSource, /function onReactionClick\(record: VisibleReaction\) \{[\s\S]*if \(isLocalSendState\.value \|\| \$i\.policies\.chatAvailability !== 'available'\) return;/);
+	});
+
+	test('does not remove or restore a message already confirmed by the stream when HTTP later fails', () => {
+		assert.match(roomSource, /@beforeSendFailureRecovery="onBeforeSendFailureRecovery"/);
+		assert.match(formSource, /emit\('beforeSendFailureRecovery', snapshot\.clientId, recovery\);[\s\S]*const snapshotsToRecover = recovery\.skipCurrentSnapshot \? snapshots\.slice\(index \+ 1\) : snapshots\.slice\(index\);/);
+		assert.match(formSource, /currentSnapshotConfirmed: recovery\.skipCurrentSnapshot/);
+		assert.match(formSource, /if \(recovery\.skipCurrentSnapshot && snapshotsToRecover\.length === 0\) return;/);
+		assert.match(roomSource, /function hasConfirmedLocalMessage\(clientId: string\): boolean \{[\s\S]*message\.clientId === clientId && !isLocalSendMessage\(message\)/);
+		assert.match(roomSource, /function removePendingMessage\(clientId: string\) \{[\s\S]*message\.clientId === clientId && isPendingMessage\(message\)/);
+		assert.match(roomSource, /function onBeforeSendFailureRecovery\(clientId: string, options: \{ skipCurrentSnapshot: boolean \}\) \{[\s\S]*options\.skipCurrentSnapshot = true;/);
+		assert.match(roomSource, /if \(options\?\.currentSnapshotConfirmed === true \|\| hasConfirmedLocalMessage\(clientId\)\) \{[\s\S]*return;/);
+	});
+
+	test('does not clear a newly selected reference when an earlier send succeeds', () => {
+		const onSentSource = roomSource.slice(
+			roomSource.indexOf('function onSentMessage'),
+			roomSource.indexOf('function onSendMessageFailed'),
+		);
+		assert.notMatch(onSentSource, /replyTarget\.value = null;/);
+		assert.notMatch(onSentSource, /quoteTarget\.value = null;/);
+		assert.match(formSource, /function clear\(\) \{[\s\S]*emit\('clearReply'\);[\s\S]*emit\('clearQuote'\);/);
 	});
 
 	test('shows an explicit remove button for an attached file', async () => {

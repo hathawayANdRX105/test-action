@@ -11,13 +11,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.header">
 			<MkUserName v-if="message.fromUser != null" :user="message.fromUser" :class="$style.sender"/>
 			<div :class="$style.headerMeta" @click.stop>
-				<button v-if="!isPending" class="_button" :class="$style.menuButton" @click="showMenu">
+				<button v-if="!isLocalSendState" class="_button" :class="$style.menuButton" @click="showMenu">
 					<i class="ti ti-dots-circle-horizontal"></i>
 				</button>
 				<MkA v-if="isSearchResult && 'toRoom' in message && message.toRoom != null" :class="$style.contextLink" :to="`/chat/room/${message.toRoomId}`">{{ message.toRoom.name }}</MkA>
 				<MkA v-if="isSearchResult && 'toUser' in message && message.toUser != null && isMe" :class="$style.contextLink" :to="`/chat/user/${message.toUserId}`">@{{ message.toUser.username }}</MkA>
 				<MkTime :class="$style.time" :time="message.createdAt" mode="absolute"/>
 				<MkLoading v-if="isPending" :class="$style.pendingIcon" :em="true"/>
+				<i v-else-if="isFailed" class="ti ti-alert-circle" :class="$style.failedIcon" :title="i18n.ts.error"></i>
 				<i v-else-if="isMe" class="ti ti-checks" :class="$style.sentIcon"></i>
 			</div>
 		</div>
@@ -141,7 +142,7 @@ type MessageWithReferenceState = typeof props.message & {
 	quoteUnavailable?: boolean;
 };
 type MessageWithSendState = typeof props.message & {
-	sendStatus?: 'pending';
+	sendStatus?: 'pending' | 'failed';
 };
 type MessageWithMentionState = typeof props.message & {
 	mentionedUserIds?: string[];
@@ -151,17 +152,19 @@ type MessageWithMentionState = typeof props.message & {
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const isRoomChat = computed(() => props.message.toRoomId != null);
 const isPending = computed(() => (props.message as MessageWithSendState).sendStatus === 'pending');
+const isFailed = computed(() => (props.message as MessageWithSendState).sendStatus === 'failed');
+const isLocalSendState = computed(() => isPending.value || isFailed.value);
 const hasFile = computed(() => props.message.file != null);
 const hasVideoFile = computed(() => props.message.file?.type.startsWith('video') === true);
 const isRoomOwnerSender = computed(() => props.roomOwnerId != null && props.message.fromUserId === props.roomOwnerId);
 const isPrivilegedSender = computed(() => props.message.fromUser?.isAdmin === true || props.message.fromUser?.isModerator === true);
 const canManageOwnerSender = computed(() => props.message.fromUserId === props.roomOwnerId && props.canManageRoomRoles === true);
-const canDelete = computed(() => !isPending.value && (isMe.value || (!isPrivilegedSender.value && ((props.canDeleteAnyMessage === true || (props.canManageRoomUsers === true && props.message.toRoomId != null)) && (!isRoomOwnerSender.value || canManageOwnerSender.value)))) && $i.policies.chatAvailability === 'available');
-const canMuteRoomSender = computed(() => props.enableRoomUserMute === true && !isPending.value && isRoomChat.value && !isMe.value && props.message.fromUser != null && $i.policies.chatAvailability === 'available');
-const canManageSender = computed(() => !isPending.value && props.canManageRoomUsers === true && !isMe.value && !isPrivilegedSender.value && (!isRoomOwnerSender.value || canManageOwnerSender.value) && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
-const canManageRoomSenderRole = computed(() => !isPending.value && props.canManageRoomRoles === true && !isMe.value && !isRoomOwnerSender.value && !isPrivilegedSender.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
+const canDelete = computed(() => !isLocalSendState.value && (isMe.value || (!isPrivilegedSender.value && ((props.canDeleteAnyMessage === true || (props.canManageRoomUsers === true && props.message.toRoomId != null)) && (!isRoomOwnerSender.value || canManageOwnerSender.value)))) && $i.policies.chatAvailability === 'available');
+const canMuteRoomSender = computed(() => props.enableRoomUserMute === true && !isLocalSendState.value && isRoomChat.value && !isMe.value && props.message.fromUser != null && $i.policies.chatAvailability === 'available');
+const canManageSender = computed(() => !isLocalSendState.value && props.canManageRoomUsers === true && !isMe.value && !isPrivilegedSender.value && (!isRoomOwnerSender.value || canManageOwnerSender.value) && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
+const canManageRoomSenderRole = computed(() => !isLocalSendState.value && props.canManageRoomRoles === true && !isMe.value && !isRoomOwnerSender.value && !isPrivilegedSender.value && props.message.fromUser != null && props.message.toRoomId != null && $i.policies.chatAvailability === 'available');
 const canModerateRoomSender = computed(() => canManageSender.value && !isRoomOwnerSender.value);
-const canModerateSender = computed(() => !isPending.value && props.canModerateUsers === true && !isMe.value && props.message.fromUser != null);
+const canModerateSender = computed(() => !isLocalSendState.value && props.canModerateUsers === true && !isMe.value && props.message.fromUser != null);
 const parsed = computed(() => props.message.text ? mfm.parse(props.message.text) : []);
 const messageWithReferenceState = computed<MessageWithReferenceState>(() => props.message);
 const isMentionedMe = computed(() => {
@@ -180,7 +183,7 @@ const visibleReactions = computed<VisibleReaction[]>(() => {
 });
 
 provide(DI.mfmEmojiReactCallback, (reaction) => {
-	if (isPending.value || $i.policies.chatAvailability !== 'available') return;
+	if (isLocalSendState.value || $i.policies.chatAvailability !== 'available') return;
 
 	sound.playMisskeySfx('reaction');
 	misskeyApi('chat/messages/react', {
@@ -190,7 +193,7 @@ provide(DI.mfmEmojiReactCallback, (reaction) => {
 });
 
 function react(ev: MouseEvent) {
-	if (isPending.value || $i.policies.chatAvailability !== 'available') return;
+	if (isLocalSendState.value || $i.policies.chatAvailability !== 'available') return;
 
 	const targetEl = getHTMLElementOrNull(ev.currentTarget ?? ev.target);
 	if (!targetEl) return;
@@ -205,7 +208,7 @@ function react(ev: MouseEvent) {
 }
 
 function onReactionClick(record: VisibleReaction) {
-	if ($i.policies.chatAvailability !== 'available') return;
+	if (isLocalSendState.value || $i.policies.chatAvailability !== 'available') return;
 
 	if (record.user.id === $i.id) {
 		misskeyApi('chat/messages/unreact', {
@@ -243,7 +246,7 @@ function stopAvatarLongPress() {
 }
 
 function onAvatarPointerdown(ev: PointerEvent) {
-	if (ev.pointerType === 'mouse' || props.message.fromUser == null || isPending.value) return;
+	if (ev.pointerType === 'mouse' || props.message.fromUser == null || isLocalSendState.value) return;
 
 	stopAvatarLongPress();
 	avatarLongPressTriggered = false;
@@ -281,7 +284,7 @@ function onAvatarContextmenu(ev: MouseEvent) {
 }
 
 async function showAvatarMenu(ev: MouseEvent) {
-	if (props.message.fromUser == null || isPending.value) return;
+	if (props.message.fromUser == null || isLocalSendState.value) return;
 	os.contextMenu(await getAvatarMenu(), ev);
 }
 
@@ -290,7 +293,7 @@ function openReference(messageId: string) {
 }
 
 function showMenu(ev: MouseEvent, contextmenu = false) {
-	if (isPending.value) return;
+	if (isLocalSendState.value) return;
 
 	const menu: MenuItem[] = [];
 
@@ -788,8 +791,13 @@ onBeforeUnmount(() => {
 
 .time,
 .sentIcon,
-.pendingIcon {
+.pendingIcon,
+.failedIcon {
 	flex: 0 0 auto;
+}
+
+.failedIcon {
+	color: var(--MI_THEME-error);
 }
 
 .bubble {
