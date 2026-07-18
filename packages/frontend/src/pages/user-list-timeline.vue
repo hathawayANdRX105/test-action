@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="headerActions" :displayBackButton="true" :tabs="headerTabs">
+<PageWithHeader :actions="headerActions" :displayBackButton="true" :tabs="headerTabs" :scrollKey="listScrollKey">
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
 		<div ref="rootEl">
 			<div v-if="queue > 0" :class="$style.new"><button class="_buttonPrimary" :class="$style.newButton" @click="top()">{{ i18n.ts.newNoteRecived }}</button></div>
@@ -59,6 +59,7 @@ const onlyFiles = computed<boolean>({
 	get: () => store.r.tl.value.filter.onlyFiles,
 	set: (x) => saveTlFilter('onlyFiles', x),
 });
+const listScrollKey = computed(() => `user-list:${props.listId}:${withRenotes.value}:${onlyFiles.value}`);
 
 function saveTlFilter(key: keyof typeof store.s.tl.filter, newValue: boolean) {
 	if (key !== 'withReplies' || $i) {

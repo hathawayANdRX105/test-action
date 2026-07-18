@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader ref="pageComponent" :actions="[]" :tabs="[]" :swipable="false" :hideTitle="true">
+<PageWithHeader ref="pageComponent" :actions="[]" :tabs="[]" :swipable="false" :hideTitle="true" :scrollKey="timelineScrollKey">
 	<div class="xTimelineWideShell" :class="$style.shell">
 		<main :class="$style.main" @wheel.passive="onMainWheel">
 			<!-- 移动端搜索框:桌面右栏自带搜索,所以这里只在窄屏显示 -->
@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<input
 					v-model="mobileSearchQuery"
 					type="search"
-					:placeholder="i18n.ts.searchPlaceholder ?? i18n.ts.search"
+					:placeholder="i18n.ts.search"
 					:class="$style.mobileSearchInput"
 					autocapitalize="off"
 					autocorrect="off"
@@ -395,6 +395,7 @@ async function fetchHotTags() {
 
 // 每 90s 自动刷新一次热门标签,避免"万年不变"。页面隐藏(切 tab 走开)时不刷,省流量。
 let hotTagsRefreshTimer: number | null = null;
+
 function startHotTagsAutoRefresh() {
 	if (hotTagsRefreshTimer != null) return;
 	hotTagsRefreshTimer = window.setInterval(() => {
@@ -402,6 +403,7 @@ function startHotTagsAutoRefresh() {
 		fetchHotTags();
 	}, 90_000);
 }
+
 function stopHotTagsAutoRefresh() {
 	if (hotTagsRefreshTimer != null) {
 		window.clearInterval(hotTagsRefreshTimer);
@@ -425,9 +427,11 @@ const displayedHotTags = computed(() => {
 	const list = hotTags.value.filter(t => !pinSet.has(t.tag.toLowerCase()));
 	return expandHotTags.value ? list : list.slice(0, 8);
 });
+
 const queue = ref(0);
 const sidebarSearchQuery = ref('');
 const mobileSearchQuery = ref('');
+
 function submitMobileSearch() {
 	const q = mobileSearchQuery.value.trim();
 	if (!q) return;
@@ -529,6 +533,7 @@ const timelineKey = computed(() => [
 		homeTab.value === 'latestReplies' ? 'latestReply' : 'personalized',
 		homeTab.value === 'following' ? 'strictFollowing' : 'withFollowedChannels',
 	].join(':'));
+const timelineScrollKey = computed(() => `timeline:${router.getCurrentFullPath()}:${timelineKey.value}`);
 
 const trendRows = computed(() => buildSearchTrendRows(searchTrends.value, sidebarLimits.trends));
 const visibleChannels = computed(() => discoverySections.value.channels.slice(0, sidebarLimits.channels));

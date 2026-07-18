@@ -101,8 +101,11 @@ const headerTabs: ComputedRef<Tab[]> = computed(() => followingFeedTabs.map(t =>
 	title: followingTabName(t),
 })));
 
-useScrollPositionKeeper(computed(() => userScroll.value?.rootEl));
-useScrollPositionKeeper(computed(() => noteScroll.value));
+const feedScrollKey = computed(() => `following-feed:list:${userList.value}:${withNonPublic.value}:${withQuotes.value}:${withBots.value}:${withReplies.value}:${onlyFiles.value}`);
+const userScrollKey = computed(() => selectedUserId.value == null ? null : `following-feed:user:${selectedUserId.value}:${userList.value}:${withNonPublic.value}:${withQuotes.value}:${withBots.value}:${withReplies.value}:${onlyFiles.value}`);
+
+useScrollPositionKeeper(computed(() => userScroll.value?.rootEl), { key: userScrollKey });
+useScrollPositionKeeper(computed(() => noteScroll.value), { key: feedScrollKey });
 definePage(() => ({
 	title: i18n.ts.following,
 	icon: followingTabIcon(followingTab),

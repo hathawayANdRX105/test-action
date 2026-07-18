@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="headerActions" :displayBackButton="true" :tabs="headerTabs">
+<PageWithHeader :actions="headerActions" :displayBackButton="true" :tabs="headerTabs" :scrollKey="antennaScrollKey">
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
 		<div ref="rootEl">
 			<div v-if="queue > 0" :class="$style.new"><button class="_buttonPrimary" :class="$style.newButton" @click="top()">{{ i18n.ts.newNoteRecived }}</button></div>
@@ -43,6 +43,7 @@ const antenna = ref<Misskey.entities.Antenna | null>(null);
 const queue = ref(0);
 const rootEl = useTemplateRef('rootEl');
 const tlEl = useTemplateRef('tlEl');
+const antennaScrollKey = computed(() => `antenna:${props.antennaId}`);
 
 function queueUpdated(q) {
 	queue.value = q;
