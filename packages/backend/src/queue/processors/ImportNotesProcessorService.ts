@@ -78,7 +78,7 @@ export class ImportNotesProcessorService {
 			} else {
 				const exists = await this.driveFilesRepository.findOneBy({ name: file, userId: user.id, folderId: folder });
 
-				if (file.endsWith('.srt')) return;
+				if (file.endsWith('.srt')) continue;
 
 				if (!exists) {
 					await this.driveService.addFile({
@@ -371,6 +371,11 @@ export class ImportNotesProcessorService {
 					} catch (e) { // TODO: 何度か再試行
 						this.logger.error('Error importing notes:', e as Error);
 					}
+					if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
+						cleanup();
+						continue;
+					}
+
 					const driveFile = await this.driveService.addFile({
 						user: user,
 						path: filePath,
@@ -522,6 +527,11 @@ export class ImportNotesProcessorService {
 					} catch (e) { // TODO: 何度か再試行
 						this.logger.error('Error importing notes:', e as Error);
 					}
+					if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
+						cleanup();
+						continue;
+					}
+
 					const driveFile = await this.driveService.addFile({
 						user: user,
 						path: filePath,
@@ -646,6 +656,11 @@ export class ImportNotesProcessorService {
 							} catch (e) { // TODO: 何度か再試行
 								this.logger.error('Error importing notes:', e as Error);
 							}
+							if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
+								cleanup();
+								continue;
+							}
+
 							const driveFile = await this.driveService.addFile({
 								user: user,
 								path: filePath,
@@ -670,6 +685,11 @@ export class ImportNotesProcessorService {
 								await this.downloadUrl(file.media_url_https, filePath);
 							} catch (e) { // TODO: 何度か再試行
 								this.logger.error('Error importing notes:', e as Error);
+							}
+
+							if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
+								cleanup();
+								continue;
 							}
 
 							const driveFile = await this.driveService.addFile({
