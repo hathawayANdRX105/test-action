@@ -244,6 +244,23 @@ export class SearchService {
 		await this.meilisearchNoteIndex?.deleteDocument(note.id);
 	}
 
+	/**
+	 * 批量取消笔记索引（Meilisearch deleteDocuments）。
+	 * 未启用 Meili 时为空操作；可见性过滤与 unindexNote 相同。
+	 */
+	@bindThis
+	public async unindexNotes(notes: MiNote[]): Promise<void> {
+		if (!this.meilisearch) return;
+		if (notes.length === 0) return;
+
+		const ids = notes
+			.filter(n => ['home', 'public'].includes(n.visibility))
+			.map(n => n.id);
+		if (ids.length === 0) return;
+
+		await this.meilisearchNoteIndex?.deleteDocuments(ids);
+	}
+
 	@bindThis
 	public async searchNote(
 		q: string,

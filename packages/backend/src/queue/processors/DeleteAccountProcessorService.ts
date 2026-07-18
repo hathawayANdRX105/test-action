@@ -290,7 +290,7 @@ export class DeleteAccountProcessorService {
 			this.logger.info('All scheduled notes deleted');
 		}
 
-		{ // Delete notes
+		{ // 删除笔记
 			await this.latestNotesRepository.delete({
 				userId: user.id,
 			});
@@ -316,23 +316,22 @@ export class DeleteAccountProcessorService {
 
 				cursor = notes.at(-1)?.id ?? null;
 
-				// Delete associated polls one-at-a-time, since it can cascade to a LOT of vote entries
-				for (const note of notes) {
-					if (note.hasPoll) {
-						await this.pollsRepository.delete({
-							noteId: note.id,
-						});
-					}
-				}
-
 				const ids = notes.map(note => note.id);
+				const pollNoteIds = notes.filter(n => n.hasPoll).map(n => n.id);
+
+				// 本页投票帖一次批量删除；poll_vote 随 poll.noteId 外键 CASCADE。
+				if (pollNoteIds.length > 0) {
+					await this.pollsRepository.delete({
+						noteId: In(pollNoteIds),
+					});
+				}
 
 				const replies = await this.notesRepository.find({
 					where: { replyId: In(ids) },
 					relations: { user: true },
 				});
 
-				// Delete replies through the usual service to ensure we get all "cascading notes" logic.
+				// 走统一删除服务，保证级联笔记逻辑完整。
 				for (const reply of replies) {
 					await this.noteDeleteService.delete(reply.user as MiUser, reply, undefined, true);
 				}
@@ -344,12 +343,11 @@ export class DeleteAccountProcessorService {
 					id: In(ids),
 				});
 
-				for (const note of notes) {
-					await this.searchService.unindexNote(note);
-				}
+				// 批量从 Meilisearch 移除索引（未启用 Meili 时为空操作）
+				await this.searchService.unindexNotes(notes);
 
-				// Delete note AP logs
-				const noteUris = notes.map(n => n.uri).filter(u => !!u) as string[];
+				// 仅远程笔记有 uri；过滤后交给 AP 日志清理
+				const noteUris = notes.map(n => n.uri).filter((u): u is string => !!u);
 				if (noteUris.length > 0) {
 					await this.apLogService.deleteObjectLogs(noteUris);
 				}
