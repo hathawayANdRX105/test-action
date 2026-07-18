@@ -285,11 +285,20 @@ export class ApiServerService {
 				const abortController = new AbortController();
 				reply.raw.on('close', () => abortController.abort());
 				const body = request.body ?? {};
-				const getNullableString = (value: unknown, maxLength = 512) => typeof value === 'string' ? value.slice(0, maxLength) : null;
+				const invalidParam = (name: string) => new AiServiceError('INVALID_PARAM', `${name} is invalid.`);
+				const getNullableString = (name: string, value: unknown, maxLength = 512) => {
+					if (value === null || value === undefined) return null;
+					if (typeof value !== 'string') throw invalidParam(name);
+					return value.slice(0, maxLength);
+				};
+				const getStringArray = (name: string, value: unknown) => {
+					if (value === null || value === undefined) return [];
+					if (!Array.isArray(value) || !value.every((id): id is string => typeof id === 'string')) throw invalidParam(name);
+					return value;
+				};
+				if (body.content !== null && body.content !== undefined && typeof body.content !== 'string') throw invalidParam('content');
 				const content = typeof body.content === 'string' ? body.content.slice(0, 20000) : '';
-				const fileIds = Array.isArray(body.fileIds)
-					? body.fileIds.filter((id): id is string => typeof id === 'string')
-					: [];
+				const fileIds = getStringArray('fileIds', body.fileIds);
 				const waitForDrainOrClose = async (): Promise<void> => {
 					await new Promise<void>((resolve) => {
 						const cleanup = () => {
@@ -320,12 +329,12 @@ export class ApiServerService {
 				try {
 					const result = await this.aiService.streamChat({
 						user,
-						conversationId: getNullableString(body.conversationId),
-						providerId: getNullableString(body.providerId),
-						model: getNullableString(body.model),
+						conversationId: getNullableString('conversationId', body.conversationId),
+						providerId: getNullableString('providerId', body.providerId),
+						model: getNullableString('model', body.model),
 						content,
 						fileIds,
-						systemPrompt: getNullableString(body.systemPrompt, 12000),
+						systemPrompt: getNullableString('systemPrompt', body.systemPrompt, 12000),
 						abortSignal: abortController.signal,
 						onDelta: async (text) => {
 							await writeEvent('delta', { text });

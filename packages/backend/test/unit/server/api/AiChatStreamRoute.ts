@@ -267,6 +267,20 @@ describe('/ai/chat-stream', () => {
 		expect(context.aiService.streamChat).toHaveBeenCalledTimes(1);
 		expect(reply.raw.writeHead).toHaveBeenCalledTimes(1);
 	});
+	test('rejects non-string conversation ids instead of starting a new stream', async () => {
+		const context = createRouteContext({ tokenInfo: false });
+		const { reply } = createReply();
+
+		await context.handler({
+			body: { content: 'hello', conversationId: 42 },
+			headers: {},
+			ip: '127.0.0.1',
+		}, reply);
+
+		expect(context.aiService.streamChat).not.toHaveBeenCalled();
+		expect(reply.raw.write).toHaveBeenCalledWith(expect.stringContaining('INVALID_PARAM'));
+	});
+
 	test('passes excessive file ids through to AiService validation instead of truncating them', async () => {
 		const context = createRouteContext({ tokenInfo: false });
 		const { reply } = createReply();
