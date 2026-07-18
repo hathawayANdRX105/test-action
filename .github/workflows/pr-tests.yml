@@ -1,11 +1,11 @@
-name: CI - simple
+name: CI - PR Gate
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
-  group: ci-simple-${{ github.event.pull_request.number }}
+  group: ci-pr-gate-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -48,8 +48,8 @@ jobs:
       - run: pnpm --filter megalodon build
       - run: pnpm --filter megalodon test
 
-  simple-gate:
-    name: Simple gate
+  pr-gate:
+    name: PR Gate
     if: ${{ always() && !cancelled() }}
     needs:
       - lint
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Require every simple check to pass
+      - name: Require every PR gate check to pass
         env:
           NEEDS: ${{ toJSON(needs) }}
         run: |
