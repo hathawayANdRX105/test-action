@@ -565,7 +565,6 @@ export class ClientServerService {
 				url: this.config.url,
 				title: instanceBrandName(this.meta.name),
 				desc: this.meta.description,
-				customHead: this.config.customHtml.head,
 				...await this.generateCommonPugData(this.meta),
 				...data,
 			});

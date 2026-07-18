@@ -65,6 +65,7 @@ function generateDummyUser(now: number, override?: Partial<MiUser>): MiUser {
 		chatScope: 'mutual',
 		emojis: [],
 		score: 0,
+		driveCapacityOverrideMb: null,
 		host: null,
 		instance: null,
 		inbox: null,

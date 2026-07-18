@@ -185,6 +185,12 @@ export interface ChatEventTypes {
 		isSilenced: boolean;
 		announcement: string;
 		announcementPinned: boolean;
+		announcementHistory: {
+			id: string;
+			text: string;
+			createdAt: string;
+			pinned: boolean;
+		}[];
 	};
 	memberKicked: {
 		roomId: MiChatRoom['id'];

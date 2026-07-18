@@ -2457,10 +2457,10 @@ export class ChatService {
 		announcementPinned?: boolean;
 		/** Manager-only: replace announcement history (e.g. delete one history entry). */
 		announcementHistory?: {
-			id: string;
+			id?: string;
 			text: string;
 			createdAt: string;
-			pinned: boolean;
+			pinned?: boolean;
 		}[];
 		avatarId?: MiDriveFile['id'] | null;
 		slowModeSeconds?: number;
@@ -2481,7 +2481,7 @@ export class ChatService {
 				throw new Error('invalid keyword mute seconds');
 			}
 		}
-		const { avatarId, ...restParams } = params;
+		const { avatarId, announcementHistory, ...restParams } = params;
 		const setParams: Partial<MiChatRoom> = { ...restParams };
 
 		if (params.bannedKeywords != null) {
@@ -2493,9 +2493,9 @@ export class ChatService {
 
 		// Archive previous announcement text when it changes (history tab).
 		const MAX_CHAT_ROOM_ANNOUNCEMENT_HISTORY = 50;
-		if (params.announcementHistory !== undefined) {
+		if (announcementHistory !== undefined) {
 			// Explicit history replace (admin delete of history items)
-			setParams.announcementHistory = params.announcementHistory
+			setParams.announcementHistory = announcementHistory
 				.filter(item => item != null && typeof item.text === 'string' && item.text.trim().length > 0)
 				.map(item => ({
 					id: typeof item.id === 'string' && item.id.length > 0 ? item.id : this.idService.gen(),
