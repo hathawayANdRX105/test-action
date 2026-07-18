@@ -114,6 +114,7 @@ describe('ChatService large room fast path', () => {
 			upsert: jest.fn(async () => ({ identifiers: [] })),
 			delete: jest.fn(async () => ({ affected: 1 })),
 		};
+		const chatUserConversationSettingsRepository: any = {};
 		const chatMessagesQueryBuilder: any = {
 			alias: 'message',
 			update: jest.fn(function (this: any) { return this; }),
@@ -296,6 +297,7 @@ describe('ChatService large room fast path', () => {
 			chatRoomInvitationsRepository as never,
 			chatRoomMembershipsRepository as never,
 			chatRoomUserSettingsRepository as never,
+			chatUserConversationSettingsRepository as never,
 			chatRoomUserMutingsRepository as never,
 			chatRoomBanningsRepository as never,
 			{} as never,
@@ -438,6 +440,47 @@ describe('ChatService large room fast path', () => {
 			select: { muteeId: true },
 			where: { roomId: 'room', muterId: 'reader' },
 		});
+	});
+
+	test('concurrent room mute cache misses share one database load', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		let resolveRows: (rows: { muteeId: string; }[]) => void = () => {};
+		const findStarted = new Promise<void>(resolve => {
+			ctx.chatRoomUserMutingsRepository.find.mockImplementationOnce(() => {
+				resolve();
+				return new Promise<{ muteeId: string; }[]>(rowsResolve => {
+					resolveRows = rowsResolve;
+				});
+			});
+		});
+
+		const mutedUserIds = Promise.all([
+			ctx.service.getMutedRoomUserIds('reader', 'room'),
+			ctx.service.getMutedRoomUserIds('reader', 'room'),
+		]);
+
+		await findStarted;
+		expect(ctx.redisClient.get).toHaveBeenCalledTimes(1);
+		expect(ctx.chatRoomUserMutingsRepository.find).toHaveBeenCalledTimes(1);
+		resolveRows([{ muteeId: 'muted-user' }]);
+
+		await expect(mutedUserIds).resolves.toEqual([
+			new Set(['muted-user']),
+			new Set(['muted-user']),
+		]);
+		expect(ctx.redisClient.set).toHaveBeenCalledTimes(1);
+	});
+
+	test('failed room mute loads do not block a later retry', async () => {
+		const ctx = createService(LARGE_CHAT_ROOM_MEMBER_THRESHOLD + 1);
+		ctx.chatRoomUserMutingsRepository.find
+			.mockRejectedValueOnce(new Error('database unavailable'))
+			.mockResolvedValueOnce([{ muteeId: 'muted-user' }]);
+
+		await expect(ctx.service.getMutedRoomUserIds('reader', 'room')).rejects.toThrow('database unavailable');
+		await expect(ctx.service.getMutedRoomUserIds('reader', 'room')).resolves.toEqual(new Set(['muted-user']));
+
+		expect(ctx.chatRoomUserMutingsRepository.find).toHaveBeenCalledTimes(2);
 	});
 
 	test('packed room timeline coalesces cache warmup db fallback', async () => {
