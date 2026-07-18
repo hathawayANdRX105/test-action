@@ -542,6 +542,7 @@ export class AiService {
 			const resolved = await this.resolveProviderAndModel(params.providerId ?? conversation.providerId, params.model ?? conversation.model);
 			provider = resolved.provider;
 			model = resolved.model;
+			attachments = await this.resolveAttachments(params.user.id, params.fileIds ?? [], model);
 			if (provider.id !== conversation.providerId || model !== conversation.model) {
 				await this.aiConversationsRepository.update(conversation.id, {
 					providerId: provider.id,
@@ -550,7 +551,6 @@ export class AiService {
 				});
 				conversation = await this.getOwnedConversation(params.user.id, conversation.id);
 			}
-			attachments = await this.resolveAttachments(params.user.id, params.fileIds ?? [], model);
 		} else {
 			const resolved = await this.resolveProviderAndModel(params.providerId, params.model);
 			attachments = await this.resolveAttachments(params.user.id, params.fileIds ?? [], resolved.model);

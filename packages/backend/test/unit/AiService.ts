@@ -445,6 +445,38 @@ describe('AiService', () => {
 		expect(messages).toHaveLength(0);
 		expect(conversations.size).toBe(0);
 	});
+	it('does not update an existing conversation model when attachments are invalid', async () => {
+		const { service, providers, conversations, messages } = createService();
+		providers.set('provider1', createProvider({
+			models: ['gpt-4o-mini', 'gpt-4o'],
+			defaultModel: 'gpt-4o-mini',
+			allowedModels: ['gpt-4o-mini', 'gpt-4o'],
+		}));
+		conversations.set('conversation1', {
+			id: 'conversation1',
+			userId: 'user1',
+			title: 'Chat',
+			providerId: 'provider1',
+			model: 'gpt-4o-mini',
+			systemPrompt: null,
+			createdAt: new Date(0),
+			updatedAt: new Date(0),
+		});
+
+		await expect(service.streamChat({
+			user: { id: 'user1' } as never,
+			conversationId: 'conversation1',
+			providerId: 'provider1',
+			model: 'gpt-4o',
+			content: '',
+			fileIds: ['missing-file'],
+		})).rejects.toMatchObject({
+			code: 'NO_SUCH_FILE',
+		});
+
+		expect(messages).toHaveLength(0);
+		expect(conversations.get('conversation1').model).toBe('gpt-4o-mini');
+	});
 
 	it('caps streaming response growth and redacts provider secrets in saved errors', async () => {
 		const { service, providers, messages, httpRequestService } = createService();
