@@ -48,6 +48,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkSwitch v-if="!isOwner" v-model="isMuted">
 		<template #label>{{ i18n.ts._chat.muteThisRoom }}</template>
 	</MkSwitch>
+
+	<hr v-if="canLeaveRoom">
+	<MkButton v-if="canLeaveRoom" danger @click="emit('leave')">{{ i18n.ts._chat.leave }}</MkButton>
 </div>
 </template>
 
@@ -76,6 +79,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(ev: 'updated', room: Misskey.entities.ChatRoom): void;
+	(ev: 'leave'): void;
 }>();
 
 const isOwner = computed(() => {
@@ -84,6 +88,7 @@ const isOwner = computed(() => {
 
 const canEditRoomProfile = computed(() => (props.room.canEditRoomProfile ?? (isOwner.value || $i.isModerator || $i.isAdmin)) === true);
 const canDeleteRoom = computed(() => (props.room.canDeleteRoom ?? (isOwner.value || $i.isModerator || $i.isAdmin)) === true);
+const canLeaveRoom = computed(() => props.room.isJoined === true && !isOwner.value);
 
 const name_ = ref(props.room.name);
 const description_ = ref(props.room.description);

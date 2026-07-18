@@ -9,6 +9,7 @@ import { assert, describe, test } from 'vitest';
 import { appendDetachedChatMessages, ChatAutoScrollState, ChatReadReceiptBatcher, findMissingChatMessageIdsInLatestWindow, getChatScrollMetrics, isChatMessageVisibleAtLatestEdge, isNearChatLatest, mergeChatMessagesForTimeline, mergeChatMessagesWithWindowResult, prependChatMessageForTimeline, sortChatMessagesForTimeline } from '@/pages/chat/room-scroll.js';
 import mediaListSource from '@/components/MkMediaList.vue?raw';
 import roomSource from '@/pages/chat/room.vue?raw';
+import roomInfoSource from '@/pages/chat/room.info.vue?raw';
 import commonBootSource from '@/boot/common.ts?raw';
 import frontendConsistencySource from '@/utility/frontend-consistency.ts?raw';
 
@@ -73,6 +74,20 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /grid-template-columns:\s*minmax\(120px,\s*auto\)\s*minmax\(0,\s*1fr\)\s*auto;/);
 		assert.match(roomSource, /grid-template-areas:\s*"title tabs menu";/);
 		assert.match(roomSource, /@container \(max-width:\s*520px\)\s*\{[\s\S]*grid-template-areas:\s*"title menu"\s*"tabs tabs";/);
+	});
+
+	test('uses the header action slot for a direct full chat-room reload', () => {
+		assert.match(roomSource, /<button v-if="headerActions\.length > 0" class="_button" :class="\$style\.localMenu" :disabled="initializing" :title="headerActions\[0\]\.text" :aria-label="headerActions\[0\]\.text" @click="headerActions\[0\]\.handler">/);
+		assert.match(roomSource, /const headerActions = computed<PageHeaderItem\[\]>\(\(\) => \{[\s\S]*if \(room\.value == null\) return \[\];[\s\S]*icon: 'ti ti-refresh',[\s\S]*text: i18n\.ts\.reload,[\s\S]*handler: \(\) => \{\s*void initialize\(\);\s*\},/);
+		assert.notMatch(roomSource, /function showMenu\(/);
+		assert.notMatch(roomSource, /icon: 'ti ti-dots'/);
+	});
+
+	test('puts the guarded leave action in the room about tab', () => {
+		assert.match(roomSource, /<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated" @leave="leaveRoom"\/>/);
+		assert.match(roomInfoSource, /const canLeaveRoom = computed\(\(\) => props\.room\.isJoined === true && !isOwner\.value\);/);
+		assert.match(roomInfoSource, /\(ev: 'leave'\): void;/);
+		assert.match(roomInfoSource, /<MkButton v-if="canLeaveRoom" danger @click="emit\('leave'\)">\{\{ i18n\.ts\._chat\.leave \}\}<\/MkButton>/);
 	});
 
 	test('uses the full available width for the visible chat surface', () => {
@@ -155,7 +170,7 @@ describe('chat room scroll state', () => {
 		assert.match(roomSource, /onActivated\(\(\) => \{[\s\S]*scheduleLatestOnChatTabReturn\(\{ forceLatest: false \}\);/);
 		assert.match(roomSource, /const previousTab = tab\.value;[\s\S]*if \(previousTab !== 'chat'\) \{[\s\S]*scheduleLatestOnChatTabReturn\(\{ forceLatest: true \}\);/);
 		assert.match(roomSource, /function scheduleLatestOnChatTabReturn\(options: \{ forceLatest\?: boolean \} = \{\}\) \{[\s\S]*ensureLatestOnChatTabReturn\(chatTabLatestReturnGeneration, options\);/);
-		assert.match(roomSource, /v-show=\"tab === 'chat'\" ref=\"chatPaneEl\"/);
+		assert.match(roomSource, /<div v-show=\"tab === 'chat'\" :class=\"\$style\.chatColumn\">[\s\S]*<div ref=\"chatPaneEl\" :class=\"\$style\.chatPane\">/);
 		assert.match(roomSource, /async function scrollToLatestAfterLayout/);
 		assert.match(roomSource, /const shouldStickToLatest = options\.forceLatest === true \|\| shouldAutoRevealLatestMessages\(\);/);
 		assert.match(roomSource, /await syncLatestMessages\(\{ stickToLatest: shouldStickToLatest, flushReadReceipt: shouldStickToLatest, sinceId, reconcileLatestWindow: shouldStickToLatest \}\);/);

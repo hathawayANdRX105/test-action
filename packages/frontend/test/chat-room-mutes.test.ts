@@ -17,7 +17,7 @@ describe('chat room user mutes', () => {
 		assert.match(roomSource, /key: 'mutedUsers'/);
 		assert.match(roomSource, /title: i18n\.ts\._chat\.mutedUsers/);
 		assert.match(roomSource, /:title="t\.title" :aria-label="t\.title"/);
-		assert.match(roomSource, /text: i18n\.ts\.menu/);
+		assert.match(roomSource, /text: i18n\.ts\.reload/);
 		assert.match(roomSource, /:title="headerActions\[0\]\.text" :aria-label="headerActions\[0\]\.text"/);
 		assert.match(roomSource, /:enableRoomUserMute="true"/);
 		assert.match(roomSource, /<XMutedUsers[^>]+@unmuted="onRoomUserUnmuted"/);

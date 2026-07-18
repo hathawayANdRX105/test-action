@@ -25,7 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-chevron-right"></i>
 			</button>
 		</div>
-		<button v-if="headerActions.length > 0" class="_button" :class="$style.localMenu" :title="headerActions[0].text" :aria-label="headerActions[0].text" @click="headerActions[0].handler">
+		<button v-if="headerActions.length > 0" class="_button" :class="$style.localMenu" :disabled="initializing" :title="headerActions[0].text" :aria-label="headerActions[0].text" @click="headerActions[0].handler">
 			<i :class="headerActions[0].icon"></i>
 		</button>
 	</div>
@@ -167,7 +167,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div v-if="tab === 'info'" :class="$style.tabPane">
 		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 100%;">
-			<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated"/>
+			<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated" @leave="leaveRoom"/>
 		</div>
 	</div>
 
@@ -211,7 +211,7 @@ import XMutedUsers from './room.user-mutes.vue';
 import XInfo from './room.info.vue';
 import XManagement from './room.management.vue';
 import XAnnouncements from './room.announcements.vue';
-import type { MenuItem } from '@/types/menu.js';
+
 import type { PageHeaderItem } from '@/types/page-header.js';
 import * as os from '@/os.js';
 import { useStream } from '@/stream.js';
@@ -2947,34 +2947,6 @@ function onRoomUserUnmuted(userId: string) {
 	mutedRoomUserIds.value = next;
 }
 
-function showMenu(ev: MouseEvent) {
-	const menuItems: MenuItem[] = [];
-
-	if (room.value) {
-		if (room.value.ownerId === $i.id) {
-			menuItems.push({
-				text: i18n.ts._chat.inviteUser,
-				icon: 'ti ti-user-plus',
-				action: () => {
-					inviteUser();
-				},
-			});
-		} else if (room.value.isJoined) {
-			menuItems.push({
-				text: i18n.ts._chat.leave,
-				icon: 'ti ti-x',
-				action: () => {
-					leaveRoom();
-				},
-			});
-		}
-	}
-
-	if (menuItems.length === 0) return;
-
-	os.popupMenu(menuItems, ev.currentTarget ?? ev.target);
-}
-
 async function ensureLatestOnChatTabReturn(generation: number, options: { forceLatest?: boolean } = {}) {
 	await nextTick();
 	await waitAnimationFrame();
@@ -3073,15 +3045,16 @@ const headerTabs = computed(() => room.value ? room.value.isJoined ? [{
 }]);
 
 const headerActions = computed<PageHeaderItem[]>(() => {
-	if (room.value == null || (!room.value.isJoined && room.value.ownerId !== $i.id)) return [];
+	if (room.value == null) return [];
 
 	return [{
-		icon: 'ti ti-dots',
-		text: i18n.ts.menu,
-		handler: showMenu,
+		icon: 'ti ti-refresh',
+		text: i18n.ts.reload,
+		handler: () => {
+			void initialize();
+		},
 	}];
 });
-
 definePage(computed(() => {
 	if (!initializing.value) {
 		if (user.value) {
