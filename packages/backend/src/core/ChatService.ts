@@ -119,6 +119,7 @@ export class ChatService {
 	private readonly roomMessageTargetLoads = new Map<MiChatRoom['id'], Promise<ChatRoomMessageTarget | null>>();
 	private readonly roomSenderMembershipCache = new Map<string, { expiresAt: number; }>();
 	private readonly roomSenderMembershipLoads = new Map<string, Promise<boolean>>();
+	private readonly roomTimelineMutedUsersLoads = new Map<string, Promise<MiUser['id'][]>>();
 	private readonly roomTimelineWarmLoads = new Map<MiChatRoom['id'], Promise<PackedRoomChatMessage[]>>();
 	private roomTimelineStatsTimer: ReturnType<typeof setInterval> | null = null;
 	private roomTimelineStats: RoomTimelineStats = {
@@ -313,36 +314,50 @@ export class ChatService {
 		if (userId == null) return new Set();
 
 		const cacheKey = this.roomTimelineMutedUsersCacheKey(roomId, userId);
-		try {
-			const cached = await this.redisClient.get(cacheKey);
-			if (cached != null) {
-				const parsed = JSON.parse(cached) as unknown;
-				if (Array.isArray(parsed) && parsed.every(value => typeof value === 'string')) {
-					return new Set(parsed);
+		const loading = this.roomTimelineMutedUsersLoads.get(cacheKey);
+		if (loading != null) return new Set(await loading);
+
+		const load = (async () => {
+			try {
+				const cached = await this.redisClient.get(cacheKey);
+				if (cached != null) {
+					const parsed = JSON.parse(cached) as unknown;
+					if (Array.isArray(parsed) && parsed.every((value): value is MiUser['id'] => typeof value === 'string')) {
+						return parsed;
+					}
 				}
+			} catch {
+				this.roomTimelineStats.cacheErrors++;
 			}
-		} catch {
-			this.roomTimelineStats.cacheErrors++;
-		}
 
-		const rows = await this.chatRoomUserMutingsRepository.find({
-			select: {
-				muteeId: true,
-			},
-			where: {
-				roomId,
-				muterId: userId,
-			},
-		});
-		const mutedUserIds = rows.map(row => row.muteeId);
+			const rows = await this.chatRoomUserMutingsRepository.find({
+				select: {
+					muteeId: true,
+				},
+				where: {
+					roomId,
+					muterId: userId,
+				},
+			});
+			const mutedUserIds = rows.map(row => row.muteeId);
+
+			try {
+				await this.redisClient.set(cacheKey, JSON.stringify(mutedUserIds), 'EX', ROOM_TIMELINE_MUTED_USERS_CACHE_TTL);
+			} catch {
+				this.roomTimelineStats.cacheErrors++;
+			}
+
+			return mutedUserIds;
+		})();
+		this.roomTimelineMutedUsersLoads.set(cacheKey, load);
 
 		try {
-			await this.redisClient.set(cacheKey, JSON.stringify(mutedUserIds), 'EX', ROOM_TIMELINE_MUTED_USERS_CACHE_TTL);
-		} catch {
-			this.roomTimelineStats.cacheErrors++;
+			return new Set(await load);
+		} finally {
+			if (this.roomTimelineMutedUsersLoads.get(cacheKey) === load) {
+				this.roomTimelineMutedUsersLoads.delete(cacheKey);
+			}
 		}
-
-		return new Set(mutedUserIds);
 	}
 
 	@bindThis
@@ -1606,6 +1621,7 @@ export class ChatService {
 			.orIgnore()
 			.execute();
 
+		this.roomTimelineMutedUsersLoads.delete(this.roomTimelineMutedUsersCacheKey(roomId, muterId));
 		await this.redisClient.del(this.roomTimelineMutedUsersCacheKey(roomId, muterId)).catch(() => {
 			this.roomTimelineStats.cacheErrors++;
 		});
@@ -1625,6 +1641,7 @@ export class ChatService {
 			muterId,
 			muteeId,
 		});
+		this.roomTimelineMutedUsersLoads.delete(this.roomTimelineMutedUsersCacheKey(roomId, muterId));
 		await this.redisClient.del(this.roomTimelineMutedUsersCacheKey(roomId, muterId)).catch(() => {
 			this.roomTimelineStats.cacheErrors++;
 		});
