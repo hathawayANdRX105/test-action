@@ -214,6 +214,7 @@ function menuEdit() {
 
 <style lang="scss" module>
 .root {
+	position: relative;
 	--nav-width: clamp(220px, 14vw, 260px);
 	--nav-icon-only-width: 72px;
 	--nav-bg-transparent: color(from var(--MI_THEME-navBg) srgb r g b / 0.5);
@@ -336,8 +337,8 @@ function menuEdit() {
 }
 
 .subButtons {
-	position: fixed;
-	left: var(--nav-width);
+	position: absolute;
+	left: 100%;
 	bottom: 80px;
 	z-index: 1001;
 	box-sizing: border-box;
@@ -687,9 +688,6 @@ function menuEdit() {
 		font-size: 0.9em;
 	}
 
-	.subButtons {
-		left: var(--nav-width);
-	}
 }
 
 .root.iconOnly {
@@ -951,8 +949,5 @@ function menuEdit() {
 		}
 	}
 
-	.subButtons {
-		left: var(--nav-icon-only-width);
-	}
 }
 </style>
