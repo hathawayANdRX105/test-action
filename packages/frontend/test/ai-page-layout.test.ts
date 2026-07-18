@@ -5,7 +5,7 @@
 
 /// <reference types="vite/client" />
 
-import { assert, describe, test } from 'vitest';
+import { assert, describe, expect, test } from 'vitest';
 import aiSource from '@/pages/ai.vue?raw';
 
 describe('ai page layout', () => {
@@ -40,5 +40,16 @@ describe('ai page layout', () => {
 		assert.match(aiSource, /if \(requestAbortController\.signal\.aborted\) \{/);
 		assert.match(aiSource, /if \(abortController\.value === requestAbortController\) \{[\s\S]*streaming\.value = false;[\s\S]*streamingMessageId\.value = null;[\s\S]*abortController\.value = null;[\s\S]*\}/);
 		assert.match(aiSource, /function stopStreaming\(\) \{\n\tabortController\.value\?\.abort\(\);\n\}/);
+	});
+
+	test('keeps the newest message when trimming overfetched ascending message pages', () => {
+		const overfetchedPage = Array.from({ length: 51 }, (_, index) => `M${index + 51}`);
+		const keptMessages = overfetchedPage.slice(Math.max(overfetchedPage.length - 50, 0));
+		expect(keptMessages).toHaveLength(50);
+		expect(keptMessages[0]).toBe('M52');
+		expect(keptMessages[keptMessages.length - 1]).toBe('M101');
+		expect(keptMessages).not.toContain('M51');
+		assert.match(aiSource, /function splitAscendingOverfetchPage<T>\(items: T\[\], limit: number\) \{[\s\S]*items: items\.slice\(Math\.max\(items\.length - limit, 0\)\),[\s\S]*hasMore: items\.length > limit,/);
+		assert.match(aiSource, /async function fetchMessagesPage\(conversationId: string, offset: number\) \{[\s\S]*return splitAscendingOverfetchPage\(await misskeyApi<AiMessage\[\]>\('ai\/messages\/list'/);
 	});
 });

@@ -343,6 +343,13 @@ function splitOverfetchPage<T>(items: T[], limit: number) {
 	};
 }
 
+function splitAscendingOverfetchPage<T>(items: T[], limit: number) {
+	return {
+		items: items.slice(Math.max(items.length - limit, 0)),
+		hasMore: items.length > limit,
+	};
+}
+
 async function fetchConversationsPage(offset: number) {
 	return splitOverfetchPage(await misskeyApi<AiConversation[]>('ai/conversations/list', {
 		limit: AI_CONVERSATIONS_PAGE_SIZE + 1,
@@ -373,7 +380,7 @@ async function loadMoreConversations() {
 }
 
 async function fetchMessagesPage(conversationId: string, offset: number) {
-	return splitOverfetchPage(await misskeyApi<AiMessage[]>('ai/messages/list', {
+	return splitAscendingOverfetchPage(await misskeyApi<AiMessage[]>('ai/messages/list', {
 		conversationId,
 		limit: AI_MESSAGES_PAGE_SIZE + 1,
 		offset,
