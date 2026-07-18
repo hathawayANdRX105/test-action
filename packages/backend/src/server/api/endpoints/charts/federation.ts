@@ -8,6 +8,7 @@ import { getJsonSchema } from '@/core/chart/core.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import FederationChart from '@/core/chart/charts/federation.js';
 import { schema } from '@/core/chart/charts/entities/federation.js';
+import { PUBLIC_CHART_OFFSET_MAX_TIMESTAMP } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['charts'],
@@ -32,7 +33,7 @@ export const paramDef = {
 	properties: {
 		span: { type: 'string', enum: ['day', 'hour'] },
 		limit: { type: 'integer', minimum: 1, maximum: 500, default: 30 },
-		offset: { type: 'integer', nullable: true, default: null },
+		offset: { type: 'integer', nullable: true, minimum: 0, maximum: PUBLIC_CHART_OFFSET_MAX_TIMESTAMP, default: null },
 	},
 	required: ['span'],
 } as const;

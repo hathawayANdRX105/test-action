@@ -10,6 +10,7 @@ import type { MiNote } from '@/models/_.js';
 import { hasText } from '@/models/Note.js';
 import { NoteVisibilityService } from '@/core/NoteVisibilityService.js';
 import { ApiError } from '@/server/api/error.js';
+import { PUBLIC_TRANSLATION_TARGET_LANG_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { NoteTranslationService, type CachedTranslation } from './translate-common.js';
 
 const TRANSLATE_BATCH_CONCURRENCY = 1;
@@ -56,7 +57,7 @@ export const paramDef = {
 			minItems: 1,
 			maxItems: 20,
 		},
-		targetLang: { type: 'string' },
+		targetLang: { type: 'string', maxLength: PUBLIC_TRANSLATION_TARGET_LANG_MAX_LENGTH },
 	},
 	required: ['noteIds', 'targetLang'],
 } as const;

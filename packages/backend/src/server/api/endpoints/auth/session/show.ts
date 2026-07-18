@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { AuthSessionsRepository } from '@/models/_.js';
 import { AuthSessionEntityService } from '@/core/entities/AuthSessionEntityService.js';
 import { DI } from '@/di-symbols.js';
+import { PUBLIC_TOKEN_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { ApiError } from '../../../error.js';
 
 export const meta = {
@@ -54,7 +55,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		token: { type: 'string' },
+		token: { type: 'string', maxLength: PUBLIC_TOKEN_MAX_LENGTH },
 	},
 	required: ['token'],
 } as const;

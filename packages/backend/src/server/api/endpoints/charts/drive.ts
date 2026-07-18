@@ -8,6 +8,7 @@ import { getJsonSchema } from '@/core/chart/core.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import DriveChart from '@/core/chart/charts/drive.js';
 import { schema } from '@/core/chart/charts/entities/drive.js';
+import { PUBLIC_CHART_OFFSET_MAX_TIMESTAMP } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['charts', 'drive'],
@@ -30,7 +31,7 @@ export const paramDef = {
 	properties: {
 		span: { type: 'string', enum: ['day', 'hour'] },
 		limit: { type: 'integer', minimum: 1, maximum: 500, default: 30 },
-		offset: { type: 'integer', nullable: true, default: null },
+		offset: { type: 'integer', nullable: true, minimum: 0, maximum: PUBLIC_CHART_OFFSET_MAX_TIMESTAMP, default: null },
 	},
 	required: ['span'],
 } as const;

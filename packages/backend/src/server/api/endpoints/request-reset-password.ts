@@ -14,6 +14,7 @@ import { DI } from '@/di-symbols.js';
 import { EmailService } from '@/core/EmailService.js';
 import { L_CHARS, secureRndstr } from '@/misc/secure-rndstr.js';
 import { trackPromise } from '@/misc/promise-tracker.js';
+import { PUBLIC_EMAIL_MAX_LENGTH, PUBLIC_SEARCH_QUERY_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['reset password'],
@@ -35,8 +36,8 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		username: { type: 'string' },
-		email: { type: 'string' },
+		username: { type: 'string', maxLength: PUBLIC_SEARCH_QUERY_MAX_LENGTH },
+		email: { type: 'string', maxLength: PUBLIC_EMAIL_MAX_LENGTH },
 	},
 	required: ['username', 'email'],
 } as const;

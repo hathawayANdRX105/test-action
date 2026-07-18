@@ -40,7 +40,7 @@ export const paramDef = {
 		// true なら未分類(category IS NULL)
 		uncategorized: { type: 'boolean', default: false },
 		limit: { type: 'integer', minimum: 1, maximum: 50, default: 12 },
-		offset: { type: 'integer', minimum: 0, default: 0 },
+		offset: { type: 'integer', minimum: 0, maximum: 10000, default: 0 },
 	},
 	required: [],
 } as const;

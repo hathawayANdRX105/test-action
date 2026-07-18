@@ -35,7 +35,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		offset: { type: 'integer', minimum: 0, default: 0 },
+		offset: { type: 'integer', minimum: 0, maximum: 10000, default: 0 },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 	},
 	required: [],

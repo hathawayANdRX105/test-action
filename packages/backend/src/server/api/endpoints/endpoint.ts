@@ -5,6 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
+import { PUBLIC_ENDPOINT_NAME_MAX_LENGTH } from '@/server/api/input-limits.js';
 import endpoints from '../endpoints.js';
 
 export const meta = {
@@ -42,7 +43,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		endpoint: { type: 'string' },
+		endpoint: { type: 'string', maxLength: PUBLIC_ENDPOINT_NAME_MAX_LENGTH },
 	},
 	required: ['endpoint'],
 } as const;

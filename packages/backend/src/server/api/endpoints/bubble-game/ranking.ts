@@ -10,6 +10,7 @@ import type { BubbleGameRecordsRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { TimeService } from '@/global/TimeService.js';
+import { PUBLIC_GAME_MODE_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	allowGet: true,
@@ -52,7 +53,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		gameMode: { type: 'string' },
+		gameMode: { type: 'string', maxLength: PUBLIC_GAME_MODE_MAX_LENGTH },
 	},
 	required: ['gameMode'],
 } as const;

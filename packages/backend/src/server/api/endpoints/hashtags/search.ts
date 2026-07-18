@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { HashtagsRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
+import { PUBLIC_TAG_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['hashtags'],
@@ -34,8 +35,8 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
-		query: { type: 'string' },
-		offset: { type: 'integer', default: 0 },
+		query: { type: 'string', maxLength: PUBLIC_TAG_MAX_LENGTH },
+		offset: { type: 'integer', minimum: 0, maximum: 10000, default: 0 },
 	},
 	required: ['query'],
 } as const;

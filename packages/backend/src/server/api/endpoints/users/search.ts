@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { DI } from '@/di-symbols.js';
 import { UserSearchService } from '@/core/UserSearchService.js';
+import { PUBLIC_SEARCH_QUERY_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['users'],
@@ -36,8 +37,8 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		query: { type: 'string' },
-		offset: { type: 'integer', default: 0 },
+		query: { type: 'string', maxLength: PUBLIC_SEARCH_QUERY_MAX_LENGTH },
+		offset: { type: 'integer', minimum: 0, maximum: 10000, default: 0 },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 		origin: { type: 'string', enum: ['local', 'remote', 'combined'], default: 'combined' },
 		detail: { type: 'boolean', default: true },

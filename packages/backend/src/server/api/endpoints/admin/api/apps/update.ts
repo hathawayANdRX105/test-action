@@ -10,6 +10,7 @@ import type { AppsRepository } from '@/models/_.js';
 import { unique } from '@/misc/prelude/array.js';
 import { DI } from '@/di-symbols.js';
 import { apiAccessErrors, hasUnsafeOAuthRedirectUri, normalizeOAuthRedirectUris } from '@/server/api/api-access-utils.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['admin', 'api'],
@@ -33,7 +34,7 @@ export const paramDef = {
 		appId: { type: 'string', format: 'misskey:id' },
 		name: { type: 'string', minLength: 1, maxLength: 128 },
 		description: { type: 'string', maxLength: 512 },
-		permission: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+		permission: { type: 'array', uniqueItems: true, maxItems: API_PERMISSION_MAX_ITEMS, items: { type: 'string', maxLength: API_PERMISSION_MAX_LENGTH } },
 		callbackUrls: { type: 'array', uniqueItems: true, maxItems: 20, items: { type: 'string', maxLength: 512 } },
 		rateLimitPerMinute: { type: 'integer', minimum: 1, maximum: 10000, nullable: true },
 		reviewNote: { type: 'string', nullable: true, maxLength: 2000 },

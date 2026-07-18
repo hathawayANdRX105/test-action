@@ -11,6 +11,7 @@ import type { ChannelsRepository } from '@/models/_.js';
 import { ChannelEntityService } from '@/core/entities/ChannelEntityService.js';
 import { DI } from '@/di-symbols.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
+import { PUBLIC_SEARCH_QUERY_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['channels'],
@@ -37,7 +38,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		query: { type: 'string' },
+		query: { type: 'string', maxLength: PUBLIC_SEARCH_QUERY_MAX_LENGTH },
 		type: { type: 'string', enum: ['nameAndDescription', 'nameOnly'], default: 'nameAndDescription' },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },

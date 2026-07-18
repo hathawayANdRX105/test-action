@@ -8,6 +8,7 @@ import _Ajv from 'ajv';
 import type { Schema, SchemaType } from '@/misc/json-schema.js';
 import type { MiLocalUser } from '@/models/User.js';
 import type { MiAccessToken } from '@/models/AccessToken.js';
+import { MISSKEY_ID_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { ApiError } from './error.js';
 import type { IEndpointMeta } from './endpoints.js';
 
@@ -17,7 +18,7 @@ const ajv = new Ajv({
 	useDefaults: true,
 });
 
-ajv.addFormat('misskey:id', /^[a-zA-Z0-9]+$/);
+ajv.addFormat('misskey:id', new RegExp(`^[a-zA-Z0-9]{1,${MISSKEY_ID_MAX_LENGTH}}$`));
 
 export type Response = Record<string, any> | void;
 

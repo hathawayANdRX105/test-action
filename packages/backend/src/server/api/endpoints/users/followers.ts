@@ -13,6 +13,7 @@ import { UtilityService } from '@/core/UtilityService.js';
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
 import { CacheService } from '@/core/CacheService.js';
+import { PUBLIC_HOST_MAX_LENGTH, PUBLIC_SEARCH_QUERY_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -61,10 +62,11 @@ export const paramDef = {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 
 		userId: { type: 'string', format: 'misskey:id' },
-		username: { type: 'string' },
+		username: { type: 'string', maxLength: PUBLIC_SEARCH_QUERY_MAX_LENGTH },
 		host: {
 			type: 'string',
 			nullable: true,
+			maxLength: PUBLIC_HOST_MAX_LENGTH,
 			description: 'The local host is represented with `null`.',
 		},
 	},

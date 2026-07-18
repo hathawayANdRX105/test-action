@@ -18,6 +18,7 @@ import {
 	uploadFile,
 	waitFire,
 } from '../utils.js';
+import { MISSKEY_ID_MAX_LENGTH } from '@/server/api/input-limits.js';
 import type * as misskey from 'misskey-js';
 
 describe('API', () => {
@@ -51,6 +52,14 @@ describe('API', () => {
 			const res = await api('test', {
 				required: true,
 				id: '',
+			});
+			assert.strictEqual(res.status, 400);
+		});
+
+		test('invalid misskey:id (too long)', async () => {
+			const res = await api('test', {
+				required: true,
+				id: 'a'.repeat(MISSKEY_ID_MAX_LENGTH + 1),
 			});
 			assert.strictEqual(res.status, 400);
 		});

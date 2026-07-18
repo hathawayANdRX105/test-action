@@ -12,6 +12,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { QueryService } from '@/core/QueryService.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { DI } from '@/di-symbols.js';
+import { PUBLIC_TAG_MAX_LENGTH, PUBLIC_TAG_QUERY_MAX_ITEMS } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['notes', 'hashtags'],
@@ -48,19 +49,22 @@ export const paramDef = {
 		untilId: { type: 'string', format: 'misskey:id' },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 
-		tag: { type: 'string', minLength: 1 },
+		tag: { type: 'string', minLength: 1, maxLength: PUBLIC_TAG_MAX_LENGTH },
 		// scope 过滤:'local' = 只看本地原创帖(userHost IS NULL), 'remote' = 只看联合远程帖, null/缺省 = 全部
 		scope: { type: 'string', enum: ['local', 'remote'], nullable: true },
 		query: {
 			type: 'array',
 			description: 'The outer arrays are chained with OR, the inner arrays are chained with AND.',
+			maxItems: PUBLIC_TAG_QUERY_MAX_ITEMS,
 			items: {
 				type: 'array',
 				items: {
 					type: 'string',
 					minLength: 1,
+					maxLength: PUBLIC_TAG_MAX_LENGTH,
 				},
 				minItems: 1,
+				maxItems: PUBLIC_TAG_QUERY_MAX_ITEMS,
 			},
 			minItems: 1,
 		},

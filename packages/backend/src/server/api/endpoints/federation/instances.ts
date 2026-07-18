@@ -10,6 +10,7 @@ import { InstanceEntityService } from '@/core/entities/InstanceEntityService.js'
 import { MetaService } from '@/core/MetaService.js';
 import { DI } from '@/di-symbols.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
+import { PUBLIC_HOST_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['federation'],
@@ -39,7 +40,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		host: { type: 'string', nullable: true, description: 'Omit or use `null` to not filter by host.' },
+		host: { type: 'string', nullable: true, maxLength: PUBLIC_HOST_MAX_LENGTH, description: 'Omit or use `null` to not filter by host.' },
 		blocked: { type: 'boolean', nullable: true },
 		notResponding: { type: 'boolean', nullable: true },
 		suspended: { type: 'boolean', nullable: true },
@@ -50,7 +51,7 @@ export const paramDef = {
 		nsfw: { type: 'boolean', nullable: true },
 		bubble: { type: 'boolean', nullable: true },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
-		offset: { type: 'integer', default: 0 },
+		offset: { type: 'integer', minimum: 0, maximum: 10000, default: 0 },
 		sort: {
 			type: 'string',
 			nullable: true,

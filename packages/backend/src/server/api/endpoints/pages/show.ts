@@ -6,10 +6,11 @@
 import { IsNull } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import type { UsersRepository, PagesRepository } from '@/models/_.js';
-import type { MiPage } from '@/models/Page.js';
+import { pageNameSchema, type MiPage } from '@/models/Page.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { CacheService } from '@/core/CacheService.js';
 import { PageEntityService } from '@/core/entities/PageEntityService.js';
+import { localUsernameSchema } from '@/models/User.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '../../error.js';
 
@@ -43,8 +44,8 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		pageId: { type: 'string', format: 'misskey:id' },
-		name: { type: 'string' },
-		username: { type: 'string' },
+		name: pageNameSchema,
+		username: localUsernameSchema,
 	},
 	anyOf: [
 		{ required: ['pageId'] },

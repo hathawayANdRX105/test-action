@@ -12,6 +12,7 @@ import { IdService } from '@/core/IdService.js';
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { apiAccessErrors, isApprovalRequiredForScopes, isDeveloperApiAccessApproved } from '@/server/api/api-access-utils.js';
+import { PUBLIC_TOKEN_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { ApiError } from '../../../error.js';
 
 export const meta = {
@@ -53,7 +54,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		appSecret: { type: 'string' },
+		appSecret: { type: 'string', maxLength: PUBLIC_TOKEN_MAX_LENGTH },
 	},
 	required: ['appSecret'],
 } as const;

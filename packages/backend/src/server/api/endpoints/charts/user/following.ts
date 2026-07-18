@@ -10,6 +10,7 @@ import PerUserFollowingChart from '@/core/chart/charts/per-user-following.js';
 import { schema } from '@/core/chart/charts/entities/per-user-following.js';
 import { CacheService } from '@/core/CacheService.js';
 import { RoleService } from '@/core/RoleService.js';
+import { PUBLIC_CHART_OFFSET_MAX_TIMESTAMP } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['charts', 'users', 'following'],
@@ -32,7 +33,7 @@ export const paramDef = {
 	properties: {
 		span: { type: 'string', enum: ['day', 'hour'] },
 		limit: { type: 'integer', minimum: 1, maximum: 500, default: 30 },
-		offset: { type: 'integer', nullable: true, default: null },
+		offset: { type: 'integer', nullable: true, minimum: 0, maximum: PUBLIC_CHART_OFFSET_MAX_TIMESTAMP, default: null },
 		userId: { type: 'string', format: 'misskey:id' },
 	},
 	required: ['span', 'userId'],

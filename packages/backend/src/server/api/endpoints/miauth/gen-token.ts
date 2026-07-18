@@ -7,12 +7,17 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ApiError } from '@/server/api/error.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { AccessTokensRepository } from '@/models/_.js';
+import type { MiMeta } from '@/models/Meta.js';
 import { IdService } from '@/core/IdService.js';
 import { NotificationService } from '@/core/NotificationService.js';
+import { RoleService } from '@/core/RoleService.js';
+import { unique } from '@/misc/prelude/array.js';
 import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { DI } from '@/di-symbols.js';
 import { TimeService } from '@/global/TimeService.js';
 import { CacheService } from '@/core/CacheService.js';
+import { apiAccessErrors, getApiPublicPermissions } from '@/server/api/api-access-utils.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH, PUBLIC_APP_DESCRIPTION_MAX_LENGTH, PUBLIC_APP_ICON_URL_MAX_LENGTH, PUBLIC_APP_NAME_MAX_LENGTH, PUBLIC_TOKEN_MAX_LENGTH, PUBLIC_USER_IDS_MAX_ITEMS } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['auth'],
@@ -55,15 +60,15 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		session: { type: 'string', nullable: true },
-		name: { type: 'string', nullable: true },
-		description: { type: 'string', nullable: true },
-		iconUrl: { type: 'string', nullable: true },
-		permission: { type: 'array', uniqueItems: true, items: {
-			type: 'string',
+		session: { type: 'string', nullable: true, maxLength: PUBLIC_TOKEN_MAX_LENGTH },
+		name: { type: 'string', nullable: true, maxLength: PUBLIC_APP_NAME_MAX_LENGTH },
+		description: { type: 'string', nullable: true, maxLength: PUBLIC_APP_DESCRIPTION_MAX_LENGTH },
+		iconUrl: { type: 'string', nullable: true, maxLength: PUBLIC_APP_ICON_URL_MAX_LENGTH },
+		permission: { type: 'array', uniqueItems: true, maxItems: API_PERMISSION_MAX_ITEMS, items: {
+			type: 'string', maxLength: API_PERMISSION_MAX_LENGTH,
 		} },
-		grantees: { type: 'array', uniqueItems: true, items: {
-			type: 'string',
+		grantees: { type: 'array', uniqueItems: true, maxItems: PUBLIC_USER_IDS_MAX_ITEMS, items: {
+			type: 'string', format: 'misskey:id',
 		} },
 		rank: { type: 'string', enum: ['admin', 'mod', 'user'], nullable: true },
 	},
@@ -73,11 +78,15 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
+		@Inject(DI.meta)
+		private readonly instanceMeta: MiMeta,
+
 		@Inject(DI.accessTokensRepository)
 		private accessTokensRepository: AccessTokensRepository,
 
 		private idService: IdService,
 		private notificationService: NotificationService,
+		private readonly roleService: RoleService,
 		private readonly timeService: TimeService,
 		private readonly cacheService: CacheService,
 	) {
@@ -97,6 +106,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
+			const publicPermissions = getApiPublicPermissions(this.instanceMeta);
+			const permission = unique(ps.permission.map(v => v.replace(/^(.+)(\/|-)(read|write)$/, '$3:$1')))
+				.filter(scope => publicPermissions.includes(scope));
+			if (permission.length === 0) {
+				throw new ApiError(apiAccessErrors.apiScopeDisabled);
+			}
+
+			const requestedRank = ps.rank;
+			const rank = requestedRank === 'admin'
+				? await this.roleService.isAdministrator(me) ? 'admin' : await this.roleService.isModerator(me) ? 'mod' : 'user'
+				: requestedRank === 'mod'
+					? await this.roleService.isModerator(me) ? 'mod' : 'user'
+					: requestedRank;
+
 			// Generate access token
 			const accessToken = secureRndstr(32);
 
@@ -113,8 +136,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				name: ps.name,
 				description: ps.description,
 				iconUrl: ps.iconUrl,
-				permission: ps.permission,
-				rank: ps.rank,
+				permission,
+				rank,
 				status: 'active',
 				isDeveloperToken: true,
 				granteeIds: ps.grantees,
@@ -122,7 +145,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.grantees) {
 				for (const granteeId of ps.grantees) {
-					this.notificationService.createNotification(granteeId, 'sharedAccessGranted', { permCount: ps.permission.length, rank: ps.rank ?? null }, me.id);
+					this.notificationService.createNotification(granteeId, 'sharedAccessGranted', { permCount: permission.length, rank: rank ?? null }, me.id);
 				}
 			}
 

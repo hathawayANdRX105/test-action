@@ -15,6 +15,7 @@ import { unique } from '@/misc/prelude/array.js';
 import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { DI } from '@/di-symbols.js';
 import { apiAccessErrors, getApiPublicPermissions, isAdminApiScope, isApprovalRequiredForScopes } from '@/server/api/api-access-utils.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['api'],
@@ -44,7 +45,7 @@ export const paramDef = {
 		name: { type: 'string', nullable: true, maxLength: 128 },
 		description: { type: 'string', nullable: true, maxLength: 512 },
 		iconUrl: { type: 'string', nullable: true, maxLength: 512 },
-		permission: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+		permission: { type: 'array', uniqueItems: true, maxItems: API_PERMISSION_MAX_ITEMS, items: { type: 'string', maxLength: API_PERMISSION_MAX_LENGTH } },
 		rank: { type: 'string', enum: ['admin', 'mod', 'user'], nullable: true },
 		rateLimitPerMinute: { type: 'integer', minimum: 1, maximum: 10000, nullable: true },
 	},

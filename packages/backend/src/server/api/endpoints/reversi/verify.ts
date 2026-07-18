@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { ReversiService } from '@/core/ReversiService.js';
 import { ReversiGameEntityService } from '@/core/entities/ReversiGameEntityService.js';
+import { PUBLIC_CRC32_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -42,7 +43,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		gameId: { type: 'string', format: 'misskey:id' },
-		crc32: { type: 'string' },
+		crc32: { type: 'string', maxLength: PUBLIC_CRC32_MAX_LENGTH },
 	},
 	required: ['gameId', 'crc32'],
 } as const;

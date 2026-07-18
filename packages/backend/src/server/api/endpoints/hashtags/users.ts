@@ -13,6 +13,7 @@ import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
 import { TimeService } from '@/global/TimeService.js';
 import { promiseMap } from '@/misc/promise-map.js';
+import { PUBLIC_TAG_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	requireCredential: false,
@@ -39,7 +40,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		tag: { type: 'string' },
+		tag: { type: 'string', maxLength: PUBLIC_TAG_MAX_LENGTH },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 		sort: { type: 'string', enum: ['+follower', '-follower', '+createdAt', '-createdAt', '+updatedAt', '-updatedAt'] },
 		state: { type: 'string', enum: ['all', 'alive'], default: 'all' },

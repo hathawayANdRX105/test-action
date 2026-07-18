@@ -9,6 +9,7 @@ import type { InstancesRepository } from '@/models/_.js';
 import { InstanceEntityService } from '@/core/entities/InstanceEntityService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { DI } from '@/di-symbols.js';
+import { PUBLIC_HOST_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['federation'],
@@ -32,7 +33,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		host: { type: 'string' },
+		host: { type: 'string', maxLength: PUBLIC_HOST_MAX_LENGTH },
 	},
 	required: ['host'],
 } as const;

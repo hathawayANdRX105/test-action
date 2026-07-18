@@ -10,6 +10,7 @@ import type { MiNote } from '@/models/_.js';
 import { hasText } from '@/models/Note.js';
 import { NoteVisibilityService } from '@/core/NoteVisibilityService.js';
 import { ApiError } from '@/server/api/error.js';
+import { PUBLIC_TRANSLATION_TARGET_LANG_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { NoteTranslationService } from './translate-common.js';
 
 export const meta = {
@@ -62,7 +63,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		noteId: { type: 'string', format: 'misskey:id' },
-		targetLang: { type: 'string' },
+		targetLang: { type: 'string', maxLength: PUBLIC_TRANSLATION_TARGET_LANG_MAX_LENGTH },
 	},
 	required: ['noteId', 'targetLang'],
 } as const;

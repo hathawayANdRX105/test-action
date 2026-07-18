@@ -9,6 +9,7 @@ import type { UsersRepository } from '@/models/_.js';
 import { QueryService } from '@/core/QueryService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { DI } from '@/di-symbols.js';
+import { PUBLIC_HOST_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['federation'],
@@ -36,7 +37,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		host: { type: 'string' },
+		host: { type: 'string', maxLength: PUBLIC_HOST_MAX_LENGTH },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },

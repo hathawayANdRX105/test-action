@@ -12,6 +12,7 @@ import { AppEntityService } from '@/core/entities/AppEntityService.js';
 import { unique } from '@/misc/prelude/array.js';
 import { DI } from '@/di-symbols.js';
 import { apiAccessErrors, getApiPublicPermissions, hasUnsafeOAuthRedirectUri, isAdminApiScope, normalizeOAuthRedirectUris } from '@/server/api/api-access-utils.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['api', 'app'],
@@ -34,7 +35,7 @@ export const paramDef = {
 		appId: { type: 'string', format: 'misskey:id' },
 		name: { type: 'string', minLength: 1, maxLength: 128 },
 		description: { type: 'string', maxLength: 512 },
-		permission: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+		permission: { type: 'array', uniqueItems: true, maxItems: API_PERMISSION_MAX_ITEMS, items: { type: 'string', maxLength: API_PERMISSION_MAX_LENGTH } },
 		callbackUrl: { type: 'string', nullable: true, maxLength: 512 },
 		callbackUrls: { type: 'array', uniqueItems: true, maxItems: 20, items: { type: 'string', maxLength: 512 } },
 		websiteUrl: { type: 'string', nullable: true, maxLength: 1024 },

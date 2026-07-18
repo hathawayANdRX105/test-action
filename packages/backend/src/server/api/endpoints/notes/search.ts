@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { fileTypeCategories, SearchService } from '@/core/SearchService.js';
 import { SearchTrendService } from '@/core/SearchTrendService.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
+import { PUBLIC_HOST_MAX_LENGTH, PUBLIC_SEARCH_QUERY_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['notes'],
@@ -34,13 +35,14 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		query: { type: 'string' },
+		query: { type: 'string', maxLength: PUBLIC_SEARCH_QUERY_MAX_LENGTH },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 		offset: { type: 'integer', default: 0 },
 		host: {
 			type: 'string',
+			maxLength: PUBLIC_HOST_MAX_LENGTH,
 			description: 'The local host is represented with `.`.',
 		},
 		filetype: {
@@ -50,7 +52,7 @@ export const paramDef = {
 		},
 		userId: { type: 'string', format: 'misskey:id', nullable: true, default: null },
 		channelId: { type: 'string', format: 'misskey:id', nullable: true, default: null },
-		order: { type: 'string' },
+		order: { type: 'string', enum: ['asc', 'desc'] },
 	},
 	required: ['query'],
 } as const;

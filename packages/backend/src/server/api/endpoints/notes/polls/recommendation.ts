@@ -52,7 +52,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
-		offset: { type: 'integer', default: 0 },
+		offset: { type: 'integer', minimum: 0, maximum: 10000, default: 0 },
 		excludeChannels: { type: 'boolean', default: false },
 		local: { type: 'boolean', nullable: true, default: null },
 		expired: { type: 'boolean', default: false },

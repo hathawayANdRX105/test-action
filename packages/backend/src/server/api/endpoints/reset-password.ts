@@ -12,6 +12,7 @@ import { TimeService } from '@/global/TimeService.js';
 import { InternalEventService } from '@/global/InternalEventService.js';
 import { UserAuthService } from '@/core/UserAuthService.js';
 import { ApiError } from '@/server/api/error.js';
+import { PUBLIC_PASSWORD_MAX_LENGTH, PUBLIC_TOKEN_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['reset password'],
@@ -38,8 +39,8 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		token: { type: 'string' },
-		password: { type: 'string', minLength: 1 },
+		token: { type: 'string', maxLength: PUBLIC_TOKEN_MAX_LENGTH },
+		password: { type: 'string', minLength: 1, maxLength: PUBLIC_PASSWORD_MAX_LENGTH },
 	},
 	required: ['token', 'password'],
 } as const;

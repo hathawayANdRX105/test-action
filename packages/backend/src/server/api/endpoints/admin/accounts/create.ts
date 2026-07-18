@@ -15,6 +15,7 @@ import { ApiError } from '@/server/api/error.js';
 import { Packed } from '@/misc/json-schema.js';
 import { RoleService } from '@/core/RoleService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { PUBLIC_PASSWORD_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -78,7 +79,7 @@ export const paramDef = {
 	properties: {
 		username: localUsernameSchema,
 		password: passwordSchema,
-		setupPassword: { type: 'string', nullable: true },
+		setupPassword: { type: 'string', nullable: true, maxLength: PUBLIC_PASSWORD_MAX_LENGTH },
 	},
 	required: ['username', 'password'],
 } as const;

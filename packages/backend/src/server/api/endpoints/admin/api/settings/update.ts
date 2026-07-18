@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
 import { apiAccessModes } from '@/const.js';
 import { getApiNoApprovalPermissions, getApiPublicPermissions, normalizeApiPermissions } from '@/server/api/api-access-utils.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['admin', 'api'],
@@ -24,8 +25,8 @@ export const paramDef = {
 		oauthEnabled: { type: 'boolean' },
 		oidcEnabled: { type: 'boolean' },
 		requireAppApproval: { type: 'boolean' },
-		publicPermissions: { type: 'array', uniqueItems: true, items: { type: 'string' } },
-		noApprovalPermissions: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+		publicPermissions: { type: 'array', uniqueItems: true, maxItems: API_PERMISSION_MAX_ITEMS, items: { type: 'string', maxLength: API_PERMISSION_MAX_LENGTH } },
+		noApprovalPermissions: { type: 'array', uniqueItems: true, maxItems: API_PERMISSION_MAX_ITEMS, items: { type: 'string', maxLength: API_PERMISSION_MAX_LENGTH } },
 		allowDeveloperTokens: { type: 'boolean' },
 		defaultTokenRateLimit: { type: 'integer', minimum: 0, maximum: 100000 },
 		writeTokenRateLimit: { type: 'integer', minimum: 0, maximum: 100000 },

@@ -9,6 +9,7 @@ import type { HashtagsRepository } from '@/models/_.js';
 import { normalizeForSearch } from '@/misc/normalize-for-search.js';
 import { HashtagEntityService } from '@/core/entities/HashtagEntityService.js';
 import { DI } from '@/di-symbols.js';
+import { PUBLIC_TAG_MAX_LENGTH } from '@/server/api/input-limits.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -40,7 +41,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		tag: { type: 'string' },
+		tag: { type: 'string', maxLength: PUBLIC_TAG_MAX_LENGTH },
 	},
 	required: ['tag'],
 } as const;

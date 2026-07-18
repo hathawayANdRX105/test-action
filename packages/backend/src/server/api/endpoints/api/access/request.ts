@@ -12,6 +12,7 @@ import { IdService } from '@/core/IdService.js';
 import { TimeService } from '@/global/TimeService.js';
 import { DI } from '@/di-symbols.js';
 import { apiAccessErrors } from '@/server/api/api-access-utils.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['api'],
@@ -30,7 +31,7 @@ export const paramDef = {
 	properties: {
 		reason: { type: 'string', minLength: 1, maxLength: 2000 },
 		// 申请人希望使用的权限范围(scope)。仅作记录/审核参考。
-		permissions: { type: 'array', items: { type: 'string' } },
+		permissions: { type: 'array', maxItems: API_PERMISSION_MAX_ITEMS, items: { type: 'string', maxLength: API_PERMISSION_MAX_LENGTH } },
 	},
 	required: ['reason'],
 } as const;

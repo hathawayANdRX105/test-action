@@ -8,6 +8,7 @@ import { getJsonSchema } from '@/core/chart/core.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import InstanceChart from '@/core/chart/charts/instance.js';
 import { schema } from '@/core/chart/charts/entities/instance.js';
+import { PUBLIC_CHART_OFFSET_MAX_TIMESTAMP, PUBLIC_HOST_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['charts'],
@@ -32,8 +33,8 @@ export const paramDef = {
 	properties: {
 		span: { type: 'string', enum: ['day', 'hour'] },
 		limit: { type: 'integer', minimum: 1, maximum: 500, default: 30 },
-		offset: { type: 'integer', nullable: true, default: null },
-		host: { type: 'string' },
+		offset: { type: 'integer', nullable: true, minimum: 0, maximum: PUBLIC_CHART_OFFSET_MAX_TIMESTAMP, default: null },
+		host: { type: 'string', maxLength: PUBLIC_HOST_MAX_LENGTH },
 	},
 	required: ['span', 'host'],
 } as const;

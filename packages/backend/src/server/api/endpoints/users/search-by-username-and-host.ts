@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { UserSearchService } from '@/core/UserSearchService.js';
+import { PUBLIC_HOST_MAX_LENGTH, PUBLIC_SEARCH_QUERY_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['users'],
@@ -37,8 +38,8 @@ export const paramDef = {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 		detail: { type: 'boolean', default: true },
 
-		username: { type: 'string', nullable: true },
-		host: { type: 'string', nullable: true },
+		username: { type: 'string', nullable: true, maxLength: PUBLIC_SEARCH_QUERY_MAX_LENGTH },
+		host: { type: 'string', nullable: true, maxLength: PUBLIC_HOST_MAX_LENGTH },
 	},
 	anyOf: [
 		{ required: ['username'] },

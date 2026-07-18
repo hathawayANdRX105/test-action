@@ -10,6 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { EmojiEntityService } from '@/core/entities/EmojiEntityService.js';
 import { DI } from '@/di-symbols.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
+import { PUBLIC_EMOJI_NAME_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -36,6 +37,7 @@ export const paramDef = {
 	properties: {
 		name: {
 			type: 'string',
+			maxLength: PUBLIC_EMOJI_NAME_MAX_LENGTH,
 		},
 	},
 	required: ['name'],

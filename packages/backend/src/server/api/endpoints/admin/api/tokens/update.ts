@@ -10,6 +10,7 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { normalizeApiPermissions } from '@/server/api/api-access-utils.js';
 import { accessTokenRanks } from '@/models/AccessToken.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['admin', 'api'],
@@ -31,7 +32,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		tokenId: { type: 'string', format: 'misskey:id' },
-		permission: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+		permission: { type: 'array', uniqueItems: true, maxItems: API_PERMISSION_MAX_ITEMS, items: { type: 'string', maxLength: API_PERMISSION_MAX_LENGTH } },
 		rank: { type: 'string', enum: accessTokenRanks, nullable: true },
 		rateLimitPerMinute: { type: 'integer', minimum: 0, maximum: 100000, nullable: true },
 		name: { type: 'string', nullable: true, maxLength: 128 },

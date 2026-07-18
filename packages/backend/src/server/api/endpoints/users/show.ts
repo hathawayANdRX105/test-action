@@ -16,6 +16,7 @@ import PerUserPvChart from '@/core/chart/charts/per-user-pv.js';
 import { RoleService } from '@/core/RoleService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { UserService } from '@/core/UserService.js';
+import { PUBLIC_HOST_MAX_LENGTH, PUBLIC_SEARCH_QUERY_MAX_LENGTH, PUBLIC_USER_IDS_MAX_ITEMS } from '@/server/api/input-limits.js';
 import { ApiError } from '../../error.js';
 import { ApiLoggerService } from '../../ApiLoggerService.js';
 import type { FindOptionsWhere } from 'typeorm';
@@ -72,13 +73,14 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		userId: { type: 'string', format: 'misskey:id' },
-		userIds: { type: 'array', uniqueItems: true, items: {
+		userIds: { type: 'array', uniqueItems: true, maxItems: PUBLIC_USER_IDS_MAX_ITEMS, items: {
 			type: 'string', format: 'misskey:id',
 		} },
-		username: { type: 'string' },
+		username: { type: 'string', maxLength: PUBLIC_SEARCH_QUERY_MAX_LENGTH },
 		host: {
 			type: 'string',
 			nullable: true,
+			maxLength: PUBLIC_HOST_MAX_LENGTH,
 			description: 'The local host is represented with `null`.',
 		},
 		detail: {

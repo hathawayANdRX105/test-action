@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { EmailService } from '@/core/EmailService.js';
+import { PUBLIC_EMAIL_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['users'],
@@ -37,7 +38,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		emailAddress: { type: 'string' },
+		emailAddress: { type: 'string', maxLength: PUBLIC_EMAIL_MAX_LENGTH },
 	},
 	required: ['emailAddress'],
 } as const;

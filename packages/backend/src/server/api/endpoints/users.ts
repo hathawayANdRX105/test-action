@@ -13,6 +13,7 @@ import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
 import { TimeService } from '@/global/TimeService.js';
 import { promiseMap } from '@/misc/promise-map.js';
+import { PUBLIC_HOST_MAX_LENGTH } from '@/server/api/input-limits.js';
 import type { SelectQueryBuilder } from 'typeorm';
 
 export const meta = {
@@ -42,13 +43,14 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
-		offset: { type: 'integer', default: 0 },
+		offset: { type: 'integer', minimum: 0, maximum: 10000, default: 0 },
 		sort: { type: 'string', enum: ['+follower', '-follower', '+localFollower', '-localFollower', '+createdAt', '-createdAt', '+updatedAt', '-updatedAt'] },
 		state: { type: 'string', enum: ['all', 'alive'], default: 'all' },
 		origin: { type: 'string', enum: ['combined', 'local', 'remote'], default: 'local' },
 		hostname: {
 			type: 'string',
 			nullable: true,
+			maxLength: PUBLIC_HOST_MAX_LENGTH,
 			default: null,
 			description: 'The local host is represented with `null`.',
 		},

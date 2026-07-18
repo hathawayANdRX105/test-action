@@ -11,6 +11,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteReactionEntityService } from '@/core/entities/NoteReactionEntityService.js';
 import { DI } from '@/di-symbols.js';
 import { QueryService } from '@/core/QueryService.js';
+import { PUBLIC_REACTION_TYPE_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['notes', 'reactions'],
@@ -49,7 +50,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		noteId: { type: 'string', format: 'misskey:id' },
-		type: { type: 'string', nullable: true },
+		type: { type: 'string', nullable: true, maxLength: PUBLIC_REACTION_TYPE_MAX_LENGTH },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },

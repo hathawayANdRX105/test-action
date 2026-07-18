@@ -14,6 +14,7 @@ import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { AppEntityService } from '@/core/entities/AppEntityService.js';
 import { DI } from '@/di-symbols.js';
 import { apiAccessErrors, getApiPublicPermissions, hasUnsafeOAuthRedirectUri, isAdminApiScope, isApprovalRequiredForScopes, normalizeOAuthRedirectUris } from '@/server/api/api-access-utils.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH, PUBLIC_APP_DESCRIPTION_MAX_LENGTH, PUBLIC_APP_NAME_MAX_LENGTH } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['app'],
@@ -48,10 +49,10 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		name: { type: 'string' },
-		description: { type: 'string' },
-		permission: { type: 'array', uniqueItems: true, items: {
-			type: 'string',
+		name: { type: 'string', minLength: 1, maxLength: PUBLIC_APP_NAME_MAX_LENGTH },
+		description: { type: 'string', maxLength: PUBLIC_APP_DESCRIPTION_MAX_LENGTH },
+		permission: { type: 'array', uniqueItems: true, maxItems: API_PERMISSION_MAX_ITEMS, items: {
+			type: 'string', maxLength: API_PERMISSION_MAX_LENGTH,
 		} },
 		callbackUrl: { type: 'string', nullable: true, maxLength: 512 },
 		callbackUrls: { type: 'array', uniqueItems: true, maxItems: 20, items: { type: 'string', maxLength: 512 } },
