@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import { Inject, Injectable } from '@nestjs/common';
 import sharp from 'sharp';
 import { sharpBmp } from '@misskey-dev/sharp-read-bmp';
-import { IsNull } from 'typeorm';
+import { DataSource, IsNull } from 'typeorm';
 import { DeleteObjectCommandInput, PutObjectCommandInput, NoSuchKey } from '@aws-sdk/client-s3';
 import { DI } from '@/di-symbols.js';
 import type { DriveFilesRepository, UsersRepository, DriveFoldersRepository, UserProfilesRepository, MiMeta } from '@/models/_.js';
@@ -117,6 +117,9 @@ export class DriveService {
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
 
+		@Inject(DI.db)
+		private readonly db: DataSource,
+
 		@Inject(DI.driveFoldersRepository)
 		private driveFoldersRepository: DriveFoldersRepository,
 
@@ -139,7 +142,6 @@ export class DriveService {
 		private instanceChart: InstanceChart,
 		private utilityService: UtilityService,
 		private readonly cacheService: CacheService,
-
 		loggerService: LoggerService,
 	) {
 		const logger = loggerService.getLogger('drive', 'blue');
@@ -148,15 +150,12 @@ export class DriveService {
 		this.deleteLogger = logger.createSubLogger('delete');
 	}
 
-	/***
-	 * Save file
-	 * @param file
-	 * @param path Path for original
-	 * @param name Name for original (should be extention corrected)
-	 * @param info File metadata
+	/**
+	 * Materialize original/alts into storage and populate file fields.
+	 * Does not insert a DB row; caller owns capacity recheck + insert.
 	 */
 	@bindThis
-	private async save(file: MiDriveFile, path: string, name: string, info: FileInfo): Promise<MiDriveFile> {
+	private async materializeStoredFile(file: MiDriveFile, path: string, name: string, info: FileInfo): Promise<void> {
 		const type = info.type.mime;
 		let hash = info.md5;
 		let size = info.size;
@@ -246,8 +245,6 @@ export class DriveService {
 			file.md5 = hash;
 			file.size = size;
 			file.storedInternal = false;
-
-			return await this.driveFilesRepository.insertOne(file);
 		} else { // use internal storage
 			const ext = FILE_TYPE_BROWSERSAFE.includes(type) ? info.type.ext : null;
 
@@ -290,9 +287,55 @@ export class DriveService {
 			file.type = type;
 			file.md5 = hash;
 			file.size = size;
-
-			return await this.driveFilesRepository.insertOne(file);
 		}
+	}
+
+	/**
+	 * Drop blobs written by materializeStoredFile when insert/recheck fails.
+	 * No DB row exists yet, so do not call deleteFile/deleteFileSync.
+	 */
+	@bindThis
+	private async cleanupMaterializedBlobs(file: MiDriveFile): Promise<void> {
+		if (file.isLink) return;
+
+		const promises: Promise<void>[] = [];
+
+		if (file.storedInternal) {
+			if (file.accessKey) promises.push(this.deleteLocalFile(file.accessKey));
+			if (file.thumbnailAccessKey && file.thumbnailUrl) promises.push(this.deleteLocalFile(file.thumbnailAccessKey));
+			if (file.webpublicAccessKey && file.webpublicUrl) promises.push(this.deleteLocalFile(file.webpublicAccessKey));
+		} else {
+			if (file.accessKey) promises.push(this.deleteObjectStorageFile(file.accessKey));
+			if (file.thumbnailAccessKey && file.thumbnailUrl) promises.push(this.deleteObjectStorageFile(file.thumbnailAccessKey));
+			if (file.webpublicAccessKey && file.webpublicUrl) promises.push(this.deleteObjectStorageFile(file.webpublicAccessKey));
+		}
+
+		if (promises.length > 0) {
+			await Promise.all(promises);
+		}
+	}
+
+	/** Best-effort cleanup that never replaces the primary capacity/insert error. */
+	@bindThis
+	private async cleanupMaterializedBlobsBestEffort(file: MiDriveFile): Promise<void> {
+		try {
+			await this.cleanupMaterializedBlobs(file);
+		} catch (err) {
+			this.registerLogger.warn(`post-capacity cleanup failed: ${renderInlineError(err)}`);
+		}
+	}
+
+	/***
+	 * Save file (materialize blob then insert). Used when no per-user capacity lock is needed.
+	 * @param file
+	 * @param path Path for original
+	 * @param name Name for original (should be extention corrected)
+	 * @param info File metadata
+	 */
+	@bindThis
+	private async save(file: MiDriveFile, path: string, name: string, info: FileInfo): Promise<MiDriveFile> {
+		await this.materializeStoredFile(file, path, name, info);
+		return await this.driveFilesRepository.insertOne(file);
 	}
 
 	/**
@@ -532,18 +575,11 @@ export class DriveService {
 
 		this.registerLogger.debug(`ADD DRIVE FILE: user ${user?.id ?? 'not set'}, name ${detectedName}, tmp ${path}`);
 
-		//#region Check drive usage
+		//#region Check max file size (before materialize; may flip remote to isLink)
 		if (user && !isLink) {
-			const usage = await this.driveFileEntityService.calcDriveUsageOf(user);
 			const isLocal = isLocalUser(user);
-
 			const policies = await this.roleService.getUserPolicies(user.id);
-			// 管理者が個別に上書きした容量があれば、ロール由来の容量より大きい方を採用する。
-			const overrideMb = (user as { driveCapacityOverrideMb?: number | null }).driveCapacityOverrideMb ?? 0;
-			const driveCapacity = 1024 * 1024 * Math.max(policies.driveCapacityMb, overrideMb);
 			const maxFileSize = 1024 * 1024 * policies.maxFileSizeMb;
-			this.registerLogger.debug('drive capacity override applied');
-			this.registerLogger.debug(`overrideCap: ${driveCapacity}bytes, usage: ${usage}bytes, u+s: ${usage + info.size}bytes`);
 
 			if (maxFileSize < info.size) {
 				if (isLocal) {
@@ -553,15 +589,6 @@ export class DriveService {
 					// Instead, force "link" mode which does not cache the file locally.
 					isLink = true;
 				}
-			}
-
-			// If usage limit exceeded
-			// Repeat the "!isLink" check because it could be set to true by the previous block.
-			if (driveCapacity < usage + info.size && !isLink) {
-				if (isLocal) {
-					throw new IdentifiableError('c6244ed2-a39a-4e1c-bf93-f0fbd7764fa6', 'No free space.', true);
-				}
-				await this.expireOldFile(await this.cacheService.findRemoteUserById(user.id), driveCapacity - info.size);
 			}
 		}
 		//#endregion
@@ -660,8 +687,67 @@ export class DriveService {
 					throw err;
 				}
 			}
+		} else if (user) {
+			// Materialize + policies outside the capacity TX (no Redis TTL lease).
+			// Critical section: advisory xact lock + SUM + recheck + insert on one connection.
+			await this.materializeStoredFile(file, path, detectedName, info);
+
+			const isLocal = isLocalUser(user);
+			const policies = await this.roleService.getUserPolicies(user.id);
+			// 管理者が個別に上書きした容量があれば、ロール由来の容量より大きい方を採用する。
+			const overrideMb = (user as { driveCapacityOverrideMb?: number | null }).driveCapacityOverrideMb ?? 0;
+			const driveCapacity = 1024 * 1024 * Math.max(policies.driveCapacityMb, overrideMb);
+			// Prefer post-materialize size (video optimize may change it).
+			const billedSize = file.size;
+			let needRemoteExpire = false;
+
+			try {
+				file = await this.db.transaction(async tem => {
+					await tem.query(
+						`SELECT pg_advisory_xact_lock(hashtext('drive-capacity'), hashtext($1))`,
+						[user.id],
+					);
+
+					const { sum } = await tem.createQueryBuilder(MiDriveFile, 'file')
+						.select('COALESCE(SUM(file.size), 0)', 'sum')
+						.where('file.userId = :id', { id: user.id })
+						.andWhere('file.isLink = FALSE')
+						.getRawOne();
+					const usage = parseInt(sum, 10) || 0;
+
+					this.registerLogger.debug('drive capacity override applied');
+					this.registerLogger.debug(`overrideCap: ${driveCapacity}bytes, usage: ${usage}bytes, u+s: ${usage + billedSize}bytes`);
+
+					if (driveCapacity < usage + billedSize) {
+						if (isLocal) {
+							throw new IdentifiableError('c6244ed2-a39a-4e1c-bf93-f0fbd7764fa6', 'No free space.', true);
+						}
+						// Remote: soft quota — insert proceeds; expire after commit.
+						needRemoteExpire = true;
+					}
+
+					// Never call driveFilesRepository.insertOne here: it opens a root-manager TX.
+					await tem.createQueryBuilder()
+						.insert()
+						.into(MiDriveFile)
+						.values(file)
+						.execute();
+					return await tem.findOneByOrFail(MiDriveFile, { id: file.id });
+				});
+			} catch (err) {
+				await this.cleanupMaterializedBlobsBestEffort(file);
+				throw err;
+			}
+
+			if (needRemoteExpire) {
+				try {
+					await this.expireOldFile(await this.cacheService.findRemoteUserById(user.id), driveCapacity);
+				} catch (err) {
+					this.registerLogger.warn(`remote drive expire failed: ${renderInlineError(err)}`);
+				}
+			}
 		} else {
-			file = await (this.save(file, path, detectedName, info));
+			file = await this.save(file, path, detectedName, info);
 		}
 
 		this.registerLogger.info(`Created file ${file.id} (${detectedName}) of type ${info.type.mime} for user ${user?.id ?? '<none>'}`);
