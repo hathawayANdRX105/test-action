@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { RegistryApiService } from '@/core/RegistryApiService.js';
+import { IdentifiableError } from '@/misc/identifiable-error.js';
+import { ApiError } from '../../../error.js';
 
 export const meta = {
 	requireCredential: true,
@@ -15,6 +17,14 @@ export const meta = {
 	limit: {
 		duration: 1000,
 		max: 2,
+	},
+
+	errors: {
+		tooManyKeys: {
+			message: 'Too many registry keys.',
+			code: 'TOO_MANY_REGISTRY_KEYS',
+			id: '4f1c8a2e-9b3d-4e7a-8c1f-2d6e9a0b5c74',
+		},
 	},
 } as const;
 
@@ -37,7 +47,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private registryApiService: RegistryApiService,
 	) {
 		super(meta, paramDef, async (ps, me, accessToken) => {
-			await this.registryApiService.set(me.id, accessToken ? accessToken.id : (ps.domain ?? null), ps.scope, ps.key, ps.value);
+			try {
+				await this.registryApiService.set(me.id, accessToken ? accessToken.id : (ps.domain ?? null), ps.scope, ps.key, ps.value);
+			} catch (err) {
+				if (err instanceof IdentifiableError && err.id === '4f1c8a2e-9b3d-4e7a-8c1f-2d6e9a0b5c74') {
+					throw new ApiError(meta.errors.tooManyKeys);
+				}
+				throw err;
+			}
 		});
 	}
 }
