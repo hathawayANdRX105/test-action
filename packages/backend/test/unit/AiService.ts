@@ -350,6 +350,24 @@ describe('AiService', () => {
 		expect(driveFilesRepository.find).not.toHaveBeenCalled();
 	});
 
+	it('does not leave an empty conversation when a new chat references a missing attachment', async () => {
+		const { service, providers, conversations, messages } = createService();
+		providers.set('provider1', createProvider());
+
+		await expect(service.streamChat({
+			user: { id: 'user1' } as never,
+			providerId: 'provider1',
+			model: 'gpt-4o',
+			content: '',
+			fileIds: ['missing-file'],
+		})).rejects.toMatchObject({
+			code: 'NO_SUCH_FILE',
+		});
+
+		expect(messages).toHaveLength(0);
+		expect(conversations.size).toBe(0);
+	});
+
 	it('caps streaming response growth and redacts provider secrets in saved errors', async () => {
 		const { service, providers, messages, httpRequestService } = createService();
 		providers.set('provider1', createProvider());

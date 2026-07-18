@@ -521,6 +521,7 @@ export class AiService {
 		let conversation: MiAiConversation;
 		let provider: MiAiProvider;
 		let model: string;
+		let attachments: MiAiMessage['attachments'];
 
 		if (params.conversationId) {
 			conversation = await this.getOwnedConversation(params.user.id, params.conversationId);
@@ -535,7 +536,10 @@ export class AiService {
 				});
 				conversation = await this.getOwnedConversation(params.user.id, conversation.id);
 			}
+			attachments = await this.resolveAttachments(params.user.id, params.fileIds ?? [], model);
 		} else {
+			const resolved = await this.resolveProviderAndModel(params.providerId, params.model);
+			attachments = await this.resolveAttachments(params.user.id, params.fileIds ?? [], resolved.model);
 			const created = await this.createConversation(params.user, {
 				providerId: params.providerId,
 				model: params.model,
@@ -546,7 +550,6 @@ export class AiService {
 			model = conversation.model;
 		}
 
-		const attachments = await this.resolveAttachments(params.user.id, params.fileIds ?? [], model);
 		const now = this.timeService.date;
 		const userMessage = await this.aiMessagesRepository.insertOne({
 			id: this.idService.gen(),
