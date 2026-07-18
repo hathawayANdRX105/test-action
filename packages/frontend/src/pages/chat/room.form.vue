@@ -133,9 +133,13 @@ const uploadingIds = ref<string[]>([]);
 const sending = ref(false);
 const textareaReadOnly = ref(false);
 const isImeComposing = ref(false);
-const justEndedComposition = ref(false);
+const suppressEnterUntilKeyup = ref(false);
+const compositionEndedRecently = ref(false);
+// Some IMEs emit the Enter keydown that confirmed a candidate after compositionend.
+const IME_COMPOSITION_END_GUARD_MS = 200;
 let autocompleteInstance: Autocomplete | null = null;
 let focusScrollTimers: number[] = [];
+let compositionEndGuardTimer: number | undefined;
 let sendSerial = 0;
 
 // ミュート期限切れの自動解除のために定期的に更新する
@@ -238,7 +242,7 @@ function onDrop(ev: DragEvent): void {
 
 function onKeydown(ev: KeyboardEvent) {
 	if (ev.key === 'Enter') {
-		if (isComposingInput(ev)) return;
+		if (shouldIgnoreEnterForIme(ev)) return;
 
 		if (prefer.s['chat.sendOnEnter']) {
 			if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) {
@@ -254,25 +258,54 @@ function onKeydown(ev: KeyboardEvent) {
 	}
 }
 
-function isComposingInput(ev: KeyboardEvent): boolean {
-	return isImeComposing.value || justEndedComposition.value || ev.isComposing || ev.keyCode === 229;
+function shouldIgnoreEnterForIme(ev: KeyboardEvent): boolean {
+	if (isImeComposing.value || ev.isComposing || ev.keyCode === 229) {
+		suppressEnterUntilKeyup.value = true;
+		return true;
+	}
+
+	if (suppressEnterUntilKeyup.value || compositionEndedRecently.value) {
+		suppressEnterUntilKeyup.value = true;
+		clearCompositionEndGuard();
+		ev.preventDefault();
+		return true;
+	}
+
+	return false;
 }
 
-function onKeyup() {
-	justEndedComposition.value = false;
+function onKeyup(ev: KeyboardEvent) {
+	if (ev.key !== 'Enter') return;
+	suppressEnterUntilKeyup.value = false;
+	clearCompositionEndGuard();
 }
 
 function onCompositionStart() {
 	isImeComposing.value = true;
-	justEndedComposition.value = false;
+	suppressEnterUntilKeyup.value = false;
+	clearCompositionEndGuard();
 }
 
 function onCompositionEnd() {
 	isImeComposing.value = false;
-	justEndedComposition.value = true;
-	window.setTimeout(() => {
-		justEndedComposition.value = false;
-	}, 0);
+	armCompositionEndGuard();
+}
+
+function armCompositionEndGuard() {
+	clearCompositionEndGuard();
+	compositionEndedRecently.value = true;
+	compositionEndGuardTimer = window.setTimeout(() => {
+		compositionEndedRecently.value = false;
+		compositionEndGuardTimer = undefined;
+	}, IME_COMPOSITION_END_GUARD_MS);
+}
+
+function clearCompositionEndGuard() {
+	if (compositionEndGuardTimer !== undefined) {
+		window.clearTimeout(compositionEndGuardTimer);
+		compositionEndGuardTimer = undefined;
+	}
+	compositionEndedRecently.value = false;
 }
 
 function onFocus() {
@@ -597,6 +630,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	window.visualViewport?.removeEventListener('resize', onVisualViewportChange);
 	window.visualViewport?.removeEventListener('scroll', onVisualViewportChange);
+	clearCompositionEndGuard();
 
 	for (const timer of focusScrollTimers) {
 		window.clearTimeout(timer);
