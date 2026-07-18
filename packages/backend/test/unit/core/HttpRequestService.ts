@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import * as http from 'node:http';
 import { describe, jest } from '@jest/globals';
 import { MockConsole } from '../../misc/MockConsole.js';
 import type { Mock } from 'jest-mock';
 import type { PrivateNetwork } from '@/config.js';
-import type { Socket } from 'net';
+import type { AddressInfo, Socket } from 'node:net';
 import { HttpRequestService, isAllowedPrivateIp, isPrivateUrl, resolveIp, validateSocketConnect } from '@/core/HttpRequestService.js';
 import { parsePrivateNetworks } from '@/config.js';
 import Logger from '@/logger.js';
@@ -103,6 +104,95 @@ describe(HttpRequestService, () => {
 		});
 	});
 
+	describe('send', () => {
+		function createService() {
+			const timeService = {
+				startTimer: jest.fn((callback: () => void, timeout: number) => ({ callback, timeout })),
+				stopTimer: jest.fn(),
+			};
+			const service = new HttpRequestService(
+				{
+					allowedPrivateNetworks: undefined,
+					deliverJobConcurrency: 128,
+					outgoingAddress: undefined,
+					proxy: undefined,
+					proxyBypassHosts: [],
+					userAgent: 'test',
+				} as never,
+				{} as never,
+				{ assertUrl: jest.fn() } as never,
+				timeService as never,
+				{ env: { NODE_ENV: 'test' } } as never,
+			);
+
+			return { service };
+		}
+
+		it('aborts the fetch when the caller signal aborts', async () => {
+			const { service } = createService();
+			const sockets = new Set<Socket>();
+			let resolveRequestReceived!: () => void;
+			const requestReceived = new Promise<void>(resolve => {
+				resolveRequestReceived = resolve;
+			});
+			const server = http.createServer(() => {
+				resolveRequestReceived();
+			});
+			server.on('connection', socket => {
+				sockets.add(socket);
+				socket.once('close', () => {
+					sockets.delete(socket);
+				});
+			});
+
+			await new Promise<void>(resolve => {
+				server.listen(0, '127.0.0.1', resolve);
+			});
+
+			const abortController = new AbortController();
+			const { port } = server.address() as AddressInfo;
+			const request = service.send(`http://127.0.0.1:${port}/`, {
+				allowHttp: true,
+				bypassProxy: true,
+				signal: abortController.signal,
+				timeout: 60000,
+			});
+
+			try {
+				await Promise.race([
+					requestReceived,
+					request.then(
+						() => { throw new Error('Request resolved before the server received it.'); },
+						error => { throw error; },
+					),
+				]);
+				abortController.abort();
+				const result = await Promise.race([
+					request.then(
+						() => 'resolved',
+						error => error instanceof Error ? error.name : 'rejected',
+					),
+					new Promise<string>(resolve => {
+						setTimeout(() => {
+							resolve('pending');
+						}, 100);
+					}),
+				]);
+
+				expect(result).toBe('AbortError');
+			} finally {
+				for (const socket of sockets) {
+					socket.destroy();
+				}
+				await new Promise<void>(resolve => {
+					server.close(() => {
+						resolve();
+					});
+				});
+				await request.catch(() => undefined);
+			}
+		});
+	});
 	describe('validateSocketConnect', () => {
 		let fakeSocket: Socket;
 		let fakeSocketMutable: {

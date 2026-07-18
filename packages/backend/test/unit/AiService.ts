@@ -264,6 +264,33 @@ describe('AiService', () => {
 		}), expect.anything());
 	});
 
+	it('passes the caller abort signal to provider chat requests', async () => {
+		const { service, providers, httpRequestService } = createService();
+		providers.set('provider1', createProvider());
+		const abortController = new AbortController();
+		httpRequestService.send.mockResolvedValue({
+			ok: true,
+			headers: {
+				get: () => 'text/event-stream',
+			},
+			body: (async function* () {
+				yield Buffer.from('data: [DONE]\n\n');
+			})(),
+		} as never);
+
+		await service.streamChat({
+			user: { id: 'user1' } as never,
+			providerId: 'provider1',
+			model: 'gpt-4o',
+			content: 'Hi',
+			abortSignal: abortController.signal,
+		});
+
+		expect(httpRequestService.send).toHaveBeenCalledWith('https://ai.example/v1/chat/completions', expect.objectContaining({
+			signal: abortController.signal,
+		}), expect.anything());
+	});
+
 	it('rejects image attachments for non-vision models', async () => {
 		const { service, providers } = createService();
 		providers.set('provider1', createProvider({

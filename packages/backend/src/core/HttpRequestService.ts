@@ -339,6 +339,7 @@ export class HttpRequestService {
 			isLocalAddressAllowed?: boolean,
 			allowHttp?: boolean,
 			bypassProxy?: boolean,
+			signal?: AbortSignal,
 		} = {},
 		extra: HttpRequestSendOptions = {
 			throwErrorWhenResponseNotOk: true,
@@ -352,6 +353,7 @@ export class HttpRequestService {
 		this.utilityService.assertUrl(parsedUrl, { allowHttp });
 
 		const controller = new AbortController();
+		const signal = args.signal == null ? controller.signal : AbortSignal.any([controller.signal, args.signal]);
 		const timeoutHandle = this.timeService.startTimer(() => {
 			controller.abort();
 		}, timeout);
@@ -369,7 +371,7 @@ export class HttpRequestService {
 				body: args.body,
 				size: args.size ?? 10 * 1024 * 1024,
 				agent: args.bypassProxy === true ? undefined : (url) => this.getAgentByUrl(url, false, isLocalAddressAllowed),
-				signal: controller.signal,
+				signal,
 			});
 
 			if (!res.ok && extra.throwErrorWhenResponseNotOk) {

@@ -884,6 +884,7 @@ export class AiService {
 			}),
 			timeout: provider.timeoutMs,
 			size: 1024 * 1024 * 8,
+			signal: abortSignal,
 		}, {
 			throwErrorWhenResponseNotOk: false,
 			validators: [],
