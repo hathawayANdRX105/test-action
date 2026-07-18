@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, jest, test } from '@jest/globals';
+import ShowRoomEndpoint from '@/server/api/endpoints/chat/rooms/show.js';
 import RoomMembersEndpoint from '@/server/api/endpoints/chat/rooms/members.js';
 import UpdateMemberRoleEndpoint from '@/server/api/endpoints/chat/rooms/members/update-role.js';
 import DeleteAllMessagesEndpoint, { meta as deleteAllMessagesMeta, paramDef as deleteAllMessagesParamDef } from '@/server/api/endpoints/chat/rooms/manage/delete-all-messages.js';
@@ -106,6 +107,37 @@ describe('chat room manage endpoints', () => {
 		};
 	}
 
+	function createShowRoomEndpoint(options?: {
+		joinMode?: 'open' | 'inviteOnly' | 'closed';
+		canView?: boolean;
+	}) {
+		const showRoom = {
+			id: 'room',
+			ownerId: 'owner',
+			joinMode: options?.joinMode ?? 'open',
+		};
+		const packedRoom = {
+			...showRoom,
+			name: 'room',
+		};
+		const chatService: any = {
+			checkChatAvailability: jest.fn(async () => undefined),
+			findRoomById: jest.fn(async () => showRoom),
+			hasPermissionToViewRoomTimeline: jest.fn(async () => options?.canView ?? false),
+		};
+		const chatEntityService: any = {
+			packRoom: jest.fn(async () => packedRoom),
+		};
+
+		return {
+			endpoint: new ShowRoomEndpoint(chatService, chatEntityService),
+			chatService,
+			chatEntityService,
+			showRoom,
+			packedRoom,
+		};
+	}
+
 	test('delete-user-messages relies on room moderation target permission instead of requireModerator', async () => {
 		expect(deleteUserMessagesMeta.requireModerator).toBeUndefined();
 		const ctx = createDeleteUserEndpoint();
@@ -168,6 +200,32 @@ describe('chat room manage endpoints', () => {
 			code: 'NO_SUCH_ROOM',
 		});
 		expect(ctx.chatService.getRoomMembershipsWithPagination).not.toHaveBeenCalled();
+	});
+
+	test('room show allows open room previews for non-members', async () => {
+		const ctx = createShowRoomEndpoint({ joinMode: 'open', canView: false });
+
+		await expect(ctx.endpoint.exec({ roomId: 'room' }, me, null)).resolves.toEqual(ctx.packedRoom);
+		expect(ctx.chatService.hasPermissionToViewRoomTimeline).not.toHaveBeenCalled();
+		expect(ctx.chatEntityService.packRoom).toHaveBeenCalledWith(ctx.showRoom, me);
+	});
+
+	test('room show hides invite-only rooms from non-members', async () => {
+		const ctx = createShowRoomEndpoint({ joinMode: 'inviteOnly', canView: false });
+
+		await expect(ctx.endpoint.exec({ roomId: 'room' }, me, null)).rejects.toMatchObject({
+			code: 'NO_SUCH_ROOM',
+		});
+		expect(ctx.chatService.hasPermissionToViewRoomTimeline).toHaveBeenCalledWith(me, ctx.showRoom);
+		expect(ctx.chatEntityService.packRoom).not.toHaveBeenCalled();
+	});
+
+	test('room show allows private rooms when the user can view the room', async () => {
+		const ctx = createShowRoomEndpoint({ joinMode: 'closed', canView: true });
+
+		await expect(ctx.endpoint.exec({ roomId: 'room' }, me, null)).resolves.toEqual(ctx.packedRoom);
+		expect(ctx.chatService.hasPermissionToViewRoomTimeline).toHaveBeenCalledWith(me, ctx.showRoom);
+		expect(ctx.chatEntityService.packRoom).toHaveBeenCalledWith(ctx.showRoom, me);
 	});
 
 	test('room owner level permission can update member role', async () => {
