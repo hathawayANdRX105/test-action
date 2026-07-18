@@ -517,7 +517,8 @@ async function sendMessage() {
 
 	streaming.value = true;
 	streamingMessageId.value = tempAssistantMessage.id;
-	abortController.value = new AbortController();
+	const requestAbortController = new AbortController();
+	abortController.value = requestAbortController;
 
 	try {
 		const result = await requestChatStream({
@@ -530,7 +531,7 @@ async function sendMessage() {
 		}, (text) => {
 			tempAssistantMessage.content = (tempAssistantMessage.content ?? '') + text;
 			void scrollToBottom();
-		});
+		}, requestAbortController.signal);
 
 		selectedConversationId.value = result.conversation.id;
 		await loadConversations();
@@ -540,7 +541,7 @@ async function sendMessage() {
 		applyDefaultSelection(result.conversation);
 		await scrollToBottom();
 	} catch (err) {
-		if (abortController.value?.signal.aborted) {
+		if (requestAbortController.signal.aborted) {
 			tempAssistantMessage.error = i18n.ts._ai.stopped;
 		} else {
 			tempAssistantMessage.error = printError(err);
@@ -551,9 +552,11 @@ async function sendMessage() {
 			});
 		}
 	} finally {
-		streaming.value = false;
-		streamingMessageId.value = null;
-		abortController.value = null;
+		if (abortController.value === requestAbortController) {
+			streaming.value = false;
+			streamingMessageId.value = null;
+			abortController.value = null;
+		}
 	}
 }
 
@@ -564,7 +567,7 @@ async function requestChatStream(body: {
 	content: string;
 	fileIds: string[];
 	systemPrompt: string | null;
-}, onDelta: (text: string) => void): Promise<ChatStreamDone> {
+}, onDelta: (text: string) => void, signal: AbortSignal): Promise<ChatStreamDone> {
 	const res = await window.fetch(`${apiUrl}/ai/chat-stream`, {
 		method: 'POST',
 		headers: {
@@ -574,7 +577,7 @@ async function requestChatStream(body: {
 		body: JSON.stringify(body),
 		credentials: 'omit',
 		cache: 'no-cache',
-		signal: abortController.value?.signal,
+		signal,
 	});
 
 	if (!res.ok || res.body == null) {
@@ -649,8 +652,6 @@ function parseSseEvent(raw: string): { type: string; data: any; } {
 
 function stopStreaming() {
 	abortController.value?.abort();
-	streaming.value = false;
-	streamingMessageId.value = null;
 }
 
 function onDraftKeydown(ev: KeyboardEvent) {

@@ -33,4 +33,12 @@ describe('ai page layout', () => {
 	test('edits history by replacing the branch in one server request', () => {
 		assert.match(aiSource, /async function editMessage\(message: AiMessage\) \{[\s\S]*await misskeyApi\('ai\/messages\/delete-from', \{ messageId: message\.id \}\);[\s\S]*messages\.value = messages\.value\.slice\(0, index\);[\s\S]*draft\.value = result;[\s\S]*await sendMessage\(\);[\s\S]*\n\}/);
 	});
+
+	test('keeps stopped stream cleanup isolated to its own request', () => {
+		assert.match(aiSource, /const requestAbortController = new AbortController\(\);[\s\S]*abortController\.value = requestAbortController;/);
+		assert.match(aiSource, /requestChatStream\(\{[\s\S]*systemPrompt: selectedConversationId\.value \? null : \(pendingSystemPrompt\.value === '' \? null : pendingSystemPrompt\.value\),[\s\S]*\}, \(text\) => \{[\s\S]*\}, requestAbortController\.signal\);/);
+		assert.match(aiSource, /if \(requestAbortController\.signal\.aborted\) \{/);
+		assert.match(aiSource, /if \(abortController\.value === requestAbortController\) \{[\s\S]*streaming\.value = false;[\s\S]*streamingMessageId\.value = null;[\s\S]*abortController\.value = null;[\s\S]*\}/);
+		assert.match(aiSource, /function stopStreaming\(\) \{\n\tabortController\.value\?\.abort\(\);\n\}/);
+	});
 });
