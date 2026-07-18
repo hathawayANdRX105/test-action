@@ -89,6 +89,7 @@ export class CaptchaService {
 		}, { throwErrorWhenResponseNotOk: false });
 
 		if (!res.ok) {
+			this.httpRequestService.closeResponseBody(res);
 			throw new Error(`${res.status}`);
 		}
 
@@ -145,6 +146,7 @@ export class CaptchaService {
 		}, { throwErrorWhenResponseNotOk: false });
 
 		if (result.status !== 200) {
+			this.httpRequestService.closeResponseBody(result);
 			throw new CaptchaError(captchaErrorCodes.requestFailed, `frc-request-failed: ${result.status}`);
 		}
 
@@ -177,6 +179,7 @@ export class CaptchaService {
 		}, { throwErrorWhenResponseNotOk: false });
 
 		if (result.status !== 200) {
+			this.httpRequestService.closeResponseBody(result);
 			throw new CaptchaError(captchaErrorCodes.requestFailed, 'mcaptcha-failed: mcaptcha didn\'t return 200 OK');
 		}
 
@@ -425,4 +428,3 @@ export class CaptchaService {
 		await this.metaService.update(metaPartial);
 	}
 }
-

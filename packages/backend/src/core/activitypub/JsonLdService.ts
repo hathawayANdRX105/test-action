@@ -227,6 +227,7 @@ export class JsonLd {
 			},
 		).then(res => {
 			if (!res.ok) {
+				this.httpRequestService.closeResponseBody(res);
 				throw new StatusError(`failed to fetch JSON-LD from ${url}`, res.status, res.statusText);
 			} else {
 				return res.json();

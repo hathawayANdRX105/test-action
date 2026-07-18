@@ -59,6 +59,8 @@ export class SystemWebhookDeliverProcessorService {
 				}),
 			});
 
+			this.httpRequestService.closeResponseBody(res);
+
 			this.systemWebhooksRepository.update({ id: job.data.webhookId }, {
 				latestSentAt: this.timeService.date,
 				latestStatus: res.status,

@@ -410,7 +410,7 @@ export class HttpRequestService {
 	}
 
 	@bindThis
-	private closeResponseBody(res: Response): void {
+	public closeResponseBody(res: Response): void {
 		const body = res.body as unknown as {
 			destroy?: () => void;
 			cancel?: () => Promise<unknown> | void;

@@ -244,6 +244,7 @@ export class FetchInstanceMetadataService {
 		const favicon = await this.httpRequestService.send(faviconUrl, {
 			method: 'HEAD',
 		}, { throwErrorWhenResponseNotOk: false });
+		this.httpRequestService.closeResponseBody(favicon);
 
 		if (favicon.ok) {
 			return faviconUrl;

@@ -176,11 +176,12 @@ export class ApRequestService {
 			now: this.timeService.now,
 		});
 
-		await this.httpRequestService.send(url, {
+		const res = await this.httpRequestService.send(url, {
 			method: req.request.method,
 			headers: req.request.headers,
 			body,
 		});
+		this.httpRequestService.closeResponseBody(res);
 	}
 
 	/**

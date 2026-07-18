@@ -98,8 +98,9 @@ export class BunnyService {
 	}
 
 	@bindThis
-	public delete(file: string) {
+	public async delete(file: string): Promise<void> {
 		const client = this.getBunnyInfo();
-		return this.httpRequestService.send(`${client.fullUrl}/${file}`, { method: 'DELETE', headers: { AccessKey: client.accessKey } });
+		const res = await this.httpRequestService.send(`${client.fullUrl}/${file}`, { method: 'DELETE', headers: { AccessKey: client.accessKey } });
+		this.httpRequestService.closeResponseBody(res);
 	}
 }
