@@ -563,6 +563,21 @@ onDeactivated(() => {
 	font-size: 12px !important;
 }
 
+/* Top-level so CSS modules exports $style.play|stop|download for template */
+.play,
+.stop,
+.download {
+	padding: 4px 8px;
+	border: none;
+	background-color: transparent;
+	color: var(--MI_THEME-accent);
+	cursor: pointer;
+
+	&:hover {
+		background-color: color-mix(in srgb, var(--MI_THEME-fg) 12%, transparent);
+	}
+}
+
 .mod_player_enabled {
 	position: relative;
 	overflow: hidden;

@@ -784,3 +784,15 @@ lastFetchedFeaturedAt: "Last fetched featured at"
 lastFetchedOutboxAt: "Last fetched outbox at"
 loginDates: "Login Dates"
 root: "Root"
+
+_chat:
+  announcementHistory: "Announcements"
+  announcementHistoryEmpty: "No announcement history yet. When the room announcement is updated, previous versions appear here."
+  announcementHistoryCurrent: "Current"
+  announcementHistoryPast: "History"
+  permanentlyCloseAnnouncement: "Dismiss permanently"
+  permanentlyCloseAnnouncementConfirm: "Permanently hide this announcement banner? It will show again if the room announcement content is updated."
+  noCurrentAnnouncement: "No current announcement"
+
+  pinToChat: "Pin to chat"
+  unpinFromChat: "Unpin from chat"

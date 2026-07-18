@@ -50,4 +50,13 @@ const props = defineProps<{
 	height: 65px;
 	margin: 0 auto;
 }
+
+.warn {
+	/* not-found state tint */
+	color: color-mix(in srgb, var(--MI_THEME-fg) 92%, var(--MI_THEME-warn));
+}
+
+.error {
+	color: color-mix(in srgb, var(--MI_THEME-fg) 88%, var(--MI_THEME-error));
+}
 </style>

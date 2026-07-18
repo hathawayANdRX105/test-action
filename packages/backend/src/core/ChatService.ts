@@ -2445,6 +2445,25 @@ export class ChatService {
 			)).slice(0, MAX_CHAT_BANNED_KEYWORDS);
 		}
 
+		// Archive previous announcement text when it changes (history tab).
+		const MAX_CHAT_ROOM_ANNOUNCEMENT_HISTORY = 50;
+		if (params.announcement !== undefined) {
+			const nextAnnouncement = params.announcement;
+			const prevAnnouncement = room.announcement ?? '';
+			if (prevAnnouncement.trim() !== '' && prevAnnouncement !== nextAnnouncement) {
+				const prevHistory = Array.isArray(room.announcementHistory) ? room.announcementHistory : [];
+				const entry = {
+					id: this.idService.gen(),
+					text: prevAnnouncement,
+					createdAt: new Date().toISOString(),
+					pinned: room.announcementPinned === true,
+				};
+				setParams.announcementHistory = [entry, ...prevHistory]
+					.filter((item, index, arr) => arr.findIndex(x => x.text === item.text && x.createdAt === item.createdAt) === index)
+					.slice(0, MAX_CHAT_ROOM_ANNOUNCEMENT_HISTORY);
+			}
+		}
+
 		if (avatarId !== undefined) {
 			if (avatarId != null) {
 				// アバター画像は操作者本人がアップロードしたファイルから選ぶ（モデレーターがオーナー以外のルームを編集する場合に対応）
@@ -2482,6 +2501,7 @@ export class ChatService {
 			isSilenced: updated.isSilenced,
 			announcement: updated.announcement,
 			announcementPinned: updated.announcementPinned,
+			announcementHistory: Array.isArray(updated.announcementHistory) ? updated.announcementHistory : [],
 		});
 
 		return updated;

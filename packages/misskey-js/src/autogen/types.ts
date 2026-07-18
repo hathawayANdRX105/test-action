@@ -14222,6 +14222,12 @@ export type components = {
             isSilenced: boolean;
             announcement: string;
             announcementPinned: boolean;
+            announcementHistory?: {
+                id: string;
+                text: string;
+                createdAt: string;
+                pinned: boolean;
+            }[];
             /** @enum {string} */
             joinMode: 'inviteOnly' | 'open' | 'closed';
             memberLimit: number;

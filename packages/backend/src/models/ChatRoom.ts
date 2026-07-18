@@ -73,6 +73,20 @@ export class MiChatRoom {
 	})
 	public announcementPinned: boolean;
 
+	/**
+	 * Previous room announcements, newest first.
+	 * Each entry: { id, text, createdAt, pinned }
+	 */
+	@Column('jsonb', {
+		default: [],
+	})
+	public announcementHistory: {
+		id: string;
+		text: string;
+		createdAt: string;
+		pinned: boolean;
+	}[];
+
 	@Column('boolean', {
 		default: false,
 	})

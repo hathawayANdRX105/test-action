@@ -12,10 +12,18 @@ import { execFileSync } from 'node:child_process';
 function callGit(args) {
 	return execFileSync('git', args, {
 		encoding: 'utf-8',
+		stdio: ['ignore', 'pipe', 'pipe'],
 	}).trim();
 }
 
 function getGitVersion(versionFromPackageJson) {
+	// Non-git checkouts (or incomplete clones) should not spam fatal errors
+	try {
+		callGit(['rev-parse', '--is-inside-work-tree']);
+	} catch {
+		return null;
+	}
+
 	const thisTag = callGit(['tag', '--points-at', 'HEAD']);
 	if (thisTag) {
 		// we're building from a tag, we don't care about extra details

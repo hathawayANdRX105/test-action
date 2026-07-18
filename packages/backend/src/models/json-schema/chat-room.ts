@@ -48,6 +48,20 @@ export const packedChatRoomSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		announcementHistory: {
+			type: 'array',
+			optional: true, nullable: false,
+			items: {
+				type: 'object',
+				optional: false, nullable: false,
+				properties: {
+					id: { type: 'string', optional: false, nullable: false },
+					text: { type: 'string', optional: false, nullable: false },
+					createdAt: { type: 'string', optional: false, nullable: false },
+					pinned: { type: 'boolean', optional: false, nullable: false },
+				},
+			},
+		},
 		joinMode: {
 			type: 'string',
 			optional: false, nullable: false,

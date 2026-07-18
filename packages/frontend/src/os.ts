@@ -49,8 +49,14 @@ export const apiWithDialog = (<
 	const promise = misskeyApi<ResT, E, P, _ResT>(endpoint, data, token);
 	promiseDialog(promise, null, async (err) => {
 		let title: string | undefined;
-		let text = err.message + '\n' + err.id;
-		if (err.code === 'INTERNAL_ERROR') {
+		// Avoid rendering literal "undefined" when network/Redis failures lack API shape
+		const safeMessage = typeof err?.message === 'string' && err.message.length > 0
+			? err.message
+			: (typeof err === 'string' && err.length > 0 ? err : i18n.ts.somethingHappened);
+		const safeId = typeof err?.id === 'string' && err.id.length > 0 ? err.id : null;
+		let text = safeId != null ? `${safeMessage}\n${safeId}` : safeMessage;
+		const code = typeof err?.code === 'string' ? err.code : '';
+		if (code === 'INTERNAL_ERROR') {
 			title = i18n.ts.internalServerError;
 			text = i18n.ts.internalServerErrorDescription;
 			const date = new Date().toISOString();
@@ -68,27 +74,37 @@ export const apiWithDialog = (<
 				}],
 			});
 			if (result === 'copy') {
-				copyToClipboard(`Endpoint: ${endpoint}\nInfo: ${JSON.stringify(err.info)}\nDate: ${date}`);
+				copyToClipboard(`Endpoint: ${endpoint}\nInfo: ${JSON.stringify(err?.info ?? null)}\nDate: ${date}`);
 			}
 			return;
-		} else if (err.code === 'RATE_LIMIT_EXCEEDED') {
+		} else if (code === 'RATE_LIMIT_EXCEEDED') {
 			title = i18n.ts.cannotPerformTemporary;
 			text = i18n.ts.cannotPerformTemporaryDescription;
-		} else if (err.code === 'INVALID_PARAM') {
+		} else if (code === 'INVALID_PARAM') {
 			title = i18n.ts.invalidParamError;
 			text = i18n.ts.invalidParamErrorDescription;
-		} else if (err.code === 'ROLE_PERMISSION_DENIED') {
+		} else if (code === 'ROLE_PERMISSION_DENIED') {
 			title = i18n.ts.permissionDeniedError;
 			text = i18n.ts.permissionDeniedErrorDescription;
-		} else if (err.code.startsWith('TOO_MANY')) {
+		} else if (code.startsWith('TOO_MANY')) {
 			title = i18n.ts.youCannotCreateAnymore;
-			text = `${i18n.ts.error}: ${err.id}`;
-		} else if (err.message.startsWith('Unexpected token')) {
+			text = safeId != null ? `${i18n.ts.error}: ${safeId}` : i18n.ts.error;
+		} else if (safeMessage.startsWith('Unexpected token')) {
 			title = i18n.ts.gotInvalidResponseError;
 			text = i18n.ts.gotInvalidResponseErrorDescription;
-		} else if (customErrors && customErrors[err.id] != null) {
-			title = customErrors[err.id].title;
-			text = customErrors[err.id].text;
+		} else if (customErrors && safeId != null && customErrors[safeId] != null) {
+			title = customErrors[safeId].title;
+			text = customErrors[safeId].text;
+		} else if (
+			safeMessage.includes('max retries') ||
+			safeMessage.includes('ECONNREFUSED') ||
+			safeMessage.includes('Failed to fetch') ||
+			safeMessage.includes('NetworkError')
+		) {
+			title = i18n.ts.somethingHappened;
+			text = safeMessage.includes('max retries') || safeMessage.includes('ECONNREFUSED')
+				? 'Redis/database connection failed. Please retry after the server is ready.'
+				: safeMessage;
 		}
 		alert({
 			type: 'error',
@@ -128,17 +144,17 @@ export function promiseDialog<T extends Promise<any>>(
 		if (onFailure) {
 			onFailure(err);
 		} else {
-			if (err.message) {
-				alert({
-					type: 'error',
-					text: err.message,
-				});
-			} else {
-				alert({
-					type: 'error',
-					text: err,
-				});
-			}
+			const text = typeof err?.message === 'string' && err.message.length > 0
+				? err.message
+				: (typeof err === 'string' && err.length > 0
+					? err
+					: (err != null && String(err) !== '[object Object]' && String(err) !== 'undefined'
+						? String(err)
+						: i18n.ts.somethingHappened));
+			alert({
+				type: 'error',
+				text,
+			});
 		}
 	});
 

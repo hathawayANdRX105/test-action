@@ -6702,6 +6702,42 @@ export interface Locale extends ILocale {
              */
             "none": string;
         };
+        /**
+         * Announcements
+         */
+        "announcementHistory": string;
+        /**
+         * No announcement history yet. When the room announcement is updated, previous versions appear here.
+         */
+        "announcementHistoryEmpty": string;
+        /**
+         * Current
+         */
+        "announcementHistoryCurrent": string;
+        /**
+         * History
+         */
+        "announcementHistoryPast": string;
+        /**
+         * Dismiss permanently
+         */
+        "permanentlyCloseAnnouncement": string;
+        /**
+         * Permanently hide this announcement banner? It will show again if the room announcement content is updated.
+         */
+        "permanentlyCloseAnnouncementConfirm": string;
+        /**
+         * No current announcement
+         */
+        "noCurrentAnnouncement": string;
+        /**
+         * Pin to chat
+         */
+        "pinToChat": string;
+        /**
+         * Unpin from chat
+         */
+        "unpinFromChat": string;
     };
     "_recommendation": {
         /**

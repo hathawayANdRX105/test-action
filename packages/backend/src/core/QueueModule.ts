@@ -34,17 +34,22 @@ const $queueLogger: Provider = {
 };
 
 // TODO factor the "alias with warning" logic into something re-usable
+const warnedQueueAliases = new Set<string>();
 function makeAliasProvider(from: InjectionToken, to: InjectionToken): Provider {
 	return {
 		provide: from,
 		useFactory: (envService: EnvService, logger: Logger, actual: unknown) => {
-			// Log a warning in non-production environments
+			// Log once per alias in non-production to avoid boot log spam
 			if (envService.env.NODE_ENV !== 'production') {
 				// noinspection SuspiciousTypeOfGuard <- WebStorm doesn't recognize symbol types
 				const fromLabel = typeof(from) === 'symbol' ? `Symbol(${from.description ?? '?'})` : String(from);
 				// noinspection SuspiciousTypeOfGuard <- WebStorm doesn't recognize symbol types
 				const toLabel = typeof(to) === 'symbol' ? `Symbol(${to.description ?? '?'})` : String(to);
-				logger.warn(`Detected incorrect use of DI alias "${fromLabel}" - please use canonical token "${toLabel}" instead.`);
+				const key = `${fromLabel}->${toLabel}`;
+				if (!warnedQueueAliases.has(key)) {
+					warnedQueueAliases.add(key);
+					logger.warn(`Detected incorrect use of DI alias "${fromLabel}" - please use canonical token "${toLabel}" instead.`);
+				}
 			}
 
 			return actual;

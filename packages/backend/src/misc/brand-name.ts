@@ -19,5 +19,17 @@ export function instanceBrandName(name: string | null | undefined, fallback = IN
 export function normalizeInstanceBrandUrl(url: string | null | undefined): string | null {
 	if (url == null) return null;
 
-	return url.replace(/github\.com\/hhhl\/hhhl/gi, INSTANCE_BRAND_REPOSITORY);
+	return url
+		// legacy / upstream brand URLs accidentally left in meta
+		.replace(/github\.com\/hhhl\/hhhl/gi, INSTANCE_BRAND_REPOSITORY)
+		.replace(/activitypub\.software\/TransFem-org\/Sharkey(?:\/-\/issues\/new)?/gi, (match) =>
+			match.includes('issues')
+				? `${INSTANCE_BRAND_REPOSITORY}/issues/new`
+				: INSTANCE_BRAND_REPOSITORY,
+		)
+		.replace(/github\.com\/misskey-dev\/misskey(?:\/issues\/new)?/gi, (match) =>
+			match.includes('issues')
+				? `${INSTANCE_BRAND_REPOSITORY}/issues/new`
+				: INSTANCE_BRAND_REPOSITORY,
+		);
 }

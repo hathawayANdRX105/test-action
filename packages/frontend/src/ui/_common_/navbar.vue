@@ -353,6 +353,10 @@ function menuEdit() {
 	align-content: center;
 }
 
+/* CSS-module class names referenced from template (layout via .subButton) */
+.menuEditButton {}
+.toggleButton {}
+
 .subButtonShape {
 	position: absolute;
 	z-index: -1;

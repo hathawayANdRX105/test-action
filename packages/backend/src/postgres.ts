@@ -5,6 +5,8 @@
 
 // https://github.com/typeorm/typeorm/issues/2400
 import pg from 'pg';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DataSource, Logger, type QueryRunner } from 'typeorm';
 import * as highlight from 'cli-highlight';
 import { entities as charts } from '@/core/chart/entities.js';
@@ -13,6 +15,9 @@ import type MisskeyLogger from '@/logger.js';
 import type { Data } from '@/logger.js';
 import type { EnvService } from '@/global/EnvService.js';
 import { bindThis } from '@/decorators.js';
+
+// built/postgres.js → packages/backend/migration/*.js
+const backendMigrationsGlob = join(dirname(fileURLToPath(import.meta.url)), '../migration/*.{js,cjs}');
 
 import { MiAbuseUserReport } from '@/models/AbuseUserReport.js';
 import { MiAbuseReportNotificationRecipient } from '@/models/AbuseReportNotificationRecipient.js';
@@ -382,7 +387,7 @@ export function createPostgresDataSource(config: Config, globalLogger?: MisskeyL
 		}, dbLogger),
 		maxQueryExecutionTime: config.db.slowQueryThreshold,
 		entities: entities,
-		// TODO only pass this when running migrations
-		migrations: ['../../migration/*.js'],
+		// Absolute glob so cwd does not break TypeORM migration discovery at runtime
+		migrations: [backendMigrationsGlob],
 	});
 }

@@ -316,6 +316,12 @@ export type Channels = {
 				isSilenced: boolean;
 				announcement: string;
 				announcementPinned: boolean;
+				announcementHistory?: {
+					id: string;
+					text: string;
+					createdAt: string;
+					pinned: boolean;
+				}[];
 			}) => void;
 			memberKicked: (payload: {
 				roomId: string;

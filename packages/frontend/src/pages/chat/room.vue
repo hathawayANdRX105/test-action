@@ -30,17 +30,46 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</button>
 	</div>
 	<div v-show="tab === 'chat'" ref="chatPaneEl" :class="$style.chatPane">
-		<div v-if="room != null && room.announcementPinned && room.announcement.length > 0" :class="$style.announcement">
-			<div :class="$style.announcementHeader">
-				<div :class="$style.announcementHeading">
-					<i class="ti ti-pinned" :class="$style.announcementIcon"></i>
-					<div :class="$style.announcementTitle">{{ i18n.ts._chat.announcement }}</div>
+		<div
+			v-if="showPinnedAnnouncement"
+			:class="[$style.announcement, { [$style.announcementIsExpanded]: announcementExpanded }]"
+		>
+			<button
+				type="button"
+				class="_button"
+				:class="$style.announcementMainButton"
+				:title="announcementExpanded ? i18n.ts.showLess : i18n.ts.showMore"
+				:aria-label="announcementExpanded ? i18n.ts.showLess : i18n.ts.showMore"
+				:aria-expanded="announcementExpanded"
+				@click="toggleAnnouncement"
+			>
+				<div :class="$style.announcementBody">
+					<div :class="$style.announcementHeading">
+						<i class="ti ti-pinned" :class="$style.announcementIcon" aria-hidden="true"></i>
+						<span :class="$style.announcementTitle">{{ i18n.ts._chat.announcement }}</span>
+						<span v-if="announcementExpanded" :class="$style.announcementToggle" aria-hidden="true">
+							<span :class="$style.announcementToggleLabel">{{ i18n.ts.showLess }}</span>
+							<i class="ti ti-chevron-up"></i>
+						</span>
+					</div>
+					<div v-if="!announcementExpanded" :class="$style.announcementPreviewBlock">
+						<div :class="$style.announcementPreview">{{ room!.announcement }}</div>
+						<div :class="$style.announcementFade" aria-hidden="true">
+							<span :class="$style.announcementEllipsis">···</span>
+						</div>
+					</div>
+					<div v-if="announcementExpanded" :class="[$style.announcementText, $style.announcementTextExpanded]">{{ room!.announcement }}</div>
 				</div>
-				<button class="_button" :class="$style.announcementToggle" :title="announcementExpanded ? i18n.ts.showLess : i18n.ts.showMore" :aria-label="announcementExpanded ? i18n.ts.showLess : i18n.ts.showMore" :aria-expanded="announcementExpanded" @click="toggleAnnouncement">
-					<i class="ti" :class="announcementExpanded ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
-				</button>
-			</div>
-			<div :class="[$style.announcementText, { [$style.announcementTextExpanded]: announcementExpanded }]">{{ room.announcement }}</div>
+			</button>
+			<button
+				v-if="announcementExpanded"
+				type="button"
+				class="_button"
+				:class="$style.announcementDismiss"
+				@click.stop="permanentlyDismissAnnouncement"
+			>
+				{{ i18n.ts._chat.permanentlyCloseAnnouncement }}
+			</button>
 		</div>
 		<div class="_gaps">
 			<div v-if="initializing">
@@ -154,6 +183,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
+	<div v-if="tab === 'announcements'" :class="$style.tabPane">
+		<div class="_spacer" :class="$style.tabPaneInner" style="--MI_SPACER-w: 100%;">
+			<XAnnouncements v-if="room != null" :room="room" @updated="onRoomUpdated" @pinnedToChat="onAnnouncementPinnedToChat"/>
+		</div>
+	</div>
+
 	<div v-if="tab === 'chat'" ref="footerEl" :class="$style.footer">
 		<div class="_gaps">
 			<Transition name="fade">
@@ -181,6 +216,7 @@ import XMembers from './room.members.vue';
 import XMutedUsers from './room.user-mutes.vue';
 import XInfo from './room.info.vue';
 import XManagement from './room.management.vue';
+import XAnnouncements from './room.announcements.vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import * as os from '@/os.js';
@@ -296,6 +332,8 @@ const headerTitle = computed(() => {
 });
 
 const CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX = 'chatRoomAnnouncementExpanded:';
+// v3：作废旧版永久关闭记录，避免误隐藏
+const CHAT_ROOM_ANNOUNCEMENT_DISMISSED_KEY_PREFIX = 'chatRoomAnnouncementDismissed:v3:';
 // 4px 只用于"真的贴底"的自动跟随,避免用户往上拉时被拽回底部。
 // 接近底部时展示/补齐最新消息用更宽的 160px:移动端图片/头像晚加载和手指轻微位移
 // 很容易让 latestDistance 飘到 80px 以上,之前会错误显示"新消息"而不是直接补出来。
@@ -396,12 +434,65 @@ const canDeleteAnyMessage = computed(() => {
 const canManageRoomUsers = computed(() => (room.value?.canModerateRoom ?? room.value?.canManage) === true);
 const canManageRoomRoles = computed(() => room.value?.canManageRoomRoles === true);
 
+// 仅在用户确认「永久关闭」后写入；未确认前横幅必须显示
+const announcementDismissedFingerprint = ref<string | null>(null);
+
 function getAnnouncementExpandedStorageKey(roomId: string) {
 	return `${CHAT_ROOM_ANNOUNCEMENT_EXPANDED_KEY_PREFIX}${roomId}`;
 }
 
+function getAnnouncementDismissedStorageKey(roomId: string) {
+	return `${CHAT_ROOM_ANNOUNCEMENT_DISMISSED_KEY_PREFIX}${$i.id}:${roomId}`;
+}
+
+function getAnnouncementFingerprint(text: string) {
+	let hash = 0;
+	for (let i = 0; i < text.length; i++) {
+		hash = ((hash << 5) - hash) + text.charCodeAt(i);
+		hash |= 0;
+	}
+	return `${text.length}:${hash}`;
+}
+
 function restoreAnnouncementExpanded(roomId: string) {
 	announcementExpanded.value = window.localStorage.getItem(getAnnouncementExpandedStorageKey(roomId)) === '1';
+}
+
+/**
+ * 只有 localStorage 里保存的指纹与「当前公告正文」完全一致时，才恢复为已关闭。
+ * 房间未加载完 / 公告已更新时一律视为未关闭。
+ */
+function restoreAnnouncementDismissed(roomId: string) {
+	const text = (room.value?.announcement ?? '').trim();
+	if (text.length === 0) {
+		announcementDismissedFingerprint.value = null;
+		return;
+	}
+	const raw = window.localStorage.getItem(getAnnouncementDismissedStorageKey(roomId));
+	if (raw != null && raw !== '' && raw === getAnnouncementFingerprint(text)) {
+		announcementDismissedFingerprint.value = raw;
+	} else {
+		announcementDismissedFingerprint.value = null;
+		if (raw != null && raw !== '') {
+			window.localStorage.removeItem(getAnnouncementDismissedStorageKey(roomId));
+		}
+	}
+}
+
+const showPinnedAnnouncement = computed(() => {
+	const r = room.value;
+	if (r == null) return false;
+	// 聊天页横幅：服务端置顶 + 有正文 + 本机未确认永久关闭
+	if (r.announcementPinned !== true) return false;
+	const text = (r.announcement ?? '').trim();
+	if (text.length === 0) return false;
+	if (announcementDismissedFingerprint.value == null) return true;
+	return announcementDismissedFingerprint.value !== getAnnouncementFingerprint(text);
+});
+
+function clearAnnouncementDismissed(roomId: string) {
+	announcementDismissedFingerprint.value = null;
+	window.localStorage.removeItem(getAnnouncementDismissedStorageKey(roomId));
 }
 
 function toggleAnnouncement() {
@@ -410,13 +501,46 @@ function toggleAnnouncement() {
 	window.localStorage.setItem(getAnnouncementExpandedStorageKey(room.value.id), announcementExpanded.value ? '1' : '0');
 }
 
-watch(() => room.value?.id, roomId => {
-	if (roomId == null) {
-		announcementExpanded.value = false;
-		return;
-	}
-	restoreAnnouncementExpanded(roomId);
-});
+async function permanentlyDismissAnnouncement() {
+	if (room.value == null) return;
+	const text = (room.value.announcement ?? '').trim();
+	if (text.length === 0) return;
+
+	const { canceled } = await os.confirm({
+		type: 'question',
+		title: i18n.ts._chat.permanentlyCloseAnnouncement,
+	});
+	if (canceled) return;
+
+	// 只隐藏聊天区横幅，不删服务端公告；跳转到「公告」页签查看
+	const fp = getAnnouncementFingerprint(text);
+	announcementDismissedFingerprint.value = fp;
+	window.localStorage.setItem(getAnnouncementDismissedStorageKey(room.value.id), fp);
+	announcementExpanded.value = false;
+	window.localStorage.setItem(getAnnouncementExpandedStorageKey(room.value.id), '0');
+	tab.value = 'announcements';
+}
+
+function onAnnouncementPinnedToChat() {
+	if (room.value == null) return;
+	// 主动置顶时清除本机永久关闭，保证聊天页立刻显示
+	clearAnnouncementDismissed(room.value.id);
+	announcementExpanded.value = false;
+	tab.value = 'chat';
+}
+
+watch(
+	() => [room.value?.id, room.value?.announcement, room.value?.announcementPinned] as const,
+	([roomId]) => {
+		if (roomId == null) {
+			announcementExpanded.value = false;
+			announcementDismissedFingerprint.value = null;
+			return;
+		}
+		restoreAnnouncementExpanded(roomId);
+		restoreAnnouncementDismissed(roomId);
+	},
+);
 
 type ScrollAnchor = {
 	id: string;
@@ -2624,7 +2748,8 @@ function onRoomUpdatedStream(ctx: Parameters<Misskey.Channels['chatRoom']['event
 		isSilenced: ctx.isSilenced,
 		announcement: ctx.announcement,
 		announcementPinned: ctx.announcementPinned,
-	};
+		...(ctx.announcementHistory != null ? { announcementHistory: ctx.announcementHistory } : {}),
+	} as typeof room.value;
 }
 
 function onMemberKicked(ctx: Parameters<Misskey.Channels['chatRoom']['events']['memberKicked']>[0]) {
@@ -3003,7 +3128,11 @@ const headerTabs = computed(() => room.value ? room.value.isJoined ? [{
 	key: 'management',
 	title: i18n.ts._chat.management,
 	icon: 'ti ti-shield-cog',
-}] : [])] : [{
+}] : []), {
+	key: 'announcements',
+	title: i18n.ts._chat.announcementHistory,
+	icon: 'ti ti-speakerphone',
+}] : [{
 	key: 'chat',
 	title: i18n.ts.chat,
 	icon: 'ti ti-messages',
@@ -3011,6 +3140,10 @@ const headerTabs = computed(() => room.value ? room.value.isJoined ? [{
 	key: 'info',
 	title: i18n.ts.info,
 	icon: 'ti ti-info-circle',
+}, {
+	key: 'announcements',
+	title: i18n.ts._chat.announcementHistory,
+	icon: 'ti ti-speakerphone',
 }] : [{
 	key: 'chat',
 	title: i18n.ts.chat,
@@ -3102,44 +3235,162 @@ definePage(computed(() => {
 }
 
 .announcement {
+	--announcement-surface: color-mix(in srgb, var(--MI_THEME-panel) 94%, var(--MI_THEME-bg));
+
 	position: sticky;
 	top: 0;
 	z-index: 900;
 	display: grid;
-	gap: 8px;
+	gap: 0;
+	width: calc(100% - 24px);
 	margin: 8px 12px 0;
-	padding: 10px 12px 11px;
+	padding: 0;
 	border-radius: var(--MI-radius-sm);
-	background: color-mix(in srgb, var(--MI_THEME-panel) 94%, var(--MI_THEME-bg));
+	background: var(--announcement-surface);
 	color: var(--MI_THEME-fg);
 	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 84%, transparent);
 	box-shadow: 0 8px 18px -14px var(--MI_THEME-shadow);
+	overflow: hidden;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-accent));
+		border-color: color-mix(in srgb, var(--MI_THEME-divider) 70%, var(--MI_THEME-accent));
+		--announcement-surface: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-accent));
+	}
 }
 
-.announcementHeader {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
+.announcementIsExpanded {
+	padding-bottom: 0;
+}
+
+.announcementMainButton {
+	display: block;
+	width: 100%;
+	padding: 8px 12px 10px;
+	text-align: left;
+	color: inherit;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+
+	&:focus-visible {
+		outline: 2px solid color-mix(in srgb, var(--MI_THEME-accent) 55%, transparent);
+		outline-offset: -2px;
+	}
+}
+
+.announcementDismiss {
+	justify-self: end;
+	margin: 0 10px 8px;
+	padding: 3px 8px;
+	font-size: 0.75em;
+	font-weight: 700;
+	line-height: 1.2;
+	color: color-mix(in srgb, var(--MI_THEME-fg) 72%, var(--MI_THEME-warn));
+	border-radius: 6px;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 70%, var(--MI_THEME-warn));
+	background: color-mix(in srgb, var(--MI_THEME-panel) 80%, transparent);
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+
+	&:hover {
+		color: var(--MI_THEME-warn);
+		border-color: color-mix(in srgb, var(--MI_THEME-warn) 45%, var(--MI_THEME-divider));
+		background: color-mix(in srgb, var(--MI_THEME-warn) 12%, var(--MI_THEME-panel));
+	}
+}
+
+.announcementBody {
+	display: grid;
+	gap: 6px;
 	min-width: 0;
+	width: 100%;
 }
 
 .announcementHeading {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
 	min-width: 0;
 }
 
 .announcementIcon {
 	flex: 0 0 auto;
+	font-size: 0.95em;
 	color: var(--MI_THEME-accent);
 }
 
 .announcementTitle {
-	font-size: 0.8em;
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: 0.78em;
 	font-weight: 700;
 	color: var(--MI_THEME-fg);
+	opacity: 0.92;
+}
+
+/* 收起：完整 1 行 + 半行被遮住的文字；省略号贴在正文裁切区右下角 */
+.announcementPreviewBlock {
+	position: relative;
+	width: 100%;
+	min-width: 0;
+	/* 一整行 + 约半行 */
+	max-height: calc(1.45em * 1.55);
+	overflow: hidden;
+}
+
+.announcementPreview {
+	width: 100%;
+	min-width: 0;
+	font-size: 0.9em;
+	line-height: 1.45;
+	color: var(--MI_THEME-fg);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* 底部遮罩条：盖住第二行下半，并把 ··· 固定在右下角正文里 */
+.announcementFade {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 1;
+	display: flex;
+	align-items: flex-end;
+	justify-content: flex-end;
+	height: 1.25em;
+	padding: 0 2px 0 1.25em;
+	background: linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--announcement-surface) 0%, transparent) 0%,
+		color-mix(in srgb, var(--announcement-surface) 72%, transparent) 42%,
+		var(--announcement-surface) 100%
+	);
+	pointer-events: none;
+}
+
+.announcementEllipsis {
+	display: inline-block;
+	margin-left: 0.35em;
+	padding: 0 0.12em;
+	font-size: 1.55em;
+	font-weight: 900;
+	line-height: 0.85;
+	letter-spacing: 0.12em;
+	color: var(--MI_THEME-fg);
+	opacity: 0.95;
+	text-shadow:
+		0 0 0.5px currentColor,
+		0 0 0.5px currentColor;
+	user-select: none;
+}
+
+.announcement:hover .announcementEllipsis {
+	color: var(--MI_THEME-accent);
+	opacity: 1;
 }
 
 .announcementText {
@@ -3161,25 +3412,39 @@ definePage(computed(() => {
 	line-clamp: unset;
 	line-height: 1.55;
 	overflow: visible;
+	margin-top: 2px;
+	padding-left: 1.35em;
 }
 
 .announcementToggle {
-	display: grid;
-	place-items: center;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
 	flex: 0 0 auto;
-	width: 32px;
-	height: 32px;
-	color: var(--MI_THEME-accent);
-	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 32%, var(--MI_THEME-divider));
-	border-radius: 999px;
-	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+	margin-left: auto;
+	padding: 2px 4px;
+	color: color-mix(in srgb, var(--MI_THEME-fg) 62%, var(--MI_THEME-accent));
+	font-size: 0.78em;
+	line-height: 1;
+	border-radius: 6px;
+	background: transparent;
+	border: none;
+	transition: color 0.15s ease, background-color 0.15s ease;
 
-	&:hover {
-		color: var(--MI_THEME-accent);
-		background: color-mix(in srgb, var(--MI_THEME-accent) 20%, var(--MI_THEME-panel));
-		border-color: color-mix(in srgb, var(--MI_THEME-accent) 46%, var(--MI_THEME-divider));
+	> .ti {
+		font-size: 1.05em;
 	}
+}
+
+.announcement:hover .announcementToggle {
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 10%, transparent);
+}
+
+.announcementToggleLabel {
+	font-weight: 600;
+	letter-spacing: 0.02em;
 }
 
 .localHeader {

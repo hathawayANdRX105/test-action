@@ -537,6 +537,12 @@ onBeforeUnmount(() => {
 	}
 }
 
+.componentItem {
+	padding: 0;
+	margin: 0;
+	min-width: 0;
+}
+
 .item {
 	display: flex;
 	align-items: center;

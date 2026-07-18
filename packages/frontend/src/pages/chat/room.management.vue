@@ -198,7 +198,8 @@ const slowModeSeconds = ref<number | string>(props.room.slowModeSeconds ?? 0);
 const keywordsText = ref((props.room.bannedKeywords ?? []).join('\n'));
 const keywordMuteSeconds = ref<number | string>(props.room.keywordMuteSeconds ?? 0);
 const announcement = ref(props.room.announcement);
-const announcementPinned = ref(props.room.announcementPinned);
+// 有正文时默认置顶，保证聊天区能立刻看到（用户仍可关掉开关）
+const announcementPinned = ref(props.room.announcementPinned || (props.room.announcement ?? '').trim().length > 0);
 const announcementChanged = computed(() => announcement.value !== props.room.announcement || announcementPinned.value !== props.room.announcementPinned);
 const bans = ref<Misskey.entities.ChatRoomsBansListResponse>([]);
 const bansFetching = ref(true);
@@ -372,10 +373,14 @@ async function saveKeywordFilter() {
 }
 
 async function saveAnnouncement() {
+	const text = announcement.value ?? '';
+	// 有正文时默认置顶，确保聊天区能显示
+	const pinned = text.trim().length > 0 ? true : false;
+	announcementPinned.value = pinned;
 	const updated = await os.apiWithDialog('chat/rooms/update', {
 		roomId: props.room.id,
-		announcement: announcement.value,
-		announcementPinned: announcementPinned.value,
+		announcement: text,
+		announcementPinned: pinned,
 	});
 	emit('updated', updated);
 }

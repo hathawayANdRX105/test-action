@@ -17,3 +17,14 @@ _initialTutorial:
   _reaction:
     letsTryReacting: "回应可以通过点击帖子中的「{reaction}」按钮来添加。试着给这个示例帖子添加一个回应！"
     reactDone: "通过按下「{undo}」按钮，可以取消已经添加的回应"
+
+_chat:
+  announcementHistory: "公告"
+  announcementHistoryEmpty: "暂无历史公告。群公告被更新后，旧版本会出现在这里。"
+  announcementHistoryCurrent: "当前"
+  announcementHistoryPast: "历史"
+  permanentlyCloseAnnouncement: "永久关闭"
+  permanentlyCloseAnnouncementConfirm: "永久隐藏此公告横幅？若群公告内容被更新，会再次显示。"
+  noCurrentAnnouncement: "当前没有公告"
+  pinToChat: "置顶到聊天"
+  unpinFromChat: "取消聊天置顶"
