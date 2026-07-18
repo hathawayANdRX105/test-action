@@ -270,9 +270,6 @@ function onCompositionStart() {
 function onCompositionEnd() {
 	isImeComposing.value = false;
 	justEndedComposition.value = true;
-	window.setTimeout(() => {
-		justEndedComposition.value = false;
-	}, 0);
 }
 
 function onFocus() {
