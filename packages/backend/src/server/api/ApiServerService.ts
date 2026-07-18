@@ -288,7 +288,7 @@ export class ApiServerService {
 				const getNullableString = (value: unknown, maxLength = 512) => typeof value === 'string' ? value.slice(0, maxLength) : null;
 				const content = typeof body.content === 'string' ? body.content.slice(0, 20000) : '';
 				const fileIds = Array.isArray(body.fileIds)
-					? body.fileIds.filter((id): id is string => typeof id === 'string').slice(0, 8)
+					? body.fileIds.filter((id): id is string => typeof id === 'string')
 					: [];
 				const waitForDrainOrClose = async (): Promise<void> => {
 					await new Promise<void>((resolve) => {

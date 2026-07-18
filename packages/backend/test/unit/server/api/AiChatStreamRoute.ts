@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, jest, test } from '@jest/globals';
+import { AiServiceError } from '@/core/AiService.js';
 import { ApiCallService } from '@/server/api/ApiCallService.js';
 import { ApiServerService } from '@/server/api/ApiServerService.js';
 
@@ -265,6 +266,26 @@ describe('/ai/chat-stream', () => {
 		expect(context.guardSpy).not.toHaveBeenCalled();
 		expect(context.aiService.streamChat).toHaveBeenCalledTimes(1);
 		expect(reply.raw.writeHead).toHaveBeenCalledTimes(1);
+	});
+	test('passes excessive file ids through to AiService validation instead of truncating them', async () => {
+		const context = createRouteContext({ tokenInfo: false });
+		const { reply } = createReply();
+		const fileIds = Array.from({ length: 9 }, (_, i) => `file-${i}`);
+		context.aiService.streamChat.mockImplementation(async (params: any) => {
+			if (params.fileIds.length > 8) {
+				throw new AiServiceError('TOO_MANY_ATTACHMENTS', 'AI chat supports up to 8 image attachments.');
+			}
+			return { id: 'assistant-message-1' };
+		});
+
+		await context.handler({
+			body: { content: 'hello', fileIds },
+			headers: {},
+			ip: '127.0.0.1',
+		}, reply);
+
+		expect(context.aiService.streamChat).toHaveBeenCalledWith(expect.objectContaining({ fileIds }));
+		expect(reply.raw.write).toHaveBeenCalledWith(expect.stringContaining('TOO_MANY_ATTACHMENTS'));
 	});
 
 	test('returns the developer token RPM error before it starts an AI stream', async () => {
