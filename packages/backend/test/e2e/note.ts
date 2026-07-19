@@ -10,7 +10,7 @@ process.env.NODE_ENV = 'test';
 import * as assert from 'assert';
 import { MiNote } from '@/models/Note.js';
 import { MiInstance } from '@/models/Instance.js';
-import { api, castAsError, initTestDb, post, role, signup, uploadFile, uploadUrl } from '../utils.js';
+import { api, castAsError, ensureRoot, initTestDb, post, role, signup, uploadFile, uploadUrl } from '../utils.js';
 import type * as misskey from 'misskey-js';
 
 // Important: this must match the value of maxNoteLength in .config/ci.yml!
@@ -33,7 +33,7 @@ describe('Note', () => {
 			host: 'example.com',
 			firstRetrievedAt: new Date(),
 		});
-		root = await signup({ username: 'root' });
+		root = await ensureRoot();
 		alice = await signup({ username: 'alice' });
 		bob = await signup({ username: 'bob' });
 		tom = await signup({ username: 'tom', host: 'example.com' });

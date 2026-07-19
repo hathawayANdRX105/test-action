@@ -149,8 +149,11 @@ export const signup = async (params?: Partial<misskey.Endpoints['signup']['req']
 	}, params);
 
 	const res = await api('signup', q);
-
-	return res.body;
+	const body = res.body;
+	if (res.status !== 200 || body == null || typeof body !== 'object' || !('token' in body) || typeof body.token !== 'string') {
+		throw new Error(`signup failed status=${res.status} body=${inspect(body, { depth: 5 })}`);
+	}
+	return body as NonNullable<misskey.Endpoints['signup']['res']>;
 };
 
 export const post = async (user: UserToken, params: misskey.Endpoints['notes/create']['req']): Promise<misskey.entities.Note> => {
@@ -284,15 +287,19 @@ export const role = async (user: UserToken, role: Partial<misskey.entities.Role>
 		name: 'New Role',
 		target: 'manual',
 		policies: {
-			...Object.entries(DEFAULT_POLICIES).map(([k, v]) => [k, {
+			// map() alone makes a numeric-key object; roles need named policy keys
+			...Object.fromEntries(Object.entries(DEFAULT_POLICIES).map(([k, v]) => [k, {
 				priority: 0,
 				useDefault: true,
 				value: v,
-			}]),
+			}])),
 			...policies,
 		},
 		...role,
 	}, user);
+	if (res.status !== 200 || res.body == null) {
+		throw new Error(`role create failed status=${res.status} body=${inspect(res.body, { depth: 5 })}`);
+	}
 	return res.body;
 };
 
@@ -636,14 +643,22 @@ export async function ensureRoot(password = 'test'): Promise<misskey.entities.Si
 		return res.body as misskey.entities.SignupResponse;
 	}
 
+	// Root already exists / username preserved — borrow DB only (never dropSchema).
 	const db = await initTestDb(true);
 	try {
 		const rows: { id: string; username: string; token: string | null }[] = await db.query(
 			`SELECT u.id, u.username, u.token FROM meta m JOIN "user" u ON u.id = m."rootUserId" WHERE m.id = 'x'`,
 		);
-		const row = rows[0];
+		let row = rows[0];
 		if (row?.token == null) {
-			throw new Error(`ensureRoot: no root token (signup status ${res.status})`);
+			// Fallback: first local user named root (meta may lag after suite resets)
+			const fallback: { id: string; username: string; token: string | null }[] = await db.query(
+				`SELECT id, username, token FROM "user" WHERE "usernameLower" = 'root' AND host IS NULL ORDER BY id ASC LIMIT 1`,
+			);
+			row = fallback[0];
+		}
+		if (row?.token == null) {
+			throw new Error(`ensureRoot: no root token (signup status ${res.status} body=${inspect(res.body, { depth: 3 })})`);
 		}
 		const me = await successfulApiCall({ endpoint: 'i', parameters: {}, user: { token: row.token } });
 		return { ...me, token: row.token } as misskey.entities.SignupResponse;

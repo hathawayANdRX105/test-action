@@ -13,7 +13,7 @@ import { loadConfig } from '@/config.js';
 import { MiRepository, MiUser, UsersRepository, miRepository } from '@/models/_.js';
 import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { jobQueue } from '@/boot/common.js';
-import { api, castAsError, initTestDb, signup, successfulApiCall, uploadFile } from '../utils.js';
+import { api, castAsError, ensureRoot, initTestDb, signup, successfulApiCall, uploadFile } from '../utils.js';
 import type * as misskey from 'misskey-js';
 
 describe('Account Move', () => {
@@ -36,7 +36,7 @@ describe('Account Move', () => {
 		const config = loadConfig();
 		url = new URL(config.url);
 		const connection = await initTestDb(false);
-		root = await signup({ username: 'root' });
+		root = await ensureRoot();
 		alice = await signup({ username: 'alice' });
 		bob = await signup({ username: 'bob' });
 		carol = await signup({ username: 'carol' });

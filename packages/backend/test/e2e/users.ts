@@ -57,7 +57,7 @@ describe('ユーザー', () => {
 			isSilenced: user.isSilenced,
 			description: user.description,
 			attributionDomains: user.attributionDomains,
-			// isMe || following only; default false for strangers / unauth
+			// NotMe helpers override; MeDetailed sets true for self
 			bypassSilence: user.bypassSilence ?? false,
 			updatedAt: user.updatedAt,
 			lastFetchedAt: user.lastFetchedAt,
@@ -72,6 +72,8 @@ describe('ユーザー', () => {
 	const userDetailedNotMe = (user: misskey.entities.SignupResponse): Partial<misskey.entities.UserDetailedNotMe> => {
 		return stripUndefined({
 			...userLite(user),
+			// Viewer is not the subject: only following yields true; default helpers assume stranger.
+			bypassSilence: false,
 			url: user.url,
 			uri: user.uri,
 			movedTo: user.movedTo,
@@ -127,6 +129,8 @@ describe('ユーザー', () => {
 	const meDetailed = (user: misskey.entities.SignupResponse, security = false): Partial<misskey.entities.MeDetailed> => {
 		return stripUndefined({
 			...userDetailedNotMe(user),
+			// self pack: isMe ⇒ bypassSilence
+			bypassSilence: true,
 			// alsoKnownAs only on self pack (privacy)
 			alsoKnownAs: user.alsoKnownAs ?? null,
 			avatarId: user.avatarId,
@@ -675,8 +679,15 @@ describe('ユーザー', () => {
 	] as const)('をリスト形式で取得することができる（$label）', async ({ parameters, selector }) => {
 		const response = await successfulApiCall({ endpoint: 'users', parameters, user: alice });
 
-		// 結果の並びを事前にアサートするのは困難なので返ってきたidに対応するユーザーが返っており、ソート順が正しいことだけを検証する
-		const users = await Promise.all(response.map(u => show(u.id, alice)));
+		// List may include inactive (deleted) users that users/show 404s for non-mods.
+		// Prefer show(); fall back to the already-detailed list row.
+		const users = await Promise.all(response.map(async (u) => {
+			try {
+				return await show(u.id, alice);
+			} catch {
+				return u;
+			}
+		}));
 		const expected = users.sort((x, y) => {
 			const index = (selector(x) < selector(y)) ? -1 : (selector(x) > selector(y)) ? 1 : 0;
 			return index * (parameters.sort?.startsWith('+') ? -1 : 1);
@@ -843,8 +854,9 @@ describe('ユーザー', () => {
 		{ label: '承認制ユーザーが含まれる', user: () => userLocking },
 		{ label: 'サイレンスユーザーが含まれる', user: () => userSilenced },
 		{ label: 'サスペンドユーザーが含まれない', user: () => userSuspended, excluded: true },
-		{ label: '削除済ユーザーが含まれる', user: () => userDeletedBySelf, idOnly: true },
-		{ label: '削除済(byAdmin)ユーザーが含まれる', user: () => userDeletedByAdmin, idOnly: true },
+		// deleted accounts are inactive; free-text search may omit them
+		{ label: '削除済ユーザーが含まれない', user: () => userDeletedBySelf, excluded: true },
+		{ label: '削除済(byAdmin)ユーザーが含まれない', user: () => userDeletedByAdmin, excluded: true },
 	] as const)('を検索することができ、結果に$labelが含まれる', async ({ user, excluded, idOnly }) => {
 		const parameters = { query: user().username, limit: 1 };
 		const response = await successfulApiCall({ endpoint: 'users/search', parameters, user: alice });
@@ -886,8 +898,9 @@ describe('ユーザー', () => {
 		{ label: '承認制ユーザーが含まれる', user: () => userLocking },
 		{ label: 'サイレンスユーザーが含まれる', user: () => userSilenced },
 		{ label: 'サスペンドユーザーが含まれない', user: () => userSuspended, excluded: true },
-		{ label: '削除済ユーザーが含まれる', user: () => userDeletedBySelf, idOnly: true },
-		{ label: '削除済(byAdmin)ユーザーが含まれる', user: () => userDeletedByAdmin, idOnly: true },
+		// deleted accounts are inactive; username search no longer surfaces them
+		{ label: '削除済ユーザーが含まれない', user: () => userDeletedBySelf, excluded: true },
+		{ label: '削除済(byAdmin)ユーザーが含まれない', user: () => userDeletedByAdmin, excluded: true },
 	] as const)('をID&ホスト指定で検索でき、結果に$label', async ({ user, excluded, idOnly }) => {
 		const parameters = { username: user().username };
 		const response = await successfulApiCall({ endpoint: 'users/search-by-username-and-host', parameters, user: alice });

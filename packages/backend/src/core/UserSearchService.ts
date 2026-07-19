@@ -128,30 +128,33 @@ export class UserSearchService {
 			.select('following.followeeId')
 			.where('following.followerId = :followerId', { followerId: me.id });
 
-		const activeFollowingUsersQuery = this.generateUserQueryBuilder(params)
-			.andWhere(`user.id IN (${followingUserQuery.getQuery()})`)
-			.andWhere('user.updatedAt > :activeThreshold', { activeThreshold });
-		activeFollowingUsersQuery.setParameters(followingUserQuery.getParameters());
+		const followingParams = followingUserQuery.getParameters();
+		// setParameters replaces the whole map — keep username/host from generateUserQueryBuilder
+		const withFollowParams = (qb: SelectQueryBuilder<MiUser>) => {
+			qb.setParameters({ ...qb.getParameters(), ...followingParams, activeThreshold });
+			return qb;
+		};
 
-		const inactiveFollowingUsersQuery = this.generateUserQueryBuilder(params)
+		const activeFollowingUsersQuery = withFollowParams(this.generateUserQueryBuilder(params)
+			.andWhere(`user.id IN (${followingUserQuery.getQuery()})`)
+			.andWhere('user.updatedAt > :activeThreshold', { activeThreshold }));
+
+		const inactiveFollowingUsersQuery = withFollowParams(this.generateUserQueryBuilder(params)
 			.andWhere(`user.id IN (${followingUserQuery.getQuery()})`)
 			.andWhere(new Brackets(qb => {
 				qb
 					.where('user.updatedAt IS NULL')
 					.orWhere('user.updatedAt <= :activeThreshold', { activeThreshold });
-			}));
-		inactiveFollowingUsersQuery.setParameters(followingUserQuery.getParameters());
+			})));
 
 		// 自分自身がヒットするとしたらここ
-		const activeUserQuery = this.generateUserQueryBuilder(params)
+		const activeUserQuery = withFollowParams(this.generateUserQueryBuilder(params)
 			.andWhere(`user.id NOT IN (${followingUserQuery.getQuery()})`)
-			.andWhere('user.updatedAt > :activeThreshold', { activeThreshold });
-		activeUserQuery.setParameters(followingUserQuery.getParameters());
+			.andWhere('user.updatedAt > :activeThreshold', { activeThreshold }));
 
-		const inactiveUserQuery = this.generateUserQueryBuilder(params)
+		const inactiveUserQuery = withFollowParams(this.generateUserQueryBuilder(params)
 			.andWhere(`user.id NOT IN (${followingUserQuery.getQuery()})`)
-			.andWhere('user.updatedAt <= :activeThreshold', { activeThreshold });
-		inactiveUserQuery.setParameters(followingUserQuery.getParameters());
+			.andWhere('user.updatedAt <= :activeThreshold', { activeThreshold }));
 
 		return [activeFollowingUsersQuery, inactiveFollowingUsersQuery, activeUserQuery, inactiveUserQuery];
 	}

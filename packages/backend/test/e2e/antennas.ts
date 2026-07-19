@@ -8,6 +8,7 @@ process.env.NODE_ENV = 'test';
 import * as assert from 'assert';
 import {
 	api,
+	ensureRoot,
 	failedApiCall,
 	post,
 	role,
@@ -71,7 +72,7 @@ describe('アンテナ', () => {
 	let userMutedByAlice: User;
 
 	beforeAll(async () => {
-		root = await signup({ username: 'root' });
+		root = await ensureRoot();
 		alice = await signup({ username: 'alice' });
 		alicePost = await post(alice, { text: 'test' });
 		aliceList = await userList(alice, {});
