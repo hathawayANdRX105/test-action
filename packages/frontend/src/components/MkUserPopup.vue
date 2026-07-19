@@ -11,66 +11,68 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:leaveToClass="prefer.s.animation ? $style.transition_popup_leaveTo : ''"
 	appear @afterLeave="emit('closed')"
 >
-	<div v-if="showing" :class="$style.root" class="_popup _shadow" :style="{ zIndex, top: top + 'px', left: left + 'px' }" @pointerover="(event) => { emit('pointerover', event); }" @mouseleave="() => { emit('mouseleave'); }">
-		<MkError v-if="error" @retry="fetchUser()"/>
-		<div v-else-if="user != null">
-			<div :class="$style.banner" :style="user.bannerUrl ? { backgroundImage: `url(${prefer.s.disableShowingAnimatedImages ? getStaticImageUrl(user.bannerUrl) : user.bannerUrl})` } : ''">
-				<span v-if="$i && $i.id != user.id && user.isFollowed && user.isFollowing" :class="$style.followed">{{ i18n.ts.mutuals }}</span>
-				<span v-else-if="$i && $i.id != user.id && user.isFollowed" :class="$style.followed">{{ i18n.ts.followsYou }}</span>
-				<span v-else-if="$i && $i.id != user.id && user.isFollowing" :class="$style.followed">{{ i18n.ts.following }}</span>
-				<span v-if="user.isLocked && $i && $i.id != user.id && !user.isFollowing" :title="i18n.ts.isLocked" :class="$style.locked"><i class="ph-lock ph-bold ph-lg"></i></span>
-			</div>
-			<svg viewBox="0 0 128 128" :class="$style.avatarBack">
-				<g transform="matrix(1.6,0,0,1.6,-38.4,-51.2)">
-					<path d="M64,32C81.661,32 96,46.339 96,64C95.891,72.184 104,72 104,72C104,72 74.096,80 64,80C52.755,80 24,72 24,72C24,72 31.854,72.018 32,64C32,46.339 46.339,32 64,32Z" style="fill: var(--MI_THEME-popup);"/>
-				</g>
-			</svg>
-			<MkAvatar :class="$style.avatar" :user="user" indicator/>
-			<div :class="$style.title">
-				<MkA :class="$style.name" :to="userPage(user)"><MkUserName :user="user" :nowrap="false"/></MkA>
-				<div :class="$style.username"><MkAcct :user="user"/></div>
-			</div>
-			<div :class="$style.description">
-				<Mfm v-if="user.description" :nyaize="false" :class="$style.mfm" :text="user.description" :isBlock="true" :author="user"/>
-				<div v-else style="opacity: 0.7;">{{ i18n.ts.noAccountDescription }}</div>
-			</div>
-			<div v-if="user.fields.length > 0" :class="$style.fields">
-				<dl v-for="(field, i) in user.fields" :key="i" :class="$style.field">
-					<dt :class="$style.fieldname">
-						<Mfm :text="field.name" :nyaize="false" :plain="true" :colored="false"/>
-					</dt>
-					<dd :class="$style.fieldvalue">
-						<Mfm :text="field.value" :nyaize="false" :author="user" :colored="false"/>
-						<i v-if="user.verifiedLinks.includes(field.value)" v-tooltip:dialog="i18n.ts.verifiedLink" class="ph-seal-check ph-bold ph-lg"></i>
-					</dd>
-				</dl>
-			</div>
-			<div :class="$style.status">
-				<div :class="$style.statusItem">
-					<div :class="$style.statusItemLabel">{{ i18n.ts.notes }}</div>
-					<div>{{ number(user.notesCount) }}</div>
+	<div v-if="showing" :class="$style.root" class="_popup _shadow" :style="{ zIndex, top: top + 'px', left: left + 'px', '--user-popup-avatar-decoration-block-end': avatarDecorationBlockEnd }" @pointerover="(event) => { emit('pointerover', event); }" @mouseleave="() => { emit('mouseleave'); }">
+		<MkAvatar v-if="!error && user != null" :class="$style.avatar" :user="user" indicator/>
+		<div :class="$style.content">
+			<MkError v-if="error" @retry="fetchUser()"/>
+			<template v-else-if="user != null">
+				<div :class="$style.banner" :style="user.bannerUrl ? { backgroundImage: `url(${prefer.s.disableShowingAnimatedImages ? getStaticImageUrl(user.bannerUrl) : user.bannerUrl})` } : ''">
+					<span v-if="$i && $i.id != user.id && user.isFollowed && user.isFollowing" :class="$style.followed">{{ i18n.ts.mutuals }}</span>
+					<span v-else-if="$i && $i.id != user.id && user.isFollowed" :class="$style.followed">{{ i18n.ts.followsYou }}</span>
+					<span v-else-if="$i && $i.id != user.id && user.isFollowing" :class="$style.followed">{{ i18n.ts.following }}</span>
+					<span v-if="user.isLocked && $i && $i.id != user.id && !user.isFollowing" :title="i18n.ts.isLocked" :class="$style.locked"><i class="ph-lock ph-bold ph-lg"></i></span>
 				</div>
-				<div v-if="isFollowingVisibleForMe(user)" :class="$style.statusItem">
-					<div :class="$style.statusItemLabel">{{ i18n.ts.following }}</div>
-					<div>{{ number(user.followingCount) }}</div>
+				<svg viewBox="0 0 128 128" :class="$style.avatarBack">
+					<g transform="matrix(1.6,0,0,1.6,-38.4,-51.2)">
+						<path d="M64,32C81.661,32 96,46.339 96,64C95.891,72.184 104,72 104,72C104,72 74.096,80 64,80C52.755,80 24,72 24,72C24,72 31.854,72.018 32,64C32,46.339 46.339,32 64,32Z" style="fill: var(--MI_THEME-popup);"/>
+					</g>
+				</svg>
+				<div :class="$style.title">
+					<MkA :class="$style.name" :to="userPage(user)"><MkUserName :user="user" :nowrap="false"/></MkA>
+					<div :class="$style.username"><MkAcct :user="user"/></div>
 				</div>
-				<div v-if="isFollowersVisibleForMe(user)" :class="$style.statusItem">
-					<div :class="$style.statusItemLabel">{{ i18n.ts.followers }}</div>
-					<div>{{ number(user.followersCount) }}</div>
+				<div :class="$style.description">
+					<Mfm v-if="user.description" :nyaize="false" :class="$style.mfm" :text="user.description" :isBlock="true" :author="user"/>
+					<div v-else style="opacity: 0.7;">{{ i18n.ts.noAccountDescription }}</div>
 				</div>
+				<div v-if="user.fields.length > 0" :class="$style.fields">
+					<dl v-for="(field, i) in user.fields" :key="i" :class="$style.field">
+						<dt :class="$style.fieldname">
+							<Mfm :text="field.name" :nyaize="false" :plain="true" :colored="false"/>
+						</dt>
+						<dd :class="$style.fieldvalue">
+							<Mfm :text="field.value" :nyaize="false" :author="user" :colored="false"/>
+							<i v-if="user.verifiedLinks.includes(field.value)" v-tooltip:dialog="i18n.ts.verifiedLink" class="ph-seal-check ph-bold ph-lg"></i>
+						</dd>
+					</dl>
+				</div>
+				<div :class="$style.status">
+					<div :class="$style.statusItem">
+						<div :class="$style.statusItemLabel">{{ i18n.ts.notes }}</div>
+						<div>{{ number(user.notesCount) }}</div>
+					</div>
+					<div v-if="isFollowingVisibleForMe(user)" :class="$style.statusItem">
+						<div :class="$style.statusItemLabel">{{ i18n.ts.following }}</div>
+						<div>{{ number(user.followingCount) }}</div>
+					</div>
+					<div v-if="isFollowersVisibleForMe(user)" :class="$style.statusItem">
+						<div :class="$style.statusItemLabel">{{ i18n.ts.followers }}</div>
+						<div>{{ number(user.followersCount) }}</div>
+					</div>
+				</div>
+				<button class="_button" :class="$style.menu" @click="showMenu"><i class="ti ti-dots"></i></button>
+				<MkFollowButton v-if="$i && user.id != $i.id" v-model:user="user" :class="$style.follow" mini/>
+			</template>
+			<div v-else>
+				<MkLoading/>
 			</div>
-			<button class="_button" :class="$style.menu" @click="showMenu"><i class="ti ti-dots"></i></button>
-			<MkFollowButton v-if="$i && user.id != $i.id" v-model:user="user" :class="$style.follow" mini/>
-		</div>
-		<div v-else>
-			<MkLoading/>
 		</div>
 	</div>
 </Transition>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkFollowButton from '@/components/MkFollowButton.vue';
 import { userPage } from '@/filters/user.js';
@@ -101,6 +103,16 @@ const user = ref<Misskey.entities.UserDetailed | null>(null);
 const top = ref(0);
 const left = ref(0);
 const error = ref(false);
+const avatarDecorationBlockEnd = computed(() => {
+	if (!prefer.s.showAvatarDecorations || user.value == null) return 0;
+
+	return user.value.avatarDecorations.reduce((inset, decoration) => {
+		const angle = (decoration.angle ?? 0) * Math.PI * 2;
+		const halfExtent = Math.abs(Math.cos(angle)) + Math.abs(Math.sin(angle));
+		const offsetY = (decoration.offsetY ?? 0) * 2;
+		return Math.max(inset, 0, halfExtent - 0.5 + offsetY);
+	}, 0);
+});
 
 function showMenu(ev: MouseEvent) {
 	if (user.value == null) return;
@@ -153,12 +165,22 @@ onMounted(() => {
 .root {
 	position: absolute;
 	width: 300px;
-	overflow: clip;
 	transform-origin: center top;
+
+	&:global(._popup) {
+		overflow: visible;
+		contain: layout style;
+	}
+}
+
+.content {
+	overflow: clip;
+	border-radius: inherit;
 }
 
 .banner {
 	height: 78px;
+	border-radius: var(--MI-radius) var(--MI-radius) 0 0;
 	background-color: rgba(0, 0, 0, 0.1);
 	background-size: cover;
 	background-position: center;
@@ -200,6 +222,7 @@ onMounted(() => {
 .avatarBack {
 	width: 100px;
 	position: absolute;
+	z-index: 1;
 	top: 28px;
 	left: 0;
 	right: 0;
@@ -216,6 +239,10 @@ onMounted(() => {
 	z-index: 2;
 	width: var(--MI-avatar);
 	height: var(--MI-avatar);
+}
+
+.avatar[data-decoration] + .content .title {
+	margin-top: calc(16px + var(--user-popup-avatar-decoration-block-end) * var(--MI-avatar));
 }
 
 .title {

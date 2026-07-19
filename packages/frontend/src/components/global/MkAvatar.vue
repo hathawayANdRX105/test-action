@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<component :is="link ? MkA : 'span'" v-user-preview="preview ? user.id : undefined" v-bind="bound" class="_noSelect" :class="[$style.root, { [$style.animation]: animation, [$style.cat]: user.isCat, [$style.square]: squareAvatars }]" :style="{ color }" :title="acct(user)" @click="onClick">
+<component :is="link ? MkA : 'span'" v-user-preview="preview ? user.id : undefined" v-bind="bound" class="_noSelect" :class="[$style.root, { [$style.animation]: animation, [$style.cat]: user.isCat, [$style.square]: squareAvatars }]" :data-decoration="hasDecoration || undefined" :style="{ color }" :title="acct(user)" @click="onClick">
 	<MkImgWithBlurhash :class="$style.inner" :src="url" :hash="user.avatarBlurhash" :cover="true" :onlyAvgColor="true"/>
 	<MkUserOnlineIndicator v-if="indicator" :class="$style.indicator" :user="user"/>
 	<div v-if="user.isCat" :class="[$style.ears]">
@@ -79,6 +79,7 @@ const emit = defineEmits<{
 }>();
 
 const showDecoration = props.forceShowDecoration || prefer.s.showAvatarDecorations;
+const hasDecoration = computed(() => showDecoration && (props.decorations ?? props.user.avatarDecorations).length > 0);
 
 const bound = computed(() => props.link
 	? { to: userPage(props.user), target: props.target }
