@@ -22,7 +22,6 @@ export class MiApiAccessGrant {
 	@Column('timestamp with time zone')
 	public updatedAt: Date;
 
-	@Index()
 	@Column({
 		...id(),
 	})

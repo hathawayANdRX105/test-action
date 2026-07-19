@@ -47,6 +47,12 @@ export const meta = {
 			code: 'JOINING_DISABLED',
 			id: '4f26ceee-f4db-44f2-aa08-27858b770692',
 		},
+		youHaveBeenBlocked: {
+			message: 'You cannot invite this user because you have been blocked by this user.',
+			code: 'YOU_HAVE_BEEN_BLOCKED',
+			kind: 'permission',
+			id: '73773707-3721-438d-a27d-cc04cf28a226',
+		},
 	},
 } as const;
 
@@ -79,6 +85,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (err instanceof Error) {
 					if (err.message === 'room is full') throw new ApiError(meta.errors.roomFull);
 					if (err.message === 'joining disabled') throw new ApiError(meta.errors.joiningDisabled);
+					if (err.message === 'blocked') throw new ApiError(meta.errors.youHaveBeenBlocked);
 				}
 				throw err;
 			}

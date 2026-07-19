@@ -4,15 +4,13 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { UsersRepository, PollsRepository, PollVotesRepository } from '@/models/_.js';
+import type { PollsRepository } from '@/models/_.js';
 import type { MiRemoteUser } from '@/models/User.js';
-import { IdService } from '@/core/IdService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { GetterService } from '@/server/api/GetterService.js';
 import { QueueService } from '@/core/QueueService.js';
 import { PollService } from '@/core/PollService.js';
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
-import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { DI } from '@/di-symbols.js';
 import { UserBlockingService } from '@/core/UserBlockingService.js';
 import { CacheService } from '@/core/CacheService.js';
@@ -83,26 +81,16 @@ export const paramDef = {
 	required: ['noteId', 'choice'],
 } as const;
 
-// TODO: ロジックをサービスに切り出す
-
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
-		@Inject(DI.usersRepository)
-		private usersRepository: UsersRepository,
-
 		@Inject(DI.pollsRepository)
 		private pollsRepository: PollsRepository,
 
-		@Inject(DI.pollVotesRepository)
-		private pollVotesRepository: PollVotesRepository,
-
-		private idService: IdService,
 		private getterService: GetterService,
 		private queueService: QueueService,
 		private pollService: PollService,
 		private apRendererService: ApRendererService,
-		private globalEventService: GlobalEventService,
 		private userBlockingService: UserBlockingService,
 		private readonly timeService: TimeService,
 		private readonly cacheService: CacheService,
@@ -120,7 +108,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noPoll);
 			}
 
-			// Check blocking
+			// Check blocking (ApiError mapping; PollService also checks)
 			if (note.userId !== me.id) {
 				const blocked = await this.userBlockingService.checkBlocked(note.userId, me.id);
 				if (blocked) {
@@ -138,42 +126,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.invalidChoice);
 			}
 
-			// if already voted
-			const exist = await this.pollVotesRepository.findBy({
-				noteId: note.id,
-				userId: me.id,
-			});
-
-			if (exist.length) {
-				if (poll.multiple) {
-					if (exist.some(x => x.choice === ps.choice)) {
-						throw new ApiError(meta.errors.alreadyVoted);
-					}
-				} else {
-					throw new ApiError(meta.errors.alreadyVoted);
+			// Shared mutator: transaction + row lock + insert + count (race-safe)
+			let vote;
+			try {
+				vote = await this.pollService.vote(me, note, ps.choice);
+			} catch (e) {
+				if (e instanceof Error) {
+					if (e.message === 'already voted') throw new ApiError(meta.errors.alreadyVoted);
+					if (e.message === 'invalid choice param') throw new ApiError(meta.errors.invalidChoice);
+					if (e.message === 'blocked') throw new ApiError(meta.errors.youHaveBeenBlocked);
+					if (e.message === 'poll not found') throw new ApiError(meta.errors.noPoll);
 				}
+				throw e;
 			}
-
-			// Create vote
-			const vote = await this.pollVotesRepository.insertOne({
-				id: this.idService.gen(createdAt.getTime()),
-				noteId: note.id,
-				userId: me.id,
-				choice: ps.choice,
-			});
-
-			// Increment votes count
-			const index = ps.choice + 1; // In SQL, array index is 1 based
-			await this.pollsRepository.query(`UPDATE poll SET votes[${index}] = votes[${index}] + 1 WHERE "noteId" = '${poll.noteId}'`);
-
-			this.globalEventService.publishNoteStream(note.id, 'pollVoted', {
-				id: note.id,
-				userId: note.userId,
-				body: {
-					choice: ps.choice,
-					userId: me.id,
-				},
-			});
 
 			// リモート投票の場合リプライ送信
 			if (note.userHost != null) {

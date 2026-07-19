@@ -2210,7 +2210,9 @@ export class ChatService {
 			throw new Error('user is banned');
 		}
 
-		// TODO: cehck block
+		if (await this.userBlockingService.checkBlocked(inviteeId, inviter.id)) {
+			throw new Error('blocked');
+		}
 
 		const invitation = {
 			id: this.idService.gen(),

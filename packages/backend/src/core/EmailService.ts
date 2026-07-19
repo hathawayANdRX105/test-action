@@ -11,6 +11,7 @@ import { nanoid } from 'nanoid';
 import { Inject, Injectable } from '@nestjs/common';
 import { Not, IsNull, Raw } from 'typeorm';
 import { validate as validateEmail } from 'deep-email-validator';
+import sanitizeHtml from 'sanitize-html';
 import { UtilityService } from '@/core/UtilityService.js';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
@@ -21,6 +22,20 @@ import { CacheService } from '@/core/CacheService.js';
 import { bindThis } from '@/decorators.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { InternalEventService } from '@/global/InternalEventService.js';
+
+/** Escape untrusted strings interpolated into the HTML email wrapper. */
+export function escapeHtmlForEmail(value: string): string {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+}
+
+/** Bare sanitize-html defaults — same policy as AbuseReportNotificationService. Test seam for policy parity. */
+export function sanitizeEmailHtml(html: string): string {
+	return sanitizeHtml(html);
+}
 
 @Injectable()
 export class EmailService {
@@ -60,6 +75,10 @@ export class EmailService {
 	public async sendEmail(to: string, subject: string, html: string, text: string, opts?: { announcementFor?: MiUserProfile, emailSettingLabel?: string } | undefined) {
 		if (!this.meta.enableEmail) return;
 
+		const safeSubject = escapeHtmlForEmail(subject);
+		const safeHtml = sanitizeEmailHtml(html);
+		const safeEmailSettingLabel = escapeHtmlForEmail(opts?.emailSettingLabel ?? 'Email setting');
+
 		const iconUrl = `${this.config.url}/static-assets/mi-white.png`;
 		const emailSettingUrl = `${this.config.url}/settings/email`;
 
@@ -81,7 +100,7 @@ export class EmailService {
 <html>
 	<head>
 		<meta charset="utf-8">
-		<title>${ subject }</title>
+		<title>${ safeSubject }</title>
 		<style>
 			html {
 				background: #eee;
@@ -145,11 +164,11 @@ export class EmailService {
 				<img src="${ this.meta.logoImageUrl ?? this.meta.iconUrl ?? iconUrl }"/>
 			</header>
 			<article>
-				<h1>${ subject }</h1>
-				<div>${ html }</div>
+				<h1>${ safeSubject }</h1>
+				<div>${ safeHtml }</div>
 			</article>
 			<footer>
-				<a href="${ emailSettingUrl }">${ opts?.emailSettingLabel ?? 'Email setting' }</a>
+				<a href="${ emailSettingUrl }">${ safeEmailSettingLabel }</a>
 			</footer>
 		</main>
 		<nav>
@@ -176,7 +195,6 @@ export class EmailService {
 		}
 
 		try {
-			// TODO: htmlサニタイズ
 			const info = await transporter.sendMail({
 				from: this.meta.email!,
 				to: to,

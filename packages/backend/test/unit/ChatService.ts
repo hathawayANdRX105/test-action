@@ -265,7 +265,14 @@ describe('ChatService large room fast path', () => {
 		};
 		const chatRoomInvitationsRepository: any = {
 			findOneBy: jest.fn(async () => null),
+			insertOne: jest.fn(async (invitation) => invitation),
 			delete: jest.fn(async () => ({ affected: 1 })),
+		};
+		const notificationService: any = {
+			createNotification: jest.fn(),
+		};
+		const userBlockingService: any = {
+			checkBlocked: jest.fn(async () => false),
 		};
 		const customEmojiService: any = {
 			emojisByKeyCache: {
@@ -314,8 +321,8 @@ describe('ChatService large room fast path', () => {
 			{} as never,
 			{} as never,
 			pushNotificationService as never,
-			{} as never,
-			{} as never,
+			notificationService as never,
+			userBlockingService as never,
 			queryService as never,
 			roleService as never,
 			{} as never,
@@ -337,6 +344,8 @@ describe('ChatService large room fast path', () => {
 			chatMessagesQueryBuilder,
 			chatRoomMembershipsRepository,
 			chatRoomInvitationsRepository,
+			notificationService,
+			userBlockingService,
 			chatRoomsRepository,
 			metasRepository,
 			chatRoomUserMutingsRepository,
@@ -1267,6 +1276,17 @@ describe('ChatService large room fast path', () => {
 		ctx.chatRoomMembershipsRepository.findOneBy.mockResolvedValueOnce(null);
 
 		await expect(ctx.service.createRoomInvitation({ id: 'owner' } as never, 'room', 'banned-user')).rejects.toThrow('user is banned');
+	});
+
+	test('blocked users cannot be invited', async () => {
+		const ctx = createService(10);
+		ctx.chatRoomMembershipsRepository.findOneBy.mockResolvedValueOnce(null);
+		ctx.userBlockingService.checkBlocked.mockResolvedValueOnce(true);
+
+		await expect(ctx.service.createRoomInvitation({ id: 'owner' } as never, 'room', 'blocked-user')).rejects.toThrow('blocked');
+		expect(ctx.userBlockingService.checkBlocked).toHaveBeenCalledWith('blocked-user', 'owner');
+		expect(ctx.chatRoomInvitationsRepository.insertOne).not.toHaveBeenCalled();
+		expect(ctx.notificationService.createNotification).not.toHaveBeenCalled();
 	});
 
 	test('muting a member updates the membership and publishes memberMuted', async () => {
