@@ -11,7 +11,7 @@ import { setTimeout } from 'node:timers/promises';
 import { Redis } from 'ioredis';
 import type { INestApplicationContext } from '@nestjs/common';
 import type * as misskey from 'misskey-js';
-import { api, post, randomString, sendEnvUpdateRequest, signup, startJobQueue, uploadUrl, withNotesCount, initTestDb } from '../utils.js';
+import { api, post, randomString, sendEnvUpdateRequest, signup, startJobQueue, uploadFile, withNotesCount, initTestDb } from '../utils.js';
 import { loadConfig } from '@/config.js';
 import { MiInstance } from '@/models/Instance.js';
 import { MiNote } from '@/models/Note.js';
@@ -518,8 +518,8 @@ describe('Timelines', () => {
 			await api('following/create', { userId: bob.id }, alice);
 			await setTimeout(1000);
 			const [bobFile, carolFile] = await Promise.all([
-				uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png'),
-				uploadUrl(carol, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png'),
+				uploadFile(bob).then(r => r.body!),
+				uploadFile(carol).then(r => r.body!),
 			]);
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [bobFile.id] });
@@ -905,7 +905,7 @@ describe('Timelines', () => {
 		test.concurrent('[withFiles: true] ファイル付きノートのみ含まれる', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
 
-			const file = await uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png');
+			const file = (await uploadFile(bob)).body!;
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [file.id] });
 
@@ -1160,7 +1160,7 @@ describe('Timelines', () => {
 		test.concurrent('[withFiles: true] ファイル付きノートのみ含まれる', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
 
-			const file = await uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png');
+			const file = (await uploadFile(bob)).body!;
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [file.id] });
 
@@ -1373,7 +1373,7 @@ describe('Timelines', () => {
 
 			const list = await api('users/lists/create', { name: 'list' }, alice).then(res => res.body);
 			await api('users/lists/push', { listId: list.id, userId: bob.id }, alice);
-			const file = await uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png');
+			const file = (await uploadFile(bob)).body!;
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [file.id] });
 
@@ -1532,7 +1532,7 @@ describe('Timelines', () => {
 		test.concurrent('[withFiles: true] ファイル付きノートのみ含まれる', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
 
-			const file = await uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png');
+			const file = (await uploadFile(bob)).body!;
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [file.id] });
 
