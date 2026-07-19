@@ -738,7 +738,7 @@ describe('Streaming', () => {
 
 		test('Authentication', async () => {
 			const application = await createAppToken(ayano, []);
-			const application2 = await createAppToken(ayano, ['read:profile']);
+			const application2 = await createAppToken(ayano, ['read:account']);
 			const socket = new WebSocket(`ws://127.0.0.1:${port}/streaming?i=${application}`);
 			const established = await new Promise<boolean>((resolve, reject) => {
 				socket.on('error', () => resolve(false));

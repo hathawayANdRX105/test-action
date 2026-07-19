@@ -29,6 +29,31 @@ async function launch() {
 
 	await killTestServer(config);
 
+	// Fresh Redis state for e2e (timelines fanout + pubsub). Safe: CI redis is test-only.
+	try {
+		const Redis = (await import('ioredis')).default;
+		const hosts = [
+			config.redis,
+			config.redisForPubsub,
+			config.redisForTimelines,
+			config.redisForJobQueue,
+			config.redisForReactions,
+			config.redisForRateLimit,
+		].filter(Boolean);
+		const seen = new Set<string>();
+		for (const opts of hosts) {
+			const key = `${opts.host}:${opts.port}:${opts.db ?? 0}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			const client = new Redis({ ...opts, lazyConnect: true, maxRetriesPerRequest: 1 });
+			await client.connect();
+			await client.flushdb();
+			client.disconnect();
+		}
+	} catch (e) {
+		console.warn('redis flush skipped', e);
+	}
+
 	console.log('starting application...');
 
 	serverService = app.get(ServerService);

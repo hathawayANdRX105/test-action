@@ -157,12 +157,12 @@ export const signup = async (params?: Partial<misskey.Endpoints['signup']['req']
 };
 
 export const post = async (user: UserToken, params: misskey.Endpoints['notes/create']['req']): Promise<misskey.entities.Note> => {
-	const q = params;
-
-	const res = await api('notes/create', q, user);
-
-	// FIXME: the return type should reflect this fact.
-	return (res.body ? res.body.createdNote : null)!;
+	const res = await api('notes/create', params, user);
+	const created = (res.body as { createdNote?: misskey.entities.Note } | null)?.createdNote;
+	if (res.status !== 200 || created == null || typeof created.id !== 'string') {
+		throw new Error(`post failed status=${res.status} body=${inspect(res.body, { depth: 5 })}`);
+	}
+	return created;
 };
 
 export const createAppToken = async (user: UserToken, permissions: (typeof misskey.permissions)[number][]) => {
@@ -658,6 +658,28 @@ export async function initTestDb(justBorrow = false, initEntities?: any[]) {
 	return db;
 }
 
+
+/** Poll a notes timeline endpoint until it contains noteId (or timeout). */
+export async function waitForTimelineNote(
+	endpoint: keyof misskey.Endpoints,
+	user: UserToken,
+	noteId: string,
+	parameters: Record<string, unknown> = {},
+	timeoutMs = 5000,
+): Promise<misskey.entities.Note[]> {
+	const start = Date.now();
+	let body: misskey.entities.Note[] = [];
+	while (Date.now() - start < timeoutMs) {
+		const res = await api(endpoint as any, { limit: 100, ...parameters } as any, user);
+		if (res.status === 200 && Array.isArray(res.body)) {
+			body = res.body as misskey.entities.Note[];
+			if (body.some(n => n.id === noteId)) return body;
+		}
+		await new Promise(r => setTimeout(r, 200));
+	}
+	return body;
+}
+
 /** Resolve the instance root user for admin e2e calls (signup 'root' fails once preserved). */
 export async function ensureRoot(password = 'test'): Promise<misskey.entities.SignupResponse> {
 	const res = await api('signup', { username: 'root', password });
@@ -669,21 +691,31 @@ export async function ensureRoot(password = 'test'): Promise<misskey.entities.Si
 	const db = await initTestDb(true);
 	try {
 		const rows: { id: string; username: string; token: string | null }[] = await db.query(
-			`SELECT u.id, u.username, u.token FROM meta m JOIN "user" u ON u.id = m."rootUserId" WHERE m.id = 'x'`,
+			`SELECT u.id, u.username, TRIM(u.token) AS token FROM meta m JOIN "user" u ON u.id = m."rootUserId" WHERE m.id = 'x'`,
 		);
 		let row = rows[0];
-		if (row?.token == null) {
-			// Fallback: first local user named root (meta may lag after suite resets)
+		if (row?.token == null || row.token === '') {
 			const fallback: { id: string; username: string; token: string | null }[] = await db.query(
-				`SELECT id, username, token FROM "user" WHERE "usernameLower" = 'root' AND host IS NULL ORDER BY id ASC LIMIT 1`,
+				`SELECT id, username, TRIM(token) AS token FROM "user" WHERE "usernameLower" = 'root' AND host IS NULL ORDER BY id ASC LIMIT 1`,
 			);
 			row = fallback[0];
 		}
-		if (row?.token == null) {
-			throw new Error(`ensureRoot: no root token (signup status ${res.status} body=${inspect(res.body, { depth: 3 })})`);
+		if (row == null) {
+			throw new Error(`ensureRoot: no root user (signup status ${res.status} body=${inspect(res.body, { depth: 3 })})`);
 		}
-		const me = await successfulApiCall({ endpoint: 'i', parameters: {}, user: { token: row.token } });
-		return { ...me, token: row.token } as misskey.entities.SignupResponse;
+
+		let token = row.token;
+		// Validate; if native token is dead (char padding / regeneration), mint a fresh 16-char token.
+		const probe = token ? await api('i', {}, { token }) : { status: 401, body: null as any };
+		if (probe.status !== 200 || token == null || token.length !== 16) {
+			const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+			let fresh = '';
+			for (let i = 0; i < 16; i++) fresh += chars[Math.floor(Math.random() * chars.length)];
+			await db.query(`UPDATE "user" SET token = $1 WHERE id = $2`, [fresh, row.id]);
+			token = fresh;
+		}
+		const me = await successfulApiCall({ endpoint: 'i', parameters: {}, user: { token } });
+		return { ...me, token } as misskey.entities.SignupResponse;
 	} finally {
 		await db.destroy();
 	}

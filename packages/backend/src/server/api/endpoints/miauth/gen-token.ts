@@ -16,7 +16,7 @@ import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { DI } from '@/di-symbols.js';
 import { TimeService } from '@/global/TimeService.js';
 import { CacheService } from '@/core/CacheService.js';
-import { apiAccessErrors, getApiPublicPermissions } from '@/server/api/api-access-utils.js';
+import { apiAccessErrors } from '@/server/api/api-access-utils.js';
 import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH, PUBLIC_APP_DESCRIPTION_MAX_LENGTH, PUBLIC_APP_ICON_URL_MAX_LENGTH, PUBLIC_APP_NAME_MAX_LENGTH, PUBLIC_TOKEN_MAX_LENGTH, PUBLIC_USER_IDS_MAX_ITEMS } from '@/server/api/input-limits.js';
 
 export const meta = {
@@ -106,10 +106,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			const publicPermissions = getApiPublicPermissions(this.instanceMeta);
+			// Developer tokens may request any catalogued scope. Admin scopes require isAdministrator.
+			// Third-party OAuth apps still use apiPublicPermissions via app creation flows.
 			const isAdmin = await this.roleService.isAdministrator(me);
 			const permission = unique(ps.permission.map(v => v.replace(/^(.+)(\/|-)(read|write)$/, '$3:$1')))
-				.filter(scope => publicPermissions.includes(scope) || (isAdmin && scope.includes(':admin:')));
+				.filter(scope => {
+					if (scope.includes(':admin:')) return isAdmin;
+					return scope.startsWith('read:') || scope.startsWith('write:');
+				});
 			if (permission.length === 0) {
 				throw new ApiError(apiAccessErrors.apiScopeDisabled);
 			}

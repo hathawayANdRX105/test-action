@@ -6,7 +6,7 @@
 process.env.NODE_ENV = 'test';
 
 import * as assert from 'assert';
-import { api, castAsError, post, signup } from '../utils.js';
+import { api, castAsError, post, signup, waitForTimelineNote } from '../utils.js';
 import type * as misskey from 'misskey-js';
 
 describe('Block', () => {
@@ -77,13 +77,8 @@ describe('Block', () => {
 		const bobNote = await post(bob, { text: 'hi' });
 		const carolNote = await post(carol, { text: 'hi' });
 
-		await new Promise(r => setTimeout(r, 500));
-
-		const res = await api('notes/local-timeline', { limit: 100 }, bob);
-		const body = res.body as misskey.entities.Note[];
-
-		assert.strictEqual(res.status, 200);
-		assert.strictEqual(Array.isArray(res.body), true);
+		// bob should see own/carol notes; alice is the blocker so her posts must not appear for bob
+		const body = await waitForTimelineNote('notes/local-timeline', bob, bobNote.id);
 		assert.strictEqual(body.some(note => note.id === aliceNote.id), false);
 		assert.strictEqual(body.some(note => note.id === bobNote.id), true);
 		assert.strictEqual(body.some(note => note.id === carolNote.id), true);
