@@ -17,8 +17,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i v-else-if="announcement.icon === 'error'" class="ti ti-circle-x" style="color: var(--MI_THEME-error);"></i>
 			<i v-else-if="announcement.icon === 'success'" class="ti ti-check" style="color: var(--MI_THEME-success);"></i>
 		</span>
-		<span :class="$style.title">{{ announcement.title }}</span>
-		<span :class="$style.body">{{ announcement.text }}</span>
+		<span :class="$style.title"><Mfm :text="announcement.title" :plain="true"/></span>
+		<span :class="$style.body"><Mfm :text="announcement.text" :plain="true"/></span>
 	</MkA>
 </div>
 </template>
@@ -64,6 +64,9 @@ import { $i } from '@/i.js';
 .title {
 	padding: 0 10px;
 	font-weight: bold;
+	overflow: clip;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 
 	&:empty {
 		display: none;

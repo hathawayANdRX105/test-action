@@ -54,12 +54,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</span>
 					</div>
 					<div v-if="!announcementExpanded" :class="$style.announcementPreviewBlock">
-						<div :class="$style.announcementPreview">{{ room!.announcement }}</div>
+						<div :class="$style.announcementPreview"><Mfm :text="room!.announcement ?? ''" :plain="true"/></div>
 						<div :class="$style.announcementFade" aria-hidden="true">
 							<span :class="$style.announcementEllipsis">···</span>
 						</div>
 					</div>
-					<div v-if="announcementExpanded" :class="[$style.announcementText, $style.announcementTextExpanded]">{{ room!.announcement }}</div>
+					<div v-if="announcementExpanded" :class="[$style.announcementText, $style.announcementTextExpanded]"><Mfm :text="room!.announcement ?? ''" :isBlock="true"/></div>
 				</div>
 			</button>
 		</div>
@@ -3343,6 +3343,7 @@ definePage(computed(() => {
 	-webkit-line-clamp: unset;
 	line-clamp: unset;
 	line-height: 1.55;
+	white-space: normal;
 	overflow: visible;
 	margin-top: 2px;
 	padding-left: 1.35em;
