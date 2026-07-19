@@ -18,6 +18,8 @@ describe('channel pinned section', () => {
 		assert.notMatch(channelSource, /data-channel-pinned-section/);
 		assert.notMatch(channelSource, /MkFoldableSection[\s\S]*pinnedNotes|pinnedNotes[\s\S]*MkFoldableSection/);
 	});
+
+	test('keeps foldable section sticky header contract', () => {
 		assert.match(foldableSectionSource, /sticky\?: boolean;/);
 		assert.match(foldableSectionSource, /sticky: true,/);
 		assert.match(foldableSectionSource, /:class="\[\$style\.header, \{ \[\$style\.stickyHeader\]: sticky \}\]"/);

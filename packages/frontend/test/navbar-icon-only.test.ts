@@ -27,7 +27,7 @@ describe('icon-only navbar', () => {
 		assert.include(mobileNavbarSource, 'const DEFAULT_BRAND_ICON_URL = `/client-assets/about-icon.png?v=${BRAND_ASSET_VERSION}`;');
 		assert.match(mobileNavbarSource, /\.top\s*\{[\s\S]*height: 60px;[\s\S]*padding: 8px 16px;[\s\S]*box-sizing: border-box;[\s\S]*\}/);
 		assert.match(mobileNavbarSource, /\.instance\s*\{[\s\S]*display: inline-flex;[\s\S]*width: 44px;[\s\S]*height: 44px;[\s\S]*overflow: clip;[\s\S]*\}/);
-		assert.match(mobileNavbarSource, /\.instanceIcon\s*\{[\s\S]*width: 34px;[\s\S]*height: 34px;[\s\S]*object-fit: cover;[\s\S]*\}/);
+		assert.match(mobileNavbarSource, /\.instanceIcon\s*\{[\s\S]*width: 34px;[\s\S]*height: 34px;[\s\S]*object-fit: contain;[\s\S]*\}/);
 		assert.strictEqual(/wideInstanceIcon/.test(mobileNavbarSource), false);
 	});
 });

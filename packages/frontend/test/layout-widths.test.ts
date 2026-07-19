@@ -47,7 +47,7 @@ describe('wide layout sizing', () => {
 		assert.match(exploreSource, /width:\s*100%;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*var\(--explore-rail-width\);/);
 		assert.match(exploreSource, /const discoverySectionLimit = 10;/);
 		assert.match(exploreSource, /const categoryNoteLimit = 14;/);
-		assert.match(exploreSource, /notes\/discovery-sections',\s*\{\s*limit:\s*discoverySectionLimit\s*\}/);
+		assert.match(exploreSource, /notes\/discovery-sections',\s*\{\s*limit:\s*discoverySectionLimit,\s*scope:\s*exploreScope\.value\s*\}/);
 		assert.match(exploreSource, /limit:\s*categoryNoteLimit,[\s\S]*withRenotes:\s*false,/);
 		assert.match(exploreSource, /\.channelGrid\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(220px,\s*100%\),\s*1fr\)\);/);
 		assert.match(exploreSource, /\.channelCard\s*\{[\s\S]*min-height:\s*142px;[\s\S]*grid-template-rows:\s*56px minmax\(0,\s*auto\) auto;/);
