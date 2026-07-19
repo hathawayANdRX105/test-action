@@ -10,7 +10,7 @@ describe('users/notes endpoint source', () => {
 	const source = readFileSync(new URL('../../src/server/api/endpoints/users/notes.ts', import.meta.url), 'utf8');
 
 	test('uses the database path for channel-inclusive user profile pages', () => {
-		const channelDbBranch = source.indexOf('if (ps.withChannelNotes) {\n\t\t\t\tconst timeline = await this.getFromDb({');
+		const channelDbBranch = source.indexOf('if (withChannelNotes) {\n\t\t\t\tconst timeline = await this.getFromDb({');
 		const redisBranch = source.indexOf('const redisTimelines: FanoutTimelineName[]');
 
 		assert.ok(channelDbBranch > 0, 'withChannelNotes should have an explicit DB branch');

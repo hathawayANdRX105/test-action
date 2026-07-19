@@ -57,6 +57,20 @@ describe('recommended timeline endpoint', () => {
 			markUserActive: jest.fn(),
 		};
 		const recommendationService: any = {
+			getRecommendationConfig: jest.fn(async () => ({
+				enabled: true,
+				rules: [],
+				channelBoost: 0,
+				excludeThreshold: 60,
+				sentiment: {
+					enabled: false,
+					modelId: '',
+					negativePenalty: -40,
+					positiveBoost: 10,
+					neutralBand: 0.15,
+				},
+			})),
+			getPinnedNoteIds: jest.fn(async () => []),
 			recordDelivery: jest.fn(),
 		};
 		const timeService: any = {
