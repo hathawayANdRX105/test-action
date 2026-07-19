@@ -19,7 +19,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkTime :class="$style.time" :time="message.createdAt" mode="absolute"/>
 				<MkLoading v-if="isPending" :class="$style.pendingIcon" :em="true"/>
 				<i v-else-if="isFailed" class="ti ti-alert-circle" :class="$style.failedIcon" :title="i18n.ts.error"></i>
-				<i v-else-if="isMe" class="ti ti-checks" :class="$style.sentIcon"></i>
+				<span v-else-if="isMe && showReadReceipts" :class="$style.readReceipt" :title="readReceiptTitle">
+					<i class="ti" :class="readReceiptIconClass"></i>
+					<span v-if="readReceiptLabel" :class="$style.readReceiptLabel">{{ readReceiptLabel }}</span>
+				</span>
 			</div>
 		</div>
 		<div :class="[$style.bubble, { [$style.mentionedBubble]: isMentionedMe, [$style.mediaBubble]: hasFile, [$style.videoBubble]: hasVideoFile }]">
@@ -94,6 +97,7 @@ import { isLink } from '@@/js/is-link.js';
 import type { MenuItem } from '@/types/menu.js';
 import type { NormalizedChatMessage } from './room.vue';
 import { ensureSignin } from '@/i.js';
+import { prefer } from '@/preferences.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -173,6 +177,31 @@ const isMentionedMe = computed(() => {
 	if (message.hasMentionForMe === true) return true;
 	return message.mentionedUserIds?.includes($i.id) === true;
 });
+const showReadReceipts = computed(() => prefer.s['chat.showReadReceipts'] !== false);
+const messageIsRead = computed(() => {
+	const m = props.message as { isRead?: boolean; readCount?: number };
+	if (typeof m.isRead === 'boolean') return m.isRead;
+	if (typeof m.readCount === 'number') return m.readCount > 0;
+	return false;
+});
+const readCount = computed(() => {
+	const m = props.message as { readCount?: number };
+	return typeof m.readCount === 'number' ? m.readCount : 0;
+});
+const readReceiptIconClass = computed(() => {
+	if (messageIsRead.value) return ['ti-checks', $style.readIcon];
+	return ['ti-check', $style.sentIcon];
+});
+const readReceiptLabel = computed(() => {
+	if (!isRoomChat.value) return messageIsRead.value ? 'Read' : '';
+	if (readCount.value > 0) return `Read ${readCount.value}`;
+	return '';
+});
+const readReceiptTitle = computed(() => {
+	if (!isRoomChat.value) return messageIsRead.value ? 'Read' : 'Delivered';
+	return readCount.value > 0 ? `Read by ${readCount.value}` : 'Delivered';
+});
+
 const visibleReactions = computed<VisibleReaction[]>(() => {
 	const records: VisibleReaction[] = [];
 	for (const record of props.message.reactions) {
@@ -790,6 +819,25 @@ onBeforeUnmount(() => {
 }
 
 .time,
+.readReceipt {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25em;
+	font-size: 0.85em;
+	opacity: 0.75;
+}
+
+.readReceiptLabel {
+	font-size: 0.78em;
+	font-weight: 600;
+	opacity: 0.9;
+}
+
+.readIcon {
+	color: var(--MI_THEME-accent);
+	opacity: 1;
+}
+
 .sentIcon,
 .pendingIcon,
 .failedIcon {

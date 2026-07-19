@@ -77,6 +77,10 @@ export const packedChatMessageSchema = {
 			type: 'boolean',
 			optional: true, nullable: false,
 		},
+		readCount: {
+			type: 'number',
+			optional: true, nullable: false,
+		},
 		hasUnreadMention: {
 			type: 'boolean',
 			optional: true, nullable: false,
@@ -185,6 +189,14 @@ export const packedChatMessageLiteSchema = {
 		},
 		hasMentionForMe: {
 			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		isRead: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		readCount: {
+			type: 'number',
 			optional: true, nullable: false,
 		},
 		reactions: {
@@ -324,6 +336,10 @@ export const packedChatMessageLiteFor1on1Schema = {
 			optional: true, nullable: true,
 			ref: 'ChatMessageReference',
 		},
+		isRead: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
 		reactions: {
 			type: 'array',
 			optional: false, nullable: false,
@@ -404,6 +420,10 @@ export const packedChatMessageLiteForRoomSchema = {
 				type: 'string',
 				optional: false, nullable: false,
 			},
+		},
+		readCount: {
+			type: 'number',
+			optional: true, nullable: false,
 		},
 		reactions: {
 			type: 'array',

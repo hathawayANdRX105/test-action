@@ -61,6 +61,7 @@ const ROOM_MESSAGE_TARGET_CACHE_TTL_MS = ROOM_MESSAGE_TARGET_CACHE_TTL * 1000;
 const ROOM_SENDER_MEMBERSHIP_CACHE_TTL_MS = ROOM_SENDER_MEMBERSHIP_CACHE_TTL * 1000;
 const MAX_REACTIONS_PER_MESSAGE = 100;
 const ROOM_CHAT_MESSAGE_READ_TTL = 60 * 60 * 24 * 30;
+const USER_CHAT_MESSAGE_READ_TTL = 60 * 60 * 24 * 30;
 const ROOM_TIMELINE_CACHE_LIMIT = 300;
 const ROOM_TIMELINE_CACHE_TTL = 60 * 60 * 24 * 2;
 const ROOM_TIMELINE_MUTED_USERS_CACHE_TTL = 60 * 5;
@@ -1154,29 +1155,93 @@ export class ChatService {
 	}
 
 	@bindThis
+	public userChatReadWatermarkKey(readerId: MiUser['id'], peerId: MiUser['id']): string {
+		return `readUserChatMessage:${readerId}:${peerId}`;
+	}
+
+	@bindThis
+	public roomChatReadWatermarkKey(readerId: MiUser['id'], roomId: MiChatRoom['id']): string {
+		return `readRoomChatMessage:${readerId}:${roomId}`;
+	}
+
+	/**
+	 * Mark 1:1 chat as read for reader relative to sender, and advance the watermark
+	 * used for per-message read receipts (isRead) on the sender's side.
+	 * Returns the watermark message id when advanced (or current latest), else null.
+	 */
+	@bindThis
 	public async readUserChatMessage(
 		readerId: MiUser['id'],
 		senderId: MiUser['id'],
-	): Promise<void> {
+	): Promise<string | null> {
+		// Prefer the latest message id we already track as "new" for this pair.
+		const latestMarker = await this.redisClient.get(`newUserChatMessageExists:${readerId}:${senderId}`);
+		let watermark = latestMarker;
+		if (watermark == null) {
+			// Fall back to newest message id in DB for this pair so opening an already-read
+			// thread still advances the watermark for historical isRead packing.
+			const latest = await this.chatMessagesRepository.findOne({
+				select: { id: true },
+				where: [
+					{ fromUserId: senderId, toUserId: readerId },
+					{ fromUserId: readerId, toUserId: senderId },
+				],
+				order: { id: 'DESC' },
+			});
+			watermark = latest?.id ?? null;
+		}
+
 		const redisPipeline = this.redisClient.pipeline();
 		redisPipeline.del(`newUserChatMessageExists:${readerId}:${senderId}`);
 		redisPipeline.srem(`newChatMessagesExists:${readerId}`, `user:${senderId}`);
+		if (watermark != null) {
+			redisPipeline.set(this.userChatReadWatermarkKey(readerId, senderId), watermark, 'EX', USER_CHAT_MESSAGE_READ_TTL);
+		}
 		await redisPipeline.exec();
+
+		if (watermark != null) {
+			// Notify the peer (message author side of this DM channel) so their UI can flip ticks.
+			// Channel key for peer observing this conversation is chatUserStream:senderId-readerId.
+			this.globalEventService.publishChatUserStream(senderId, readerId, 'readReceipt', {
+				userId: readerId,
+				lastReadMessageId: watermark,
+			});
+		}
+
+		return watermark;
+	}
+
+	@bindThis
+	public async getUserChatReadWatermark(readerId: MiUser['id'], peerId: MiUser['id']): Promise<string | null> {
+		return await this.redisClient.get(this.userChatReadWatermarkKey(readerId, peerId));
+	}
+
+	@bindThis
+	public async getRoomChatReadWatermarks(roomId: MiChatRoom['id'], memberIds: MiUser['id'][]): Promise<Map<MiUser['id'], string | null>> {
+		const result = new Map<MiUser['id'], string | null>();
+		if (memberIds.length === 0) return result;
+		const keys = memberIds.map(id => this.roomChatReadWatermarkKey(id, roomId));
+		const values = await this.redisClient.mget(...keys);
+		for (let i = 0; i < memberIds.length; i++) {
+			result.set(memberIds[i], values[i]);
+		}
+		return result;
 	}
 
 	@bindThis
 	public async readRoomChatMessage(
 		readerId: MiUser['id'],
 		roomId: MiChatRoom['id'],
-	): Promise<void> {
+	): Promise<string | null> {
 		const throttleKey = `readRoomChatMessageThrottle:${readerId}:${roomId}`;
 		const shouldRead = await this.redisClient.set(throttleKey, '1', 'EX', ROOM_TIMELINE_HTTP_READ_THROTTLE_TTL, 'NX');
 		if (shouldRead !== 'OK') {
 			this.roomTimelineStats.readSkips++;
-			return;
+			// Still return current watermark so callers can refresh UI if needed.
+			return await this.redisClient.get(this.roomChatReadWatermarkKey(readerId, roomId));
 		}
 
-		await this.redisClient.eval(
+		const latest = await this.redisClient.eval(
 			READ_ROOM_CHAT_MESSAGE_SCRIPT,
 			5,
 			`newRoomChatMessageExists:${readerId}:${roomId}`,
@@ -1186,7 +1251,16 @@ export class ChatService {
 			`readRoomChatMessage:${readerId}:${roomId}`,
 			`room:${roomId}`,
 			ROOM_CHAT_MESSAGE_READ_TTL,
-		);
+		) as string | null;
+
+		if (latest != null) {
+			this.globalEventService.publishChatRoomStream(roomId, 'readReceipt', {
+				userId: readerId,
+				lastReadMessageId: latest,
+			});
+		}
+
+		return latest;
 	}
 
 	@bindThis
@@ -1740,6 +1814,14 @@ export class ChatService {
 
 	@bindThis
 	public async packedRoomTimeline(meId: MiUser['id'], roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatMessage['id'] | null, untilId?: MiChatMessage['id'] | null): Promise<PackedRoomChatMessage[]> {
+		const messages = await this.packedRoomTimelineRaw(meId, roomId, limit, sinceId, untilId);
+		return await this.chatEntityService.applyRoomReadReceipts(messages, meId, roomId);
+	}
+
+	/** Shared-cache-friendly timeline pack without viewer-specific fields. */
+	@bindThis
+	private async packedRoomTimelineRaw(meId: MiUser['id'], roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatMessage['id'] | null, untilId?: MiChatMessage['id'] | null): Promise<PackedRoomChatMessage[]> {
+
 		this.roomTimelineStats.requests++;
 
 		if (untilId == null) {
