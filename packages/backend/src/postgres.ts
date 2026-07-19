@@ -388,6 +388,6 @@ export function createPostgresDataSource(config: Config, globalLogger?: MisskeyL
 		maxQueryExecutionTime: config.db.slowQueryThreshold,
 		entities: entities,
 		// Absolute glob so cwd does not break TypeORM migration discovery at runtime
-		migrations: [backendMigrationsGlob],
+		migrations: envService.env.NODE_ENV === 'test' ? [] : [backendMigrationsGlob],
 	});
 }
