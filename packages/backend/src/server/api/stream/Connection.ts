@@ -875,18 +875,25 @@ export class Connection extends SkEventSource<ConnectionEvents> {
 	public sendSerializedMessageToWs(message: string, options?: { compress?: boolean }): Promise<void> {
 		// Don't throw, since we might end up here if an async call completes while the connection is closing.
 		if (!this.isActive) return Promise.resolve();
+		// ws throws if readyState is CLOSING/CLOSED even when isActive still true mid-teardown.
+		if (this.wsConnection.readyState !== this.wsConnection.OPEN) return Promise.resolve();
 
 		if (Connection.shouldCloseForBackpressure(this.wsConnection.bufferedAmount)) {
 			return this.close(1013, 'WebSocket send buffer exceeded');
 		}
 
 		return new Promise<void>((resolve, reject) => {
-			this.wsConnection.send(message, {
-				compress: options?.compress ?? true,
-			}, (err?: unknown) => {
-				if (err != null) reject(err);
-				else resolve();
-			});
+			try {
+				this.wsConnection.send(message, {
+					compress: options?.compress ?? true,
+				}, (err?: unknown) => {
+					if (err != null) reject(err);
+					else resolve();
+				});
+			} catch {
+				// Closing race: treat as dropped message
+				resolve();
+			}
 		});
 	}
 
@@ -894,6 +901,7 @@ export class Connection extends SkEventSource<ConnectionEvents> {
 	public sendSerializedMessageToWsFast(message: string, options?: { compress?: boolean }): void {
 		// Don't throw, since we might end up here if an async call completes while the connection is closing.
 		if (!this.isActive) return;
+		if (this.wsConnection.readyState !== this.wsConnection.OPEN) return;
 
 		if (Connection.shouldCloseForBackpressure(this.wsConnection.bufferedAmount)) {
 			void this.close(1013, 'WebSocket send buffer exceeded');
@@ -909,7 +917,7 @@ export class Connection extends SkEventSource<ConnectionEvents> {
 				compress: options?.compress ?? true,
 			});
 		} catch (err) {
-			void this.emit('error', { error: err });
+			// Closing race: ignore send errors during teardown
 		}
 	}
 
