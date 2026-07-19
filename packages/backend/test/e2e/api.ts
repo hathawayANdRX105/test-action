@@ -103,7 +103,7 @@ describe('API', () => {
 	});
 
 	test('管理者専用のAPIのアクセス制限', async () => {
-		const application = await createAppToken(alice, ['read:account']);
+		const application = await createAppToken(alice, ['read:profile']);
 		const application2 = await createAppToken(alice, ['read:admin:index-stats']);
 		const application3 = await createAppToken(bob, []);
 		const application4 = await createAppToken(bob, ['read:admin:index-stats']);

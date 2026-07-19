@@ -635,12 +635,12 @@ describe('アンテナ', () => {
 				// includedに関わらずnote()は評価して投稿する。
 				const p = await prev;
 				const n = await current.note();
-				if (current.included) return p.concat(n);
+				if (current.included && n != null) return p.concat(n);
 				return p;
 			}, Promise.resolve([] as Note[]));
 
 			// Wait until fanout has all expected notes (or timeout and assert)
-			const expectedIds = new Set(notes.map(n => n.id));
+			const expectedIds = new Set(notes.filter((n): n is Note => n != null).map(n => n.id));
 			const start = Date.now();
 			let response: { id: string }[] = [];
 			while (Date.now() - start < 5000) {
