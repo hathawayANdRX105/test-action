@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i v-else-if="announcement.icon === 'error'" class="ti ti-circle-x" style="color: var(--MI_THEME-error);"></i>
 				<i v-else-if="announcement.icon === 'success'" class="ti ti-check" style="color: var(--MI_THEME-success);"></i>
 			</span>
-			<span :class="$style.title">{{ announcement.title }}</span>
+			<span :class="$style.title"><Mfm :text="announcement.title"/></span>
 		</div>
 		<div :class="$style.text"><Mfm :text="announcement.text" :isBlock="true" /></div>
 		<div ref="bottomEl"></div>

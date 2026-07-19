@@ -14152,6 +14152,8 @@ export type components = {
             quote?: components['schemas']['ChatMessageReference'] | null;
             mentionedUserIds?: string[];
             hasMentionForMe?: boolean;
+            isRead?: boolean;
+            readCount?: number;
             reactions: {
                 reaction: string;
                 user?: components['schemas']['UserLite'] | null;
@@ -14186,6 +14188,7 @@ export type components = {
             reply?: components['schemas']['ChatMessageReference'] | null;
             quoteId?: string | null;
             quote?: components['schemas']['ChatMessageReference'] | null;
+            isRead?: boolean;
             reactions: {
                 reaction: string;
             }[];
@@ -14205,6 +14208,7 @@ export type components = {
             quoteId?: string | null;
             quote?: components['schemas']['ChatMessageReference'] | null;
             mentionedUserIds?: string[];
+            readCount?: number;
             reactions: {
                 reaction: string;
                 user: components['schemas']['UserLite'];

@@ -54,12 +54,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</span>
 					</div>
 					<div v-if="!announcementExpanded" :class="$style.announcementPreviewBlock">
-						<div :class="$style.announcementPreview">{{ room!.announcement }}</div>
+						<div :class="$style.announcementPreview"><Mfm :text="room!.announcement ?? ''" :plain="true"/></div>
 						<div :class="$style.announcementFade" aria-hidden="true">
 							<span :class="$style.announcementEllipsis">···</span>
 						</div>
 					</div>
-					<div v-if="announcementExpanded" :class="[$style.announcementText, $style.announcementTextExpanded]">{{ room!.announcement }}</div>
+					<div v-if="announcementExpanded" :class="[$style.announcementText, $style.announcementTextExpanded]"><Mfm :text="room!.announcement ?? ''" :isBlock="true"/></div>
 				</div>
 			</button>
 		</div>
@@ -247,6 +247,10 @@ export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'from
 	quoteUnavailable?: boolean;
 	clientId?: string;
 	sendStatus?: 'pending' | 'failed';
+	/** 1:1 — peer has read up to this message */
+	isRead?: boolean;
+	/** Room — number of other members who have read up to this message */
+	readCount?: number;
 	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
 		user: Misskey.entities.UserLite | null;
 	})[];
@@ -1633,6 +1637,7 @@ function connectStream() {
 		userConnection.on('unreact', onUnreact);
 		// 1on1 进 DM 时服务端立刻 push 最新 30 条消息,替代 chat/messages/user-timeline 初次 HTTP
 		userConnection.on('bootstrap', onUserBootstrap);
+		userConnection.on('readReceipt', onReadReceipt);
 		connection.value = userConnection;
 	} else if (room.value != null) {
 		const roomConnection = useStream().useChannel('chatRoom', {
@@ -1651,6 +1656,7 @@ function connectStream() {
 		roomConnection.on('memberRoleUpdated', onMemberRoleUpdated);
 		// B-light:后端把 60ms 窗口内同房间的 message/react/unreact 合并成一个 batch 事件
 		roomConnection.on('batch', onBatch);
+		roomConnection.on('readReceipt', onReadReceipt);
 		// 进群时服务端立刻 push 完整初始包(room + latest 30 messages + mutes)
 		// 替代 chat/rooms/show + chat/messages/room-timeline + chat/rooms/user-mutes/list 三次 HTTP
 		roomConnection.on('bootstrap', onBootstrap);
@@ -2563,6 +2569,37 @@ function flushIncomingMessagesNow(options?: { stickToLatest?: boolean }) {
 	processIncomingMessageBatch(batch, { stickToLatest: shouldStickToLatest });
 }
 
+
+function onReadReceipt(ctx: { userId: string; lastReadMessageId: string }) {
+	if (ctx == null || ctx.userId == null || ctx.lastReadMessageId == null) return;
+	if (ctx.userId === $i.id) return;
+
+	const watermark = ctx.lastReadMessageId;
+	const isRoom = room.value != null;
+	// Per-conversation map of readerId -> last applied watermark (module-local on the closure).
+	const state = (onReadReceipt as any)._state as Map<string, string> | undefined;
+	const readerWatermarks: Map<string, string> = state ?? new Map();
+	(onReadReceipt as any)._state = readerWatermarks;
+
+	const prevWm = readerWatermarks.get(ctx.userId) ?? null;
+	if (prevWm != null && prevWm >= watermark) return; // stale / duplicate
+	readerWatermarks.set(ctx.userId, watermark);
+
+	for (const message of messages.value) {
+		if (message.fromUserId !== $i.id) continue;
+		if (message.id > watermark) continue;
+		if (!isRoom) {
+			message.isRead = true;
+			continue;
+		}
+		// Room: first time this reader covers the message, increment once.
+		const coveredBefore = prevWm != null && message.id <= prevWm;
+		if (!coveredBefore) {
+			message.readCount = (typeof message.readCount === 'number' ? message.readCount : 0) + 1;
+		}
+	}
+}
+
 function onMessage(message: Misskey.entities.ChatMessageLite) {
 	markChatStreamEvent();
 	pendingIncomingShouldStickToLatest = pendingIncomingShouldStickToLatest || shouldForceStickIncomingBatchToLatest([message]) || shouldAutoRevealLatestMessages();
@@ -3343,6 +3380,7 @@ definePage(computed(() => {
 	-webkit-line-clamp: unset;
 	line-clamp: unset;
 	line-height: 1.55;
+	white-space: normal;
 	overflow: visible;
 	margin-top: 2px;
 	padding-left: 1.35em;

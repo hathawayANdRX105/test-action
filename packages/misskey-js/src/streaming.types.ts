@@ -274,6 +274,10 @@ export type Channels = {
 				user?: UserLite;
 				messageId: ChatMessageLite['id'];
 			}) => void;
+			readReceipt: (payload: {
+				userId: string;
+				lastReadMessageId: ChatMessageLite['id'];
+			}) => void;
 			// 1on1 进入聊天时服务端直推:替代 chat/messages/user-timeline 初次 HTTP
 			bootstrap: (payload: {
 				messages: ChatMessageLiteFor1on1[];
@@ -306,6 +310,10 @@ export type Channels = {
 				reaction: string;
 				user?: UserLite;
 				messageId: ChatMessageLite['id'];
+			}) => void;
+			readReceipt: (payload: {
+				userId: string;
+				lastReadMessageId: ChatMessageLite['id'];
 			}) => void;
 			roomUpdated: (payload: {
 				id: string;

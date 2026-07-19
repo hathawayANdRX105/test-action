@@ -8,9 +8,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.body">
 		<div :class="$style.top">
 			<div :class="$style.banner" :style="{ backgroundImage: `url(${ instanceBannerUrl })` }"></div>
-			<button v-tooltip.right="iconOnly ? instance.name ?? i18n.ts.instance : null" class="_button" :class="$style.instance" @click="openInstanceMenu">
-				<img :key="instanceLogoUrl" :src="instanceLogoUrl" alt="" :class="showWideInstanceLogo ? $style.wideInstanceIcon : $style.instanceIcon" decoding="async" draggable="false" style="viewTransitionName: navbar-serverIcon;"/>
-			</button>
+			<div :class="$style.instanceWrap">
+				<button v-tooltip.right="iconOnly ? instance.name ?? i18n.ts.instance : null" class="_button" :class="$style.instance" @click="openInstanceMenu">
+					<img :key="instanceLogoUrl" :src="instanceLogoUrl" alt="" :class="showWideInstanceLogo ? $style.wideInstanceIcon : $style.instanceIcon" decoding="async" draggable="false" style="viewTransitionName: navbar-serverIcon;"/>
+				</button>
+				<button
+					type="button"
+					class="_button"
+					:class="$style.versionBadge"
+					:title="versionBadgeTitle"
+					:aria-label="versionBadgeTitle"
+					@click="openChangelog"
+				>
+					<span :class="$style.versionText">{{ shortVersion }}</span>
+					<span v-if="hasUnreadChangelog" :class="$style.versionDot" class="_blink" aria-hidden="true">
+						<i class="_indicatorCircle"></i>
+					</span>
+				</button>
+			</div>
 		</div>
 		<div :class="$style.middle">
 			<MkA v-tooltip.right="iconOnly ? i18n.ts.home : null" :class="$style.item" :activeClass="$style.active" to="/" exact>
@@ -93,6 +108,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue';
+import { version } from '@@/js/config.js';
 import { openInstanceMenu } from './common.js';
 import * as os from '@/os.js';
 import { navbarItemDef } from '@/navbar.js';
@@ -105,6 +121,7 @@ import { prefer } from '@/preferences.js';
 import { openAccountMenu as openAccountMenu_ } from '@/accounts.js';
 import { $i } from '@/i.js';
 import { normalizePrimaryMenu } from '@/utility/navbar-menu.js';
+import { hasUnreadChangelog } from '@/utility/changelog.js';
 
 const currentMenu = Array.isArray(prefer.s.menu) ? prefer.s.menu : [];
 if ($i != null) {
@@ -189,6 +206,25 @@ function toggleIconOnly() {
 	} else {
 		store.set('menuDisplay', iconOnly.value ? 'sideFull' : 'sideIcon');
 	}
+}
+
+const shortVersion = computed(() => {
+	const v = version.startsWith('v') ? version.slice(1) : version;
+	return v.length > 14 ? `${v.slice(0, 12)}…` : v;
+});
+
+const versionBadgeTitle = computed(() => {
+	const base = `Universe Federation ${version}`;
+	return hasUnreadChangelog.value ? `${base} · ${i18n.ts.whatIsNew}` : base;
+});
+
+function openChangelog() {
+	const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkChangelogPanel.vue')), {
+		celebrate: false,
+		markReadOnClose: true,
+	}, {
+		closed: () => dispose(),
+	});
 }
 
 function openAccountMenu(ev: MouseEvent) {
@@ -447,6 +483,66 @@ function menuEdit() {
 		background-position: center center;
 		-webkit-mask-image: linear-gradient(0deg, rgba(0,0,0,0) 15%, rgba(0,0,0,0.75) 100%);
 		mask-image: linear-gradient(0deg, rgba(0,0,0,0) 15%, rgba(0,0,0,0.75) 100%);
+	}
+
+	.instanceWrap {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		width: 100%;
+		min-width: 0;
+	}
+
+	.versionBadge {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		max-width: 100%;
+		padding: 1px 6px;
+		border-radius: 999px;
+		font-size: 0.68em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.3;
+		color: var(--MI_THEME-fg);
+		background: color-mix(in srgb, var(--MI_THEME-panel) 70%, transparent);
+		border: 1px solid color-mix(in srgb, var(--MI_THEME-divider) 80%, transparent);
+		opacity: 0.88;
+		cursor: pointer;
+
+		&:hover {
+			opacity: 1;
+			border-color: color-mix(in srgb, var(--MI_THEME-accent) 45%, var(--MI_THEME-divider));
+			color: var(--MI_THEME-accent);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--MI_THEME-focus);
+			outline-offset: 1px;
+		}
+	}
+
+	.versionText {
+		max-width: 7.5em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.versionDot {
+		position: relative;
+		display: inline-flex;
+		width: 8px;
+		height: 8px;
+		flex: 0 0 auto;
+
+		> :global(._indicatorCircle) {
+			background: #3ecf5a !important;
+			box-shadow: 0 0 0 1px color-mix(in srgb, #3ecf5a 35%, transparent);
+		}
 	}
 
 	.instance {

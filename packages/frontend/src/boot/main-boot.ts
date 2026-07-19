@@ -34,6 +34,7 @@ import { launchPlugins } from '@/plugin.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { signout } from '@/signout.js';
 import { migrateOldSettings } from '@/pref-migrate.js';
+import { noteClientUpgradedFrom } from '@/utility/changelog.js';
 
 export async function mainBoot() {
 	const { isClientUpdated, lastVersion } = await common(async () => {
@@ -78,6 +79,9 @@ export async function mainBoot() {
 	}
 
 	if (isClientUpdated && $i) {
+		// Keep green-dot unread until the user acknowledges the changelog panel.
+		noteClientUpgradedFrom(lastVersion);
+
 		const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkUpdated.vue')), {}, {
 			closed: () => dispose(),
 		});

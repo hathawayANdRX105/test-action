@@ -415,6 +415,9 @@ export const PREF_DEF = {
 	'chat.sendOnEnter': {
 		default: true,
 	},
+	'chat.showReadReceipts': {
+		default: true,
+	},
 
 	'game.dropAndFusion': {
 		default: {

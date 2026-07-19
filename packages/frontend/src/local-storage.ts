@@ -6,6 +6,7 @@
 export type Keys = (
 	'v' |
 	'lastVersion' |
+	'lastSeenChangelogVersion' |
 	'instance' |
 	'instanceCachedAt' |
 	'account' |
