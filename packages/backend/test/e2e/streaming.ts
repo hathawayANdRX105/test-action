@@ -704,17 +704,18 @@ describe('Streaming', () => {
 				await api('i/update', {
 					mutedInstances: ['example.com'],
 				}, chitose);
-				await new Promise(r => setTimeout(r, 500)); // stream profile mutedInstances
+				await new Promise(r => setTimeout(r, 1500)); // stream profile mutedInstances
 
 				// chitose が example.com をミュートしている状態で、リスインしている takumi が ノートした時の動きを見たい
 				const fired = await waitFire(
 					chitose, 'userList',
 					() => createRemoteNote(takumi, 'foo'),
-					msg => msg.type === 'note' && msg.body.userId === kyoko.id,
+					msg => msg.type === 'note' && msg.body.userId === takumi.id,
 					{ listId: list.id },
 				);
 
 				assert.strictEqual(fired, false);
+				await api('i/update', { mutedInstances: [] }, chitose);
 			});
 
 			// #10443
@@ -722,17 +723,18 @@ describe('Streaming', () => {
 				await api('i/update', {
 					mutedInstances: ['example.com'],
 				}, chitose);
-				await new Promise(r => setTimeout(r, 500)); // stream profile mutedInstances
+				await new Promise(r => setTimeout(r, 1500)); // stream profile mutedInstances
 
 				// chitose が example.com をミュートしている状態で、リスインしている kyoko が takumi のノートにリプライした時の動きを見たい
 				const fired = await waitFire(
 					chitose, 'userList',
 					() => api('notes/create', { text: 'foo', replyId: takumiNote.id }, kyoko),
-					msg => msg.type === 'note' && msg.body.userId === kyoko.id,
+					msg => msg.type === 'note' && msg.body.userId === kyoko.id && msg.body.replyId === takumiNote.id,
 					{ listId: list.id },
 				);
 
 				assert.strictEqual(fired, false);
+				await api('i/update', { mutedInstances: [] }, chitose);
 			});
 
 			// #10443
@@ -740,17 +742,19 @@ describe('Streaming', () => {
 				await api('i/update', {
 					mutedInstances: ['example.com'],
 				}, chitose);
-				await new Promise(r => setTimeout(r, 500)); // stream profile mutedInstances
+				await new Promise(r => setTimeout(r, 1500)); // stream profile mutedInstances
 
-				// chitose が example.com をミュートしている状態で、リスインしている kyoko が takumi のノートをリノートした時の動きを見たい
+				// Pure renote of muted-instance note must not appear on list TL.
+				// Match renoteId so earlier kyoko notes from other tests do not false-positive.
 				const fired = await waitFire(
 					chitose, 'userList',
 					() => api('notes/create', { renoteId: takumiNote.id }, kyoko),
-					msg => msg.type === 'note' && msg.body.userId === kyoko.id,
+					msg => msg.type === 'note' && msg.body.userId === kyoko.id && msg.body.renoteId === takumiNote.id,
 					{ listId: list.id },
 				);
 
 				assert.strictEqual(fired, false);
+				await api('i/update', { mutedInstances: [] }, chitose);
 			});
 		});
 

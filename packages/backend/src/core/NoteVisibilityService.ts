@@ -493,10 +493,12 @@ export class NoteVisibilityService {
 			return true;
 		}
 		// Always mute renotes/replies of muted-instance posts (including pure renotes of remote notes)
-		if (note.reply?.userHost && data.userMutedInstances.has(note.reply.userHost)) {
+		const replyHost = note.reply?.userHost ?? note.reply?.user?.host ?? null;
+		const renoteHost = note.renote?.userHost ?? note.renote?.user?.host ?? null;
+		if (replyHost && data.userMutedInstances.has(replyHost)) {
 			return true;
 		}
-		if (note.renote?.userHost && data.userMutedInstances.has(note.renote.userHost)) {
+		if (renoteHost && data.userMutedInstances.has(renoteHost)) {
 			return true;
 		}
 
