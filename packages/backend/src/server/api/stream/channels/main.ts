@@ -37,6 +37,11 @@ class MainChannel extends NoteChannel {
 
 	@bindThis
 	private async onEvent(data: MainEventPayload): Promise<void> {
+		// Third-party access tokens share main with read:account; never forward full registry values.
+		if (data.type === 'registryUpdated' && this.connection.client.token != null) {
+			return;
+		}
+
 		switch (data.type) {
 			case 'notification': {
 				// Ignore notifications from instances the user has muted
