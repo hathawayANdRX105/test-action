@@ -975,7 +975,6 @@ describe('Note', () => {
 			}, alice);
 
 			assert.strictEqual(deleteOneRes.status, 204);
-			// repliesCount is updated via collapsed queue; poll briefly
 			// repliesCount is deferred via CollapsedQueue (timeout 30s)
 			let mainNote = await Notes.findOneBy({ id: mainNoteRes.body.createdNote.id });
 			for (let i = 0; i < 40 && (mainNote?.repliesCount ?? 0) !== 1; i++) {
@@ -997,7 +996,7 @@ describe('Note', () => {
 			}
 			assert.ok(mainNote);
 			assert.strictEqual(mainNote.repliesCount, 0);
-		});
+		}, 120_000);
 	});
 
 	describe('notes/translate', () => {

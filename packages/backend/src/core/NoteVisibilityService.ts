@@ -479,6 +479,21 @@ export class NoteVisibilityService {
 		// Silence if we've muted the instance
 		if (note.userHost && data.userMutedInstances.has(note.userHost)) return true;
 
+		// Match QueryService.generateMutedUserQueryForNotes: renote/reply targets
+		// (quotes keep renoteUserId; pure renotes also recurse via checkNoteVisibilityFor).
+		if (note.reply && note.reply.userId !== note.userId && data.userRelations.get(note.reply.userId)?.isMuting) {
+			return true;
+		}
+		if (note.renote && note.renote.userId !== note.userId && data.userRelations.get(note.renote.userId)?.isMuting) {
+			return true;
+		}
+		if (note.reply?.userHost && note.reply.userHost !== note.userHost && data.userMutedInstances.has(note.reply.userHost)) {
+			return true;
+		}
+		if (note.renote?.userHost && note.renote.userHost !== note.userHost && data.userMutedInstances.has(note.renote.userHost)) {
+			return true;
+		}
+
 		// Otherwise don't silence
 		return false;
 	}

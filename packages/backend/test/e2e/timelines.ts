@@ -36,41 +36,33 @@ function waitForPushToTl() {
 	return setTimeout(500);
 }
 
+let remoteNoteApp: INestApplicationContext | null = null;
+let remoteNoteCreateService: NoteCreateService | null = null;
+
+async function getRemoteNoteCreateService(): Promise<NoteCreateService> {
+	if (remoteNoteCreateService) return remoteNoteCreateService;
+	process.env.MK_TEST_KEEP_SCHEMA = '1';
+	const { NestFactory } = await import('@nestjs/core');
+	const { MainModule } = await import('@/MainModule.js');
+	const { NestLogger } = await import('@/NestLogger.js');
+	remoteNoteApp = await NestFactory.createApplicationContext(MainModule, { logger: new NestLogger() });
+	await remoteNoteApp.init();
+	remoteNoteCreateService = remoteNoteApp.get(NoteCreateService);
+	return remoteNoteCreateService;
+}
+
+/** Remote users cannot call notes/create; enqueue via NoteCreateService so fanout runs. */
 async function createRemoteNote(user: misskey.entities.SignupResponse, params: {
 	text: string;
 	visibility?: 'public' | 'home' | 'followers' | 'specified';
 }): Promise<misskey.entities.Note> {
 	if (user.host == null) throw new Error('user is not remote');
-
-	const connection = await initTestDb(true);
-	const notes = connection.getRepository(MiNote);
-	const createdAt = new Date();
-	const note = new MiNote({
-		id: genAidx(createdAt.getTime()),
-		createdAt,
-		threadId: null,
+	const noteCreateService = await getRemoteNoteCreateService();
+	const note = await noteCreateService.create(user as any, {
 		text: params.text,
-		userId: user.id,
-		userHost: user.host,
 		visibility: params.visibility ?? 'public',
-		localOnly: false,
-		reactionAcceptance: null,
-		fileIds: [],
-		attachedFileTypes: [],
-		replyId: null,
-		replyUserId: null,
-		replyUserHost: null,
-		renoteId: null,
-		renoteUserId: null,
-		renoteUserHost: null,
-		channelId: null,
-		visibleUserIds: [],
-		mentions: [],
 		uri: `https://${user.host}/notes/${randomString()}`,
-	} as any);
-
-	await notes.insert(note);
-
+	});
 	return note as unknown as misskey.entities.Note;
 }
 
@@ -110,6 +102,7 @@ async function createLocalNote(user: misskey.entities.SignupResponse, params: {
 
 	return note;
 }
+
 
 async function createRemoteFollowing(follower: misskey.entities.SignupResponse, followee: misskey.entities.SignupResponse): Promise<void> {
 	if (follower.host == null) throw new Error('follower is not remote');
@@ -161,6 +154,7 @@ describe('Timelines', () => {
 	});
 
 	afterAll(async () => {
+		try { await remoteNoteApp?.close(); } catch { /* */ }
 		redisForTimelines.disconnect();
 		await stopAllJobQueues();
 	});
