@@ -805,12 +805,23 @@ export class NoteEditService implements OnApplicationShutdown {
 	private async pushToTl(note: MiNote, user: { id: MiUser['id']; host: MiUser['host']; }) {
 		if (!this.meta.enableFanoutTimeline) return;
 
-		const r = this.redisForTimelines.pipeline();
+		// ioredis pipeline.exec fails when too many commands are queued; split around ~30k.
+		const FANOUT_PIPELINE_CHUNK_SIZE = 30_000;
+		let r = this.redisForTimelines.pipeline();
+		const flush = async () => {
+			if (r.length === 0) return;
+			await r.exec();
+			r = this.redisForTimelines.pipeline();
+		};
+		const push = async (...args: Parameters<FanoutTimelineService['push']>) => {
+			await this.fanoutTimelineService.push(...args);
+			if (r.length >= FANOUT_PIPELINE_CHUNK_SIZE) await flush();
+		};
 
 		if (note.channelId) {
-			await this.fanoutTimelineService.push(`channelTimeline:${note.channelId}`, note.id, this.config.perChannelMaxNoteCacheCount, r);
+			await push(`channelTimeline:${note.channelId}`, note.id, this.config.perChannelMaxNoteCacheCount, r);
 
-			await this.fanoutTimelineService.push(`userTimelineWithChannel:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
+			await push(`userTimelineWithChannel:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
 
 			const channelFollowings = await this.channelFollowingsRepository.find({
 				where: {
@@ -820,9 +831,9 @@ export class NoteEditService implements OnApplicationShutdown {
 			});
 
 			for (const channelFollowing of channelFollowings) {
-				await this.fanoutTimelineService.push(`homeTimeline:${channelFollowing.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
+				await push(`homeTimeline:${channelFollowing.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
 				if (note.fileIds.length > 0) {
-					await this.fanoutTimelineService.push(`homeTimelineWithFiles:${channelFollowing.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
+					await push(`homeTimelineWithFiles:${channelFollowing.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
 				}
 			}
 		} else {
@@ -847,7 +858,6 @@ export class NoteEditService implements OnApplicationShutdown {
 
 			const replyTargetVisibleUserIds = await getReplyTargetVisibleUserIds(note, this.notesRepository, this.followingsRepository);
 
-			// TODO: あまりにも数が多いと redisPipeline.exec に失敗する(理由は不明)ため、3万件程度を目安に分割して実行するようにする
 			for (const following of followings) {
 				// 基本的にvisibleUserIdsには自身のidが含まれている前提であること
 				if (note.visibility === 'specified' && !note.visibleUserIds.some(v => v === following.followerId)) continue;
@@ -858,9 +868,9 @@ export class NoteEditService implements OnApplicationShutdown {
 					if (replyTargetVisibleUserIds != null && !replyTargetVisibleUserIds.has(following.followerId)) continue;
 				}
 
-				await this.fanoutTimelineService.push(`homeTimeline:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
+				await push(`homeTimeline:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
 				if (note.fileIds.length > 0) {
-					await this.fanoutTimelineService.push(`homeTimelineWithFiles:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
+					await push(`homeTimelineWithFiles:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
 				}
 			}
 
@@ -878,42 +888,42 @@ export class NoteEditService implements OnApplicationShutdown {
 					if (replyTargetVisibleUserIds != null && !replyTargetVisibleUserIds.has(userListMembership.userListUserId)) continue;
 				}
 
-				await this.fanoutTimelineService.push(`userListTimeline:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax, r);
+				await push(`userListTimeline:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax, r);
 				if (note.fileIds.length > 0) {
-					await this.fanoutTimelineService.push(`userListTimelineWithFiles:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax / 2, r);
+					await push(`userListTimelineWithFiles:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax / 2, r);
 				}
 			}
 
 			// 自分自身のHTL
 			if (note.userHost == null) {
 				if (note.visibility !== 'specified' || !note.visibleUserIds.some(v => v === user.id)) {
-					await this.fanoutTimelineService.push(`homeTimeline:${user.id}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
+					await push(`homeTimeline:${user.id}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
 					if (note.fileIds.length > 0) {
-						await this.fanoutTimelineService.push(`homeTimelineWithFiles:${user.id}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
+						await push(`homeTimelineWithFiles:${user.id}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
 					}
 				}
 			}
 
 			// 自分自身以外への返信
 			if (isReply(note)) {
-				await this.fanoutTimelineService.push(`userTimelineWithReplies:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
+				await push(`userTimelineWithReplies:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
 
 				if (note.visibility === 'public' && note.userHost == null) {
-					await this.fanoutTimelineService.push('localTimelineWithReplies', note.id, 300, r);
+					await push('localTimelineWithReplies', note.id, 300, r);
 					if (note.replyUserHost == null) {
-						await this.fanoutTimelineService.push(`localTimelineWithReplyTo:${note.replyUserId}`, note.id, 300 / 10, r);
+						await push(`localTimelineWithReplyTo:${note.replyUserId}`, note.id, 300 / 10, r);
 					}
 				}
 			} else {
-				await this.fanoutTimelineService.push(`userTimeline:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
+				await push(`userTimeline:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
 				if (note.fileIds.length > 0) {
-					await this.fanoutTimelineService.push(`userTimelineWithFiles:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax / 2 : this.meta.perRemoteUserUserTimelineCacheMax / 2, r);
+					await push(`userTimelineWithFiles:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax / 2 : this.meta.perRemoteUserUserTimelineCacheMax / 2, r);
 				}
 
 				if (note.visibility === 'public' && note.userHost == null) {
-					await this.fanoutTimelineService.push('localTimeline', note.id, 1000, r);
+					await push('localTimeline', note.id, 1000, r);
 					if (note.fileIds.length > 0) {
-						await this.fanoutTimelineService.push('localTimelineWithFiles', note.id, 500, r);
+						await push('localTimelineWithFiles', note.id, 500, r);
 					}
 				}
 			}
@@ -921,7 +931,7 @@ export class NoteEditService implements OnApplicationShutdown {
 			// checkHibernation moved to HibernateUsersProcessorService
 		}
 
-		await r.exec();
+		await flush();
 	}
 
 	// checkHibernation moved to HibernateUsersProcessorService
