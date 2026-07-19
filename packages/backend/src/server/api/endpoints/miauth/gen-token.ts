@@ -107,8 +107,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const publicPermissions = getApiPublicPermissions(this.instanceMeta);
+			const isAdmin = await this.roleService.isAdministrator(me);
 			const permission = unique(ps.permission.map(v => v.replace(/^(.+)(\/|-)(read|write)$/, '$3:$1')))
-				.filter(scope => publicPermissions.includes(scope));
+				.filter(scope => publicPermissions.includes(scope) || (isAdmin && scope.includes(':admin:')));
 			if (permission.length === 0) {
 				throw new ApiError(apiAccessErrors.apiScopeDisabled);
 			}

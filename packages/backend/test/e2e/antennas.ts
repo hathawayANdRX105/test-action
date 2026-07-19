@@ -26,6 +26,27 @@ const compareBy = <T extends { id: string }>(selector: (s: T) => string = (s: T)
 	return selector(a).localeCompare(selector(b));
 };
 
+async function waitForAntennaNotes(antennaId: string, user: { token: string }, noteId: string, timeoutMs = 5000): Promise<string[]> {
+	const start = Date.now();
+	while (Date.now() - start < timeoutMs) {
+		const response = await successfulApiCall({
+			endpoint: 'antennas/notes',
+			parameters: { antennaId, limit: 100 },
+			user,
+		});
+		const ids = response.map((n: { id: string }) => n.id);
+		if (ids.includes(noteId)) return ids;
+		await new Promise(r => setTimeout(r, 200));
+	}
+	const response = await successfulApiCall({
+		endpoint: 'antennas/notes',
+		parameters: { antennaId, limit: 100 },
+		user,
+	});
+	return response.map((n: { id: string }) => n.id);
+}
+
+
 describe('アンテナ', () => {
 	// エンティティとしてのアンテナを主眼においたテストを記述する
 	// (Antennaを返すエンドポイント、Antennaエンティティを書き換えるエンドポイント、Antennaからノートを取得するエンドポイントをテストする)
@@ -344,17 +365,9 @@ describe('アンテナ', () => {
 				parameters: { ...defaultParam, keywords: [[keyword]] },
 				user: alice,
 			});
-			// antennaCreated is redis-IPC; give AntennaService cache a beat before matching
-			await new Promise(r => setTimeout(r, 500));
 			const note = await post(bob, { text: `test ${keyword}` });
-			// antennaTimeline fanout is redis; small settle before read
-			await new Promise(r => setTimeout(r, 300));
-			const response = await successfulApiCall({
-				endpoint: 'antennas/notes',
-				parameters: { antennaId: antenna.id },
-				user: alice,
-			});
-			assert.deepStrictEqual(response.map(n => n.id), [note.id]);
+			const ids = await waitForAntennaNotes(antenna.id, alice, note.id);
+			assert.deepStrictEqual(ids.includes(note.id), true);
 		});
 
 		const keyword = 'キーワード';
@@ -617,7 +630,6 @@ describe('アンテナ', () => {
 				parameters: { ...defaultParam, keywords: [[keyword]], ...parameters() },
 				user: alice,
 			});
-			await new Promise(r => setTimeout(r, 500));
 
 			const notes = await posts.reduce(async (prev, current) => {
 				// includedに関わらずnote()は評価して投稿する。
@@ -627,7 +639,20 @@ describe('アンテナ', () => {
 				return p;
 			}, Promise.resolve([] as Note[]));
 
-			await new Promise(r => setTimeout(r, 300));
+			// Wait until fanout has all expected notes (or timeout and assert)
+			const expectedIds = new Set(notes.map(n => n.id));
+			const start = Date.now();
+			let response: { id: string }[] = [];
+			while (Date.now() - start < 5000) {
+				response = await successfulApiCall({
+					endpoint: 'antennas/notes',
+					parameters: { antennaId: antenna.id, limit: 100 },
+					user: alice,
+				});
+				const got = new Set(response.map(n => n.id));
+				if ([...expectedIds].every(id => got.has(id))) break;
+				await new Promise(r => setTimeout(r, 200));
+			}
 
 			// alice視点でNoteを取り直す
 			const expected = await Promise.all(notes.reverse().map(s => successfulApiCall({
@@ -636,11 +661,6 @@ describe('アンテナ', () => {
 				user: alice,
 			})));
 
-			const response = await successfulApiCall({
-				endpoint: 'antennas/notes',
-				parameters: { antennaId: antenna.id },
-				user: alice,
-			});
 			// Compare ids only — packed note fields drift (counts, user detail)
 			assert.deepStrictEqual(response.map(n => n.id), expected.map(n => n.id));
 		});

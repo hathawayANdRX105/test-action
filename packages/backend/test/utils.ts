@@ -166,11 +166,21 @@ export const post = async (user: UserToken, params: misskey.Endpoints['notes/cre
 };
 
 export const createAppToken = async (user: UserToken, permissions: (typeof misskey.permissions)[number][]) => {
+	// Admin scopes require administrator + rank=admin (RoleService drops admin unless token.rank is admin).
+	// Non-admins requesting only admin scopes still need a public seed so gen-token does not reject empty lists.
+	const needsAdmin = permissions.some(p => p.includes(':admin:'));
+	const permission = permissions.length > 0 ? [...permissions] : ['read:account'];
+	if (needsAdmin && permission.every(p => p.includes(':admin:'))) {
+		permission.push('read:account');
+	}
 	const res = await api('miauth/gen-token', {
 		session: randomUUID(),
-		permission: permissions,
+		permission,
+		...(needsAdmin ? { rank: 'admin' as const } : {}),
 	}, user);
-
+	if (res.status !== 200 || res.body == null || typeof (res.body as any).token !== 'string') {
+		throw new Error(`createAppToken failed status=${res.status} body=${inspect(res.body, { depth: 5 })}`);
+	}
 	return (res.body as misskey.entities.MiauthGenTokenResponse).token;
 };
 
