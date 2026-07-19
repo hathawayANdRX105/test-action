@@ -463,11 +463,18 @@ describe('アンテナ', () => {
 				],
 			},
 			{
-				label: '削除ユーザーのノートも含まれる',
-				parameters: () => ({}),
+				// soft-deleted accounts cannot notes/create; nothing new enters the antenna
+				label: '削除ユーザーの新規ノートは含まれない',
+				parameters: () => ({ keywords: [['deleted-user-keyword-unique']] }),
 				posts: [
-					{ note: (): Promise<Note> => post(userDeletedBySelf, { text: `${keyword}` }), included: true },
-					{ note: (): Promise<Note> => post(userDeletedByAdmin, { text: `${keyword}` }), included: true },
+					{ note: async (): Promise<Note> => {
+						try { return await post(userDeletedBySelf, { text: 'deleted-user-keyword-unique' }); }
+						catch { return null as unknown as Note; }
+					} },
+					{ note: async (): Promise<Note> => {
+						try { return await post(userDeletedByAdmin, { text: 'deleted-user-keyword-unique' }); }
+						catch { return null as unknown as Note; }
+					} },
 				],
 			},
 			{
@@ -717,6 +724,20 @@ describe('アンテナ', () => {
 				const n = await post(alice, { text: `${keyword} (${index})` });
 				return [n].concat(p);
 			}, Promise.resolve([] as Note[]));
+
+			// Wait for fanout so pagination sees the full set (not a partial redis window)
+			const newestId = notes[0].id;
+			await waitForAntennaNotes(antenna.id, alice, newestId, 15_000);
+			const start = Date.now();
+			while (Date.now() - start < 15_000) {
+				const got = await successfulApiCall({
+					endpoint: 'antennas/notes',
+					parameters: { antennaId: antenna.id, limit: 100 },
+					user: alice,
+				});
+				if (got.length >= notes.length && notes.every(n => got.some((g: { id: string }) => g.id === n.id))) break;
+				await new Promise(r => setTimeout(r, 200));
+			}
 
 			// antennas/notesは降順のみで、昇順をサポートしない。
 			await testPaginationConsistency(notes, async (paginationParam) => {

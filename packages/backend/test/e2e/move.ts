@@ -364,9 +364,26 @@ describe('Account Move', () => {
 			await api('following/create', {
 				userId: alice.id,
 			}, eve);
-			const newAlice = await Users.findOneByOrFail({ id: alice.id });
-			const newCarol = await Users.findOneByOrFail({ id: carol.id });
-			let newEve = await Users.findOneByOrFail({ id: eve.id });
+
+			// followingCount/followersCount are written via CollapsedQueue (30s);
+			// poll DB instead of assuming immediate denormalized values.
+			const waitCounts = async (
+				id: string,
+				pred: (u: MiUser) => boolean,
+				timeoutMs = 35_000,
+			) => {
+				const start = Date.now();
+				let row = await Users.findOneByOrFail({ id });
+				while (!pred(row) && Date.now() - start < timeoutMs) {
+					await setTimeout(500);
+					row = await Users.findOneByOrFail({ id });
+				}
+				return row;
+			};
+
+			const newAlice = await waitCounts(alice.id, u => u.followingCount === 0 && u.followersCount === 0);
+			const newCarol = await waitCounts(carol.id, u => u.followingCount === 1);
+			let newEve = await waitCounts(eve.id, u => u.followingCount === 1 && u.followersCount === 1);
 			assert.strictEqual(newAlice.movedToUri, `${url.origin}/users/${bob.id}`);
 			assert.strictEqual(newAlice.followingCount, 0);
 			assert.strictEqual(newAlice.followersCount, 0);
@@ -377,7 +394,7 @@ describe('Account Move', () => {
 			await api('following/delete', {
 				userId: alice.id,
 			}, eve);
-			newEve = await Users.findOneByOrFail({ id: eve.id });
+			newEve = await waitCounts(eve.id, u => u.followingCount === 1 && u.followersCount === 1);
 			assert.strictEqual(newEve.followingCount, 1);
 			assert.strictEqual(newEve.followersCount, 1);
 		});

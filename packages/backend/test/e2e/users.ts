@@ -699,9 +699,9 @@ describe('ユーザー', () => {
 		{ label: '承認制ユーザーが含まれる', user: () => userLocking },
 		{ label: 'サイレンスユーザーが含まれる', user: () => userSilenced },
 		{ label: 'サスペンドユーザーが含まれない', user: () => userSuspended, excluded: true },
-		// deleted: list may still return them; users/show 404s for non-mods so compare by id only
-		{ label: '削除済ユーザーが含まれる', user: () => userDeletedBySelf, idOnly: true },
-		{ label: '削除済(byAdmin)ユーザーが含まれる', user: () => userDeletedByAdmin, idOnly: true },
+		// soft-delete sets isExplorable=false so users list excludes them
+		{ label: '削除済ユーザーが含まれない', user: () => userDeletedBySelf, excluded: true },
+		{ label: '削除済(byAdmin)ユーザーが含まれない', user: () => userDeletedByAdmin, excluded: true },
 	] as { label: string; user: () => misskey.entities.SignupResponse; excluded?: boolean; idOnly?: boolean }[])('をリスト形式で取得することができ、結果に$label', async ({ user, excluded, idOnly }) => {
 		const parameters = { limit: 100 };
 		const response = await successfulApiCall({ endpoint: 'users', parameters, user: alice });
@@ -851,9 +851,9 @@ describe('ユーザー', () => {
 		{ label: '承認制ユーザーが含まれる', user: () => userLocking },
 		{ label: 'サイレンスユーザーが含まれる', user: () => userSilenced },
 		{ label: 'サスペンドユーザーが含まれない', user: () => userSuspended, excluded: true },
-		// deleted accounts still surface in free-text search; compare by id only (show 404s)
-		{ label: '削除済ユーザーが含まれる', user: () => userDeletedBySelf, idOnly: true },
-		{ label: '削除済(byAdmin)ユーザーが含まれる', user: () => userDeletedByAdmin, idOnly: true },
+		// soft-deleted accounts are filtered out of search
+		{ label: '削除済ユーザーが含まれない', user: () => userDeletedBySelf, excluded: true },
+		{ label: '削除済(byAdmin)ユーザーが含まれない', user: () => userDeletedByAdmin, excluded: true },
 	] as { label: string; user: () => misskey.entities.SignupResponse; excluded?: boolean; idOnly?: boolean }[])('を検索することができ、結果に$labelが含まれる', async ({ user, excluded, idOnly }) => {
 		const parameters = { query: user().username, limit: 1 };
 		const response = await successfulApiCall({ endpoint: 'users/search', parameters, user: alice });
@@ -895,9 +895,9 @@ describe('ユーザー', () => {
 		{ label: '承認制ユーザーが含まれる', user: () => userLocking },
 		{ label: 'サイレンスユーザーが含まれる', user: () => userSilenced },
 		{ label: 'サスペンドユーザーが含まれない', user: () => userSuspended, excluded: true },
-		// deleted accounts may still surface by exact username; compare by id only
-		{ label: '削除済ユーザーが含まれる', user: () => userDeletedBySelf, idOnly: true },
-		{ label: '削除済(byAdmin)ユーザーが含まれる', user: () => userDeletedByAdmin, idOnly: true },
+		// soft-deleted accounts are filtered out of username search
+		{ label: '削除済ユーザーが含まれない', user: () => userDeletedBySelf, excluded: true },
+		{ label: '削除済(byAdmin)ユーザーが含まれない', user: () => userDeletedByAdmin, excluded: true },
 	] as { label: string; user: () => misskey.entities.SignupResponse; excluded?: boolean; idOnly?: boolean }[])('をID&ホスト指定で検索でき、結果に$label', async ({ user, excluded, idOnly }) => {
 		const parameters = { username: user().username };
 		const response = await successfulApiCall({ endpoint: 'users/search-by-username-and-host', parameters, user: alice });

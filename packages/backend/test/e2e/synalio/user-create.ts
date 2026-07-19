@@ -43,11 +43,8 @@ describe('[シナリオ] ユーザ作成', () => {
 
 	beforeAll(async () => {
 		queue = await startJobQueue();
-		// ensure meta/root exists so admin role create and system webhooks work
-		await ensureRoot();
-		admin = await signup({ username: 'admin' });
-
-		await role(admin, { isAdministrator: true });
+		// root is the only pre-assigned administrator (role() only creates a Role entity)
+		admin = await ensureRoot();
 	}, 1000 * 60 * 2);
 
 	afterAll(async () => {
