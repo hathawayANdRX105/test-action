@@ -163,7 +163,7 @@ describe('アンテナ', () => {
 			localOnly: false,
 			notify: false,
 		};
-		assert.deepStrictEqual(response.map(n => n.id), expected.map(n => n.id));
+		assert.deepStrictEqual(response, expected);
 	});
 
 	test('が上限いっぱいまで作成できること', async () => {
@@ -231,7 +231,7 @@ describe('アンテナ', () => {
 			user: alice,
 		});
 		const expected = { ...response, ...parameters() };
-		assert.deepStrictEqual(response.map(n => n.id), expected.map(n => n.id));
+		assert.deepStrictEqual(response, expected);
 	});
 
 	test('を作成する時キーワードが指定されていないとエラーになる', async () => {
@@ -256,7 +256,7 @@ describe('アンテナ', () => {
 			user: alice,
 		});
 		const expected = { ...response, ...parameters() };
-		assert.deepStrictEqual(response.map(n => n.id), expected.map(n => n.id));
+		assert.deepStrictEqual(response, expected);
 	});
 	test.todo('は他人のものは変更できない');
 
@@ -296,7 +296,7 @@ describe('アンテナ', () => {
 			user: alice,
 		});
 		const expected = { ...antenna };
-		assert.deepStrictEqual(response.map(n => n.id), expected.map(n => n.id));
+		assert.deepStrictEqual(response, expected);
 	});
 	test.todo('は他人のものをID指定で表示できない');
 
