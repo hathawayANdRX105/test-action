@@ -1,8 +1,8 @@
 name: CI - PR Validation
 
 on:
-  # Deferred from PR Gate closeout: run manually or from follow-up branches.
-  # Not required for PR #71 merge.
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 concurrency:
