@@ -7,6 +7,10 @@ import { describe, expect, jest, test } from '@jest/globals';
 import ReactMessageEndpoint from '@/server/api/endpoints/chat/messages/react.js';
 import UnreactMessageEndpoint from '@/server/api/endpoints/chat/messages/unreact.js';
 
+function entityNotFoundError(): Error {
+	return Object.assign(new Error('not found'), { name: 'EntityNotFoundError' });
+}
+
 describe('chat message reaction endpoints', () => {
 	const me = { id: 'me' } as never;
 
@@ -34,7 +38,7 @@ describe('chat message reaction endpoints', () => {
 	test('unreact maps missing or inaccessible messages to no such message', async () => {
 		const chatService = createChatService({
 			unreact: jest.fn(async () => {
-				throw new Error('missing message');
+				throw entityNotFoundError();
 			}),
 		});
 		const endpoint = new UnreactMessageEndpoint(chatService);
@@ -43,5 +47,29 @@ describe('chat message reaction endpoints', () => {
 			code: 'NO_SUCH_MESSAGE',
 		});
 		expect(chatService.unreact).toHaveBeenCalledWith('message', 'me', '👍');
+	});
+
+	test('react propagates internal failures', async () => {
+		const dbError = new Error('db down');
+		const chatService = createChatService({
+			react: jest.fn(async () => {
+				throw dbError;
+			}),
+		});
+		const endpoint = new ReactMessageEndpoint(chatService);
+
+		await expect(endpoint.exec({ messageId: 'message', reaction: '👍' }, me, null)).rejects.toBe(dbError);
+	});
+
+	test('unreact propagates internal failures', async () => {
+		const dbError = new Error('db down');
+		const chatService = createChatService({
+			unreact: jest.fn(async () => {
+				throw dbError;
+			}),
+		});
+		const endpoint = new UnreactMessageEndpoint(chatService);
+
+		await expect(endpoint.exec({ messageId: 'message', reaction: '👍' }, me, null)).rejects.toBe(dbError);
 	});
 });
