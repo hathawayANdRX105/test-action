@@ -69,7 +69,7 @@ class ChatUserChannel extends Channel {
 		try {
 			if (!this.user) return;
 			const raw = await this.chatService.userTimeline(this.user.id, this.otherId, 30);
-			const messages = await this.chatEntityService.packMessagesLiteFor1on1(raw);
+			const messages = await this.chatEntityService.packMessagesLiteFor1on1(raw, this.user);
 			// ChatMessageLiteFor1on1 跟 ChatMessageLite 在 ChatEventTypes.bootstrap 中没分;
 			// 序列化层只 JSON.stringify,not 类型敏感,直接 as any 简化
 			this.connection.sendSerializedMessageToWsFast(

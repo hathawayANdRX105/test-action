@@ -213,6 +213,10 @@ export interface ChatEventTypes {
 		| { type: 'react'; body: { reaction: string; user?: Packed<'UserLite'>; messageId: MiChatMessage['id'] } }
 		| { type: 'unreact'; body: { reaction: string; user?: Packed<'UserLite'>; messageId: MiChatMessage['id'] } }
 	>;
+	readReceipt: {
+		userId: MiUser['id'];
+		lastReadMessageId: string;
+	};
 	// 进入房间或开 DM 时 WS 端口直推的初始包,替代多个 HTTP。
 	// chatRoom 用全字段;chatUser 只用 messages。把房间相关字段标 optional 让类型同时服务两个 channel。
 	bootstrap: {

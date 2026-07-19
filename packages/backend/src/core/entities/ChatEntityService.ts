@@ -73,6 +73,19 @@ export class ChatEntityService {
 	) {
 	}
 
+	private userChatReadWatermarkKey(readerId: MiUser['id'], peerId: MiUser['id']): string {
+		return `readUserChatMessage:${readerId}:${peerId}`;
+	}
+
+	private roomChatReadWatermarkKey(readerId: MiUser['id'], roomId: MiChatRoom['id']): string {
+		return `readRoomChatMessage:${readerId}:${roomId}`;
+	}
+
+	/** Snowflake ids are lexicographically ordered by time — safe for watermark compares. */
+	private isMessageAtOrBeforeWatermark(messageId: string, watermark: string | null | undefined): boolean {
+		return watermark != null && messageId <= watermark;
+	}
+
 	@bindThis
 	private async extractMessageMentionedUserIds(text: string | null | undefined): Promise<MiUser['id'][]> {
 		if (text == null || !text.includes('@')) return [];
@@ -287,6 +300,29 @@ export class ChatEntityService {
 			});
 		}
 
+		let isRead: boolean | undefined;
+		let readCount: number | undefined;
+		if (me != null && message.fromUserId === me.id) {
+			if (message.toUserId != null) {
+				const peerWatermark = await this.redisClient.get(this.userChatReadWatermarkKey(message.toUserId, me.id));
+				isRead = this.isMessageAtOrBeforeWatermark(message.id, peerWatermark);
+			} else if (message.toRoomId != null) {
+				// Best-effort single-message pack: count members who have read up to this id.
+				const memberships = await this.chatRoomMembershipsRepository.find({
+					select: { userId: true },
+					where: { roomId: message.toRoomId },
+				});
+				const memberIds = memberships.map(m => m.userId).filter(id => id !== me.id);
+				if (memberIds.length > 0) {
+					const keys = memberIds.map(id => this.roomChatReadWatermarkKey(id, message.toRoomId!));
+					const values = await this.redisClient.mget(...keys);
+					readCount = values.reduce((acc, wm) => acc + (this.isMessageAtOrBeforeWatermark(message.id, wm) ? 1 : 0), 0);
+				} else {
+					readCount = 0;
+				}
+			}
+		}
+
 		return {
 			id: message.id,
 			createdAt: this.idService.parse(message.id).date.toISOString(),
@@ -305,6 +341,8 @@ export class ChatEntityService {
 			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId, me, { _hint_: { packedUsers } }) : null,
 			mentionedUserIds: message.toRoomId ? mentionedUserIds : undefined,
 			hasMentionForMe: message.toRoomId ? (me != null && message.fromUserId !== me.id && mentionedUserIds.includes(me.id)) : undefined,
+			isRead,
+			readCount,
 			reactions,
 		};
 	}
@@ -359,6 +397,9 @@ export class ChatEntityService {
 	public async packMessageLiteFor1on1(
 		src: MiChatMessage['id'] | MiChatMessage,
 		options?: {
+			meId?: MiUser['id'];
+			/** Peer's last-read watermark for messages I sent (peer = the other user). */
+			peerReadWatermark?: string | null;
 			_hint_?: {
 				packedFiles: Map<MiChatMessage['fileId'], Packed<'DriveFile'> | null>;
 			};
@@ -377,6 +418,12 @@ export class ChatEntityService {
 			});
 		}
 
+		const meId = options?.meId;
+		let isRead: boolean | undefined;
+		if (meId != null && message.fromUserId === meId) {
+			isRead = this.isMessageAtOrBeforeWatermark(message.id, options?.peerReadWatermark);
+		}
+
 		return {
 			id: message.id,
 			createdAt: this.idService.parse(message.id).date.toISOString(),
@@ -389,28 +436,46 @@ export class ChatEntityService {
 			reply: message.replyId ? await this.packMessageReference(message.reply ?? message.replyId) : null,
 			quoteId: message.quoteId,
 			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId) : null,
+			isRead,
 			reactions,
 		};
 	}
 
-	@bindThis
 	public async packMessagesLiteFor1on1(
 		messages: MiChatMessage[],
+		me?: { id: MiUser['id'] },
 	) {
 		if (messages.length === 0) return [];
+
+		const meId = me?.id;
+		// For 1:1 history, all messages share the same peer pair.
+		let peerReadWatermark: string | null = null;
+		if (meId != null) {
+			const sample = messages[0];
+			const peerId = sample.fromUserId === meId ? sample.toUserId : sample.fromUserId;
+			if (peerId != null) {
+				peerReadWatermark = await this.redisClient.get(this.userChatReadWatermarkKey(peerId, meId));
+			}
+		}
 
 		const [packedFiles] = await Promise.all([
 			this.driveFileEntityService.packMany(messages.map(m => m.file).filter(x => x != null))
 				.then(files => new Map(files.map(f => [f.id, f]))),
 		]);
 
-		return await Promise.all(messages.map(message => this.packMessageLiteFor1on1(message, { _hint_: { packedFiles } })));
+		return await Promise.all(messages.map(message => this.packMessageLiteFor1on1(message, {
+			meId,
+			peerReadWatermark,
+			_hint_: { packedFiles },
+		})));
 	}
 
-	@bindThis
 	public async packMessageLiteForRoom(
 		src: MiChatMessage['id'] | MiChatMessage,
 		options?: {
+			meId?: MiUser['id'];
+			/** Map of memberId -> lastReadMessageId. */
+			memberReadWatermarks?: Map<MiUser['id'], string | null>;
 			mentionedUserIds?: MiUser['id'][];
 			_hint_?: {
 				packedFiles: Map<MiChatMessage['fileId'], Packed<'DriveFile'> | null>;
@@ -434,6 +499,17 @@ export class ChatEntityService {
 			});
 		}
 
+		const meId = options?.meId;
+		let readCount: number | undefined;
+		if (meId != null && message.fromUserId === meId && options?.memberReadWatermarks != null) {
+			let count = 0;
+			for (const [memberId, watermark] of options.memberReadWatermarks) {
+				if (memberId === meId) continue;
+				if (this.isMessageAtOrBeforeWatermark(message.id, watermark)) count++;
+			}
+			readCount = count;
+		}
+
 		return {
 			id: message.id,
 			createdAt: this.idService.parse(message.id).date.toISOString(),
@@ -448,15 +524,19 @@ export class ChatEntityService {
 			quoteId: message.quoteId,
 			quote: message.quoteId ? await this.packMessageReference(message.quote ?? message.quoteId) : null,
 			mentionedUserIds,
+			readCount,
 			reactions,
 		};
 	}
 
-	@bindThis
 	public async packMessagesLiteForRoom(
 		messages: MiChatMessage[],
+		me?: { id: MiUser['id'] },
 	) {
 		if (messages.length === 0) return [];
+
+		const meId = me?.id;
+		const roomId = messages[0].toRoomId;
 
 		const users = messages.flatMap(x => [x.fromUser ?? x.fromUserId, x.reply?.fromUser ?? x.reply?.fromUserId, x.quote?.fromUser ?? x.quote?.fromUserId]).filter(x => x != null);
 		const reactedUserIds = messages.flatMap(x => x.reactions.map(r => r.split('/')[0]));
@@ -467,40 +547,89 @@ export class ChatEntityService {
 			}
 		}
 
-		const [packedUsers, packedFiles, mentionedUserIdsByMessage] = await Promise.all([
+		const memberIdsPromise: Promise<MiUser['id'][]> = (async () => {
+			if (meId == null || roomId == null) return [];
+			const memberships = await this.chatRoomMembershipsRepository.find({
+				select: { userId: true },
+				where: { roomId },
+			});
+			const ids = memberships.map(m => m.userId);
+			// Owner may not have a membership row on some older rooms.
+			const room = await this.chatRoomsRepository.findOne({ select: { ownerId: true }, where: { id: roomId } });
+			if (room?.ownerId && !ids.includes(room.ownerId)) ids.push(room.ownerId);
+			return ids;
+		})();
+
+		const [packedUsers, packedFiles, mentionedUserIdsByMessage, memberIds] = await Promise.all([
 			this.userEntityService.packMany(users)
 				.then(users => new Map(users.map(u => [u.id, u]))),
 			this.driveFileEntityService.packMany(messages.map(m => m.file).filter(x => x != null))
 				.then(files => new Map(files.map(f => [f.id, f]))),
 			this.getCachedMessagesMentionedUserIds(messages),
+			memberIdsPromise,
 		]);
 
+		let memberReadWatermarks: Map<MiUser['id'], string | null> | undefined;
+		if (meId != null && roomId != null && memberIds.length > 0) {
+			const keys = memberIds.map(id => this.roomChatReadWatermarkKey(id, roomId));
+			const values = await this.redisClient.mget(...keys);
+			memberReadWatermarks = new Map();
+			for (let i = 0; i < memberIds.length; i++) {
+				memberReadWatermarks.set(memberIds[i], values[i]);
+			}
+		}
+
 		return await Promise.all(messages.map(message => this.packMessageLiteForRoom(message, {
+			meId,
+			memberReadWatermarks,
 			mentionedUserIds: mentionedUserIdsByMessage.get(message.id) ?? [],
-			_hint_: { packedFiles, packedUsers },
+			_hint_: { packedUsers, packedFiles },
 		})));
 	}
 
 	@bindThis
-	private async getRoomMemberCount(roomId: MiChatRoom['id']): Promise<number> {
-		const loading = this.roomMemberCountLoads.get(roomId);
-		if (loading != null) return await loading;
+	/**
+	 * Overlay viewer-specific readCount onto already-packed room messages.
+	 * Safe to call on shared-cache payloads (mutates a shallow copy per message).
+	 */
+	@bindThis
+	public async applyRoomReadReceipts(
+		messages: Packed<'ChatMessageLiteForRoom'>[],
+		meId: MiUser['id'],
+		roomId: MiChatRoom['id'],
+	): Promise<Packed<'ChatMessageLiteForRoom'>[]> {
+		if (messages.length === 0) return messages;
 
-		const load = this.chatRoomMembershipsRepository
-			.countBy({ roomId })
-			.then(count => count + 1);
-		this.roomMemberCountLoads.set(roomId, load);
-
-		try {
-			return await load;
-		} finally {
-			if (this.roomMemberCountLoads.get(roomId) === load) {
-				this.roomMemberCountLoads.delete(roomId);
-			}
+		const memberships = await this.chatRoomMembershipsRepository.find({
+			select: { userId: true },
+			where: { roomId },
+		});
+		const memberIds = memberships.map(m => m.userId);
+		const room = await this.chatRoomsRepository.findOne({ select: { ownerId: true }, where: { id: roomId } });
+		if (room?.ownerId && !memberIds.includes(room.ownerId)) memberIds.push(room.ownerId);
+		if (memberIds.length === 0) {
+			return messages.map(m => m.fromUserId === meId ? { ...m, readCount: 0 } : m);
 		}
+
+		const keys = memberIds.map(id => this.roomChatReadWatermarkKey(id, roomId));
+		const values = await this.redisClient.mget(...keys);
+		const watermarks = new Map<MiUser['id'], string | null>();
+		for (let i = 0; i < memberIds.length; i++) {
+			watermarks.set(memberIds[i], values[i]);
+		}
+
+		return messages.map(message => {
+			if (message.fromUserId !== meId) return message;
+			let count = 0;
+			for (const [memberId, watermark] of watermarks) {
+				if (memberId === meId) continue;
+				if (this.isMessageAtOrBeforeWatermark(message.id, watermark)) count++;
+			}
+			return { ...message, readCount: count };
+		});
 	}
 
-	@bindThis
+
 	public async packRoom(
 		src: MiChatRoom['id'] | MiChatRoom,
 		me?: { id: MiUser['id'] },

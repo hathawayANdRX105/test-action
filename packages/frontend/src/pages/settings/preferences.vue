@@ -580,6 +580,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</MkSwitch>
 								</MkPreferenceContainer>
 							</SearchMarker>
+							<SearchMarker :keywords="['read', 'receipt', 'chat']">
+								<MkPreferenceContainer k="chat.showReadReceipts">
+									<MkSwitch v-model="chatShowReadReceipts">
+										<template #label><SearchLabel>显示已读状态</SearchLabel></template>
+										<template #caption>开启后，自己发出的消息会显示对方（或群成员）是否已读。关闭后仅对自己隐藏勾选状态，仍会正常上报已读。</template>
+									</MkSwitch>
+								</MkPreferenceContainer>
+							</SearchMarker>
 						</div>
 					</MkFolder>
 				</SearchMarker>
@@ -1052,6 +1060,7 @@ const useBlurEffect = prefer.model('useBlurEffect');
 const defaultFollowWithReplies = prefer.model('defaultFollowWithReplies');
 const chatShowSenderName = prefer.model('chat.showSenderName');
 const chatSendOnEnter = prefer.model('chat.sendOnEnter');
+const chatShowReadReceipts = prefer.model('chat.showReadReceipts');
 const useStickyIcons = prefer.model('useStickyIcons');
 const reduceAnimation = prefer.model('animation', v => !v, v => !v);
 const animatedMfm = prefer.model('animatedMfm');
@@ -1120,6 +1129,7 @@ watch([
 	highlightSensitiveMedia,
 	enableSeasonalScreenEffect,
 	chatShowSenderName,
+	chatShowReadReceipts,
 	useStickyIcons,
 	keepScreenOn,
 	contextMenu,
