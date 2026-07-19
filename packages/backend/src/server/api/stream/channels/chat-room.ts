@@ -36,9 +36,9 @@ class ChatRoomChannel extends Channel {
 		super(id, connection);
 		this.readReceiptBatcher = new ChatReadReceiptBatcher({
 			minIntervalMs: STREAM_CHAT_READ_RECEIPT_MIN_INTERVAL_MS,
-			run: () => {
+			run: async () => {
 				if (!this.roomId) return;
-				return this.chatService.readRoomChatMessage(this.user!.id, this.roomId);
+				await this.chatService.readRoomChatMessage(this.user!.id, this.roomId);
 			},
 			onError: err => {
 				console.error('Failed to read room chat message:', err);
