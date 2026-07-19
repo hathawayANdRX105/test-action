@@ -115,7 +115,12 @@ export class CollapsedQueueService implements OnApplicationShutdown {
 				limiter: 2, // Low concurrency, this table is slow for some reason
 				collapse: (oldJob, newJob) => ({
 					latestRequestReceivedAt: maxDate(oldJob.latestRequestReceivedAt, newJob.latestRequestReceivedAt),
-					notRespondingSince: minDate(oldJob.notRespondingSince, newJob.notRespondingSince),
+					// null = clear/responding; must win over fail Dates in the same window.
+					// Among Dates keep earliest (outage start). undefined = no opinion via minDate.
+					notRespondingSince:
+						oldJob.notRespondingSince === null || newJob.notRespondingSince === null
+							? null
+							: minDate(oldJob.notRespondingSince, newJob.notRespondingSince),
 					shouldUnsuspend: or(oldJob.shouldUnsuspend, newJob.shouldUnsuspend),
 					shouldSuspendGone: or(oldJob.shouldSuspendGone, newJob.shouldSuspendGone),
 					shouldSuspendNotResponding: or(oldJob.shouldSuspendNotResponding, newJob.shouldSuspendNotResponding),
@@ -142,26 +147,23 @@ export class CollapsedQueueService implements OnApplicationShutdown {
 						qb.setSql('latestRequestReceivedAt', 'GREATEST("latestRequestReceivedAt", :latestRequestReceivedAt)', { latestRequestReceivedAt: job.latestRequestReceivedAt });
 					}
 
-					// null (responding) > Date (not responding)
-					if (job.notRespondingSince != null) {
-						qb.setSql('notRespondingSince', `
+					// Responding path: clear notRespondingSince + isNotResponding together.
+					// Fail-only path: row-aware first-set / earliest-keep, derive isNotResponding
+					// from the same expression (IS NOT NULL) so the two columns cannot disagree.
+					if (job.latestRequestReceivedAt !== undefined || job.notRespondingSince === null) {
+						qb.setValue('notRespondingSince', null);
+						qb.setValue('isNotResponding', false);
+					} else if (job.notRespondingSince != null) {
+						// PG SET sees old column values: embed full CASE in both assignments.
+						const notRespondingSinceExpr = `
 							CASE
-								WHEN "notRespondingSince" IS NULL THEN NULL
+								WHEN "latestRequestReceivedAt" IS NOT NULL AND "latestRequestReceivedAt" >= :notRespondingSince THEN "notRespondingSince"
+								WHEN "notRespondingSince" IS NULL THEN :notRespondingSince
 								ELSE LEAST("notRespondingSince", :notRespondingSince)
 							END
-						`, { notRespondingSince: job.notRespondingSince });
-					} else if (job.notRespondingSince === null) {
-						qb.setValue('notRespondingSince', null);
-					}
-
-					// isNotResponding derives from latestRequestReceivedAt and notRespondingSince
-					if (job.latestRequestReceivedAt || job.notRespondingSince !== undefined) {
-						if (job.latestRequestReceivedAt || job.notRespondingSince === null) {
-							qb.setValue('isNotResponding', false);
-						} else {
-							// TODO this should be atomic
-							qb.setValue('isNotResponding', true);
-						}
+						`;
+						qb.setSql('notRespondingSince', notRespondingSinceExpr, { notRespondingSince: job.notRespondingSince });
+						qb.setSql('isNotResponding', `(${notRespondingSinceExpr}) IS NOT NULL`, { notRespondingSince: job.notRespondingSince });
 					}
 
 					// manual > gone > none > auto
