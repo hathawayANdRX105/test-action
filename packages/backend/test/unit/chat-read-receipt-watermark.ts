@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { assert, describe, test } from 'vitest';
+import * as assert from 'assert';
+import { describe, test } from '@jest/globals';
 
 /** Mirror of ChatEntityService watermark compare (snowflake ids). */
 function isMessageAtOrBeforeWatermark(messageId: string, watermark: string | null | undefined): boolean {
