@@ -36,6 +36,10 @@ async function launch() {
 
 	await startControllerEndpoints(config);
 
+	// After first boot, keep schema across Nest restarts. Per-suite resets drop via
+	// initTestDb while Nest is stopped, then call /env-reset to relaunch.
+	process.env.MK_TEST_KEEP_SCHEMA = '1';
+
 	// ジョブキューは必要な時にテストコード側で起動する
 	// ジョブキューが動くとテスト結果の確認に支障が出ることがあるので意図的に動かさないでいる
 
@@ -78,11 +82,31 @@ async function startControllerEndpoints(config: Config) {
 		res.code(200).send({ success: true });
 	});
 
-	fastify.post<{ Body: { key?: string, value?: string } }>('/env-reset', async (req, res) => {
-		process.env = JSON.parse(originEnv);
+	// Stop Nest without relaunch — caller may dropSchema safely then POST /env-reset.
+	fastify.post('/env-stop', async (_req, res) => {
+		try {
+			await serverService.dispose();
+			await app.close();
+		} catch (e) {
+			console.warn('env-stop dispose error', e);
+		}
+		res.code(200).send({ success: true });
+	});
 
-		await serverService.dispose();
-		await app.close();
+	fastify.post<{ Body: { key?: string, value?: string } }>('/env-reset', async (req, res) => {
+		// Preserve MK_TEST_KEEP_SCHEMA across reset so relaunch does not dropSchema.
+		const keep = process.env.MK_TEST_KEEP_SCHEMA;
+		process.env = JSON.parse(originEnv);
+		process.env.NODE_ENV = 'test';
+		if (keep) process.env.MK_TEST_KEEP_SCHEMA = keep;
+		else process.env.MK_TEST_KEEP_SCHEMA = '1';
+
+		try {
+			await serverService.dispose();
+			await app.close();
+		} catch {
+			// already stopped via /env-stop
+		}
 
 		await killTestServer(config);
 
