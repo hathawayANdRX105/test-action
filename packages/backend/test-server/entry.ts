@@ -8,11 +8,7 @@ import type { Config } from '@/config.js';
 import { NestLogger } from '@/NestLogger.js';
 import { DI } from '@/di-symbols.js';
 import { INestApplicationContext } from '@nestjs/common';
-import { loadConfig } from '@/config.js';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 
-const execFileAsync = promisify(execFile);
 const originEnv = JSON.stringify(process.env);
 
 process.env.NODE_ENV = 'test';
@@ -20,24 +16,10 @@ process.env.NODE_ENV = 'test';
 let app: INestApplicationContext;
 let serverService: ServerService;
 
-async function flushTestRedis(): Promise<void> {
-	// Must run BEFORE Nest opens ioredis clients — FLUSHALL after subscribe breaks pubsub.
-	try {
-		const config = loadConfig();
-		const host = config.redis.host ?? '127.0.0.1';
-		const port = String(config.redis.port ?? 6379);
-		await execFileAsync('redis-cli', ['-h', host, '-p', port, 'FLUSHALL']);
-	} catch (e) {
-		console.warn('redis flush skipped', e);
-	}
-}
-
 /**
  * テスト用のサーバインスタンスを起動する
  */
 async function launch() {
-	await flushTestRedis();
-
 	app = await NestFactory.createApplicationContext(MainModule, {
 		logger: new NestLogger(),
 	});
@@ -103,7 +85,6 @@ async function startControllerEndpoints(config: Config) {
 		await app.close();
 
 		await killTestServer(config);
-		await flushTestRedis();
 
 		console.log('starting application...');
 

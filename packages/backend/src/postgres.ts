@@ -370,7 +370,10 @@ export function createPostgresDataSource(config: Config, globalLogger?: MisskeyL
 			},
 		} : {}),
 		synchronize: envService.env.NODE_ENV === 'test',
-		dropSchema: envService.env.NODE_ENV === 'test',
+		// Never dropSchema here: e2e jest setup drops via initTestDb, then env-reset
+		// restarts Nest. dropSchema on Nest init races with in-flight queries and
+		// wipes tables mid-suite (notes/create INTERNAL_ERROR, "relation user does not exist").
+		dropSchema: false,
 		cache: config.db.disableCache === false && envService.env.NODE_ENV !== 'test' ? { // dbをcloseしても何故かredisのコネクションが内部的に残り続けるようで、テストの際に支障が出るため無効にする(キャッシュも含めてテストしたいため本当は有効にしたいが...)
 			type: 'ioredis',
 			options: {
