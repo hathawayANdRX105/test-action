@@ -100,7 +100,7 @@
 	}
 
 	/**
-	 * @param {unknown} reason
+	 * @param {any} reason
 	 * @returns {boolean}
 	 */
 	function isFrontendAssetLoadError(reason) {

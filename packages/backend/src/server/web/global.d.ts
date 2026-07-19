@@ -6,5 +6,6 @@ declare const LANGS: string[];
 interface Window {
 	VERSION?: string;
 	LANGS_VERSION?: string;
+	CLIENT_ENTRY?: string;
 	__sharkeyBootMounted?: boolean;
 }
