@@ -20,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<i v-else-if="announcement.icon === 'error'" class="ti ti-circle-x" style="color: var(--MI_THEME-error);"></i>
 								<i v-else-if="announcement.icon === 'success'" class="ti ti-check" style="color: var(--MI_THEME-success);"></i>
 							</span>
-							<MkA :to="`/announcements/${announcement.id}`"><span>{{ announcement.title }}</span></MkA>
+							<MkA :to="`/announcements/${announcement.id}`"><Mfm :text="announcement.title"/></MkA>
 						</div>
 						<div :class="$style.content">
 							<Mfm :text="announcement.text" :isBlock="true" class="_selectable"/>

@@ -19,6 +19,9 @@ describe('chat room announcement', () => {
 		assert.match(roomSource, /v-if="!announcementExpanded" :class="\$style\.announcementPreviewBlock"/);
 		assert.match(roomSource, /:class="\$style\.announcementFade"/);
 		assert.match(roomSource, /:class="\$style\.announcementEllipsis"/);
+		// MFM rendering for room announcement body (collapsed + expanded)
+		assert.match(roomSource, /announcementPreview"><Mfm :text="room!\.announcement \?\? ''" :plain="true"\/>/);
+		assert.match(roomSource, /announcementTextExpanded]"><Mfm :text="room!\.announcement \?\? ''" :isBlock="true"\/>/);
 		// 普通用户不可永久关闭
 		assert.doesNotMatch(roomSource, /permanentlyDismissAnnouncement/);
 		assert.doesNotMatch(roomSource, /chatRoomAnnouncementDismissed/);
