@@ -159,17 +159,16 @@ async function close(skip: boolean) {
 		if (canceled) return;
 	}
 
-	dialog.value?.close();
-	store.set('accountSetupWizard', -1);
+	await setupComplete();
 }
 
-function setupComplete() {
-	store.set('accountSetupWizard', -1);
+async function setupComplete() {
+	await store.set('accountSetupWizard', -1);
 	dialog.value?.close();
 }
 
-function launchTutorial() {
-	setupComplete();
+async function launchTutorial() {
+	await setupComplete();
 	nextTick(() => {
 		const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkTutorialDialog.vue')), {
 			initialPage: 1,
