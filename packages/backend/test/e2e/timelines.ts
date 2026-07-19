@@ -10,6 +10,9 @@ import * as assert from 'assert';
 import { setTimeout } from 'node:timers/promises';
 import { Redis } from 'ioredis';
 import type { INestApplicationContext } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { MainModule } from '@/MainModule.js';
+import { NestLogger } from '@/NestLogger.js';
 import type * as misskey from 'misskey-js';
 import { api, post, randomString, sendEnvUpdateRequest, signup, startJobQueue, stopAllJobQueues, uploadFile, withNotesCount, initTestDb } from '../utils.js';
 import { loadConfig } from '@/config.js';
@@ -41,15 +44,16 @@ let remoteNoteCreateService: NoteCreateService | null = null;
 
 async function getRemoteNoteCreateService(): Promise<NoteCreateService> {
 	if (remoteNoteCreateService) return remoteNoteCreateService;
+	// KEEP schema: only need NoteCreateService to enqueue post-note jobs.
+	// Queue workers run in test-server process (not here).
 	process.env.MK_TEST_KEEP_SCHEMA = '1';
-	const { NestFactory } = await import('@nestjs/core');
-	const { MainModule } = await import('@/MainModule.js');
-	const { NestLogger } = await import('@/NestLogger.js');
 	remoteNoteApp = await NestFactory.createApplicationContext(MainModule, { logger: new NestLogger() });
 	await remoteNoteApp.init();
-	remoteNoteCreateService = remoteNoteApp.get(NoteCreateService);
-	return remoteNoteCreateService;
+	const service = remoteNoteApp.get(NoteCreateService);
+	remoteNoteCreateService = service;
+	return service;
 }
+
 
 /** Remote users cannot call notes/create; enqueue via NoteCreateService so fanout runs. */
 async function createRemoteNote(user: misskey.entities.SignupResponse, params: {
