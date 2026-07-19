@@ -8,7 +8,11 @@ import type { Config } from '@/config.js';
 import { NestLogger } from '@/NestLogger.js';
 import { DI } from '@/di-symbols.js';
 import { INestApplicationContext } from '@nestjs/common';
+import { loadConfig } from '@/config.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
+const execFileAsync = promisify(execFile);
 const originEnv = JSON.stringify(process.env);
 
 process.env.NODE_ENV = 'test';
@@ -16,10 +20,24 @@ process.env.NODE_ENV = 'test';
 let app: INestApplicationContext;
 let serverService: ServerService;
 
+async function flushTestRedis(): Promise<void> {
+	// Must run BEFORE Nest opens ioredis clients — FLUSHALL after subscribe breaks pubsub.
+	try {
+		const config = loadConfig();
+		const host = config.redis.host ?? '127.0.0.1';
+		const port = String(config.redis.port ?? 6379);
+		await execFileAsync('redis-cli', ['-h', host, '-p', port, 'FLUSHALL']);
+	} catch (e) {
+		console.warn('redis flush skipped', e);
+	}
+}
+
 /**
  * テスト用のサーバインスタンスを起動する
  */
 async function launch() {
+	await flushTestRedis();
+
 	app = await NestFactory.createApplicationContext(MainModule, {
 		logger: new NestLogger(),
 	});
@@ -28,31 +46,6 @@ async function launch() {
 	const config = app.get<Config>(DI.config);
 
 	await killTestServer(config);
-
-	// Fresh Redis state for e2e (timelines fanout + pubsub). Safe: CI redis is test-only.
-	try {
-		const Redis = (await import('ioredis')).default;
-		const hosts = [
-			config.redis,
-			config.redisForPubsub,
-			config.redisForTimelines,
-			config.redisForJobQueue,
-			config.redisForReactions,
-			config.redisForRateLimit,
-		].filter(Boolean);
-		const seen = new Set<string>();
-		for (const opts of hosts) {
-			const key = `${opts.host}:${opts.port}:${opts.db ?? 0}`;
-			if (seen.has(key)) continue;
-			seen.add(key);
-			const client = new Redis({ ...opts, lazyConnect: true, maxRetriesPerRequest: 1 });
-			await client.connect();
-			await client.flushdb();
-			client.disconnect();
-		}
-	} catch (e) {
-		console.warn('redis flush skipped', e);
-	}
 
 	console.log('starting application...');
 
@@ -110,6 +103,7 @@ async function startControllerEndpoints(config: Config) {
 		await app.close();
 
 		await killTestServer(config);
+		await flushTestRedis();
 
 		console.log('starting application...');
 
