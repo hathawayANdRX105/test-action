@@ -701,13 +701,26 @@ export async function waitForTimelineNote(
 	parameters: Record<string, unknown> = {},
 	timeoutMs = 15000,
 ): Promise<misskey.entities.Note[]> {
+	return waitForTimelineNotes(endpoint, user, [noteId], parameters, timeoutMs);
+}
+
+/** Poll until every noteId is present (post-note fanout is async; first note ≠ all notes). */
+export async function waitForTimelineNotes(
+	endpoint: keyof misskey.Endpoints,
+	user: UserToken,
+	noteIds: string[],
+	parameters: Record<string, unknown> = {},
+	timeoutMs = 15000,
+): Promise<misskey.entities.Note[]> {
 	const start = Date.now();
 	let body: misskey.entities.Note[] = [];
+	const need = new Set(noteIds);
 	while (Date.now() - start < timeoutMs) {
 		const res = await api(endpoint as any, { limit: 100, ...parameters } as any, user);
 		if (res.status === 200 && Array.isArray(res.body)) {
 			body = res.body as misskey.entities.Note[];
-			if (body.some(n => n.id === noteId)) return body;
+			const have = new Set(body.map(n => n.id));
+			if ([...need].every(id => have.has(id))) return body;
 		}
 		await new Promise(r => setTimeout(r, 200));
 	}

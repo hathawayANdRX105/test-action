@@ -6,7 +6,7 @@
 process.env.NODE_ENV = 'test';
 
 import * as assert from 'assert';
-import { api, post, signup, waitFire, waitForTimelineNote } from '../utils.js';
+import { api, post, signup, waitFire, waitForTimelineNotes } from '../utils.js';
 import type * as misskey from 'misskey-js';
 
 describe('Renote Mute', () => {
@@ -34,7 +34,8 @@ describe('Renote Mute', () => {
 		const carolRenote = await post(carol, { renoteId: bobNote.id });
 		const carolNote = await post(carol, { text: 'hi' });
 
-		const body = await waitForTimelineNote('notes/local-timeline', alice, bobNote.id);
+		// Wait for notes that should appear (pure renote is silenced for muter).
+		const body = await waitForTimelineNotes('notes/local-timeline', alice, [bobNote.id, carolNote.id]);
 		assert.strictEqual(body.some(note => note.id === bobNote.id), true);
 		assert.strictEqual(body.some(note => note.id === carolRenote.id), false);
 		assert.strictEqual(body.some(note => note.id === carolNote.id), true);
@@ -45,7 +46,7 @@ describe('Renote Mute', () => {
 		const carolRenote = await post(carol, { renoteId: bobNote.id, text: 'kore' });
 		const carolNote = await post(carol, { text: 'hi' });
 
-		const body = await waitForTimelineNote('notes/local-timeline', alice, bobNote.id);
+		const body = await waitForTimelineNotes('notes/local-timeline', alice, [bobNote.id, carolRenote.id, carolNote.id]);
 		assert.strictEqual(body.some(note => note.id === bobNote.id), true);
 		assert.strictEqual(body.some(note => note.id === carolRenote.id), true);
 		assert.strictEqual(body.some(note => note.id === carolNote.id), true);
@@ -56,7 +57,7 @@ describe('Renote Mute', () => {
 		const carolNote = await post(carol, { text: 'hi' });
 		const bobRenote = await post(bob, { renoteId: carolNote.id });
 
-		const body = await waitForTimelineNote('notes/local-timeline', alice, carolNote.id);
+		const body = await waitForTimelineNotes('notes/local-timeline', alice, [carolNote.id, bobRenote.id]);
 		assert.strictEqual(body.some(note => note.id === carolNote.id), true);
 		assert.strictEqual(body.some(note => note.id === bobRenote.id), true);
 	});
