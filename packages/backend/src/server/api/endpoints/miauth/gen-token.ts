@@ -108,9 +108,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// permissions catalog (includes read:account). Admin scopes need isAdministrator.
 			// Third-party OAuth/app flows still use getApiPublicPermissions elsewhere.
 			const isAdmin = await this.roleService.isAdministrator(me);
-			const catalog = new Set(permissions);
-			const permission = unique(ps.permission.map(v => v.replace(/^(.+)(\/|-)(read|write)$/, '$3:$1')))
 			const catalog: Set<string> = new Set(permissions);
+			const permission = unique(ps.permission.map(v => v.replace(/^(.+)(\/|-)(read|write)$/, '$3:$1')))
+				.filter(scope => {
 					if (isAdminApiScope(scope)) return isAdmin;
 					return catalog.has(scope);
 				});
