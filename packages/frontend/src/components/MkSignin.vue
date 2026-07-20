@@ -103,7 +103,7 @@ const waiting = ref(false);
 const passwordPageEl = useTemplateRef('passwordPageEl');
 const needCaptcha = ref(false);
 
-const userInfo = ref<null | Misskey.entities.UserDetailed>(null);
+const userInfo = ref<null | Misskey.entities.UserDetailed | { username: string }>(null);
 const password = ref('');
 
 //#region Passkey Passwordless
@@ -177,7 +177,7 @@ async function onUsernameSubmitted(username: string) {
 
 		// Rate-limited users/show can still proceed; keep username for password/totp pages only after success.
 		if (userInfo.value == null) {
-			userInfo.value = { username } as any;
+			userInfo.value = { username };
 		}
 	} catch {
 		// tryLogin already surfaces errors via onSigninApiError

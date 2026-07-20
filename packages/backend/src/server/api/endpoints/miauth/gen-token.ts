@@ -7,7 +7,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ApiError } from '@/server/api/error.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { AccessTokensRepository } from '@/models/_.js';
-import type { MiMeta } from '@/models/Meta.js';
 import { IdService } from '@/core/IdService.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { RoleService } from '@/core/RoleService.js';
@@ -16,7 +15,8 @@ import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { DI } from '@/di-symbols.js';
 import { TimeService } from '@/global/TimeService.js';
 import { CacheService } from '@/core/CacheService.js';
-import { apiAccessErrors, getApiPublicPermissions, isAdminApiScope } from '@/server/api/api-access-utils.js';
+import { permissions } from '@/const.js';
+import { apiAccessErrors, isAdminApiScope } from '@/server/api/api-access-utils.js';
 import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH, PUBLIC_APP_DESCRIPTION_MAX_LENGTH, PUBLIC_APP_ICON_URL_MAX_LENGTH, PUBLIC_APP_NAME_MAX_LENGTH, PUBLIC_TOKEN_MAX_LENGTH, PUBLIC_USER_IDS_MAX_ITEMS } from '@/server/api/input-limits.js';
 
 export const meta = {
@@ -78,11 +78,9 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
-		@Inject(DI.meta)
-		private readonly instanceMeta: MiMeta,
-
 		@Inject(DI.accessTokensRepository)
 		private accessTokensRepository: AccessTokensRepository,
+
 
 		private idService: IdService,
 		private notificationService: NotificationService,
@@ -106,14 +104,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			// Developer mi-auth tokens: public catalog scopes + admin scopes only for administrators.
-			// Matches api/tokens/create for non-admin; admin scopes still require isAdministrator.
-			const publicPermissions = getApiPublicPermissions(this.instanceMeta);
+			// First-party mi-auth developer tokens: any non-admin scope in the global
+			// permissions catalog (includes read:account). Admin scopes need isAdministrator.
+			// Third-party OAuth/app flows still use getApiPublicPermissions elsewhere.
 			const isAdmin = await this.roleService.isAdministrator(me);
+			const catalog = new Set(permissions);
 			const permission = unique(ps.permission.map(v => v.replace(/^(.+)(\/|-)(read|write)$/, '$3:$1')))
 				.filter(scope => {
 					if (isAdminApiScope(scope)) return isAdmin;
-					return publicPermissions.includes(scope);
+					return catalog.has(scope);
 				});
 			if (permission.length === 0) {
 				throw new ApiError(apiAccessErrors.apiScopeDisabled);
