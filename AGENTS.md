@@ -29,6 +29,12 @@ GitHub templates (forms members fill):
 6. **Keep the tree clean.** No random dirs/files, no secrets, no real instance config, no local tooling DB directories committed (see `.gitignore`).
 7. **Match existing style.** Misskey/Sharkey-derived tree; no drive-by renames or rebrands.
 
+## Scope limits
+
+- Keep one PR to one Issue and one reviewable purpose. Split it before review if it changes more than three business subsystems, has a destructive schema change without migration and rollback notes, exceeds roughly 300 effective code lines, or cannot be understood in 30 minutes.
+- Do not bundle architecture replacement, broad dependency upgrades, repository-wide formatting, unrequested rebranding, or speculative refactoring into a bug fix or small task.
+- Do not change public API shapes or destructive data behavior unless the scoped Issue requires it and the PR states compatibility or migration impact.
+
 ## Branch names
 
 | Prefix | Use |

@@ -42,3 +42,11 @@ With Universe Federation, you can enable sign-ups, subject to manual moderator a
 ## Documentation
 
 Universe Federation Documentation can be found at [Universe Federation Documentation](https://dc.hhhl.cc/)
+
+## Repository documentation
+
+- [Contributing](CONTRIBUTING.md)
+- [Important user notes](docs/user/important-notes.md)
+- [Upgrade notes](docs/ops/upgrade-notes.md)
+- [Security policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
