@@ -43,14 +43,14 @@ export type Request = <
 
 type Host = 'a.test' | 'b.test';
 
-export async function sleep(ms = 5000): Promise<void> {
+export async function sleep(ms = 3000): Promise<void> {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /** Poll until predicate is true or timeout (AP delivery is async via BullMQ). */
 export async function waitUntil(
 	fn: () => Promise<boolean>,
-	{ timeoutMs = 60000, intervalMs = 1000 }: { timeoutMs?: number; intervalMs?: number } = {},
+	{ timeoutMs = 90000, intervalMs = 1000 }: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	let lastErr: unknown;

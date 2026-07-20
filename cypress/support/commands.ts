@@ -122,9 +122,25 @@ Cypress.Commands.add('login', (username, password) => {
 // Close account setup wizard + confirmation dialog if present.
 Cypress.Commands.add('dismissUserSetup', () => {
 	cy.get('body', { timeout: 30000 }).should('be.visible');
+	// Setup wizard close
 	cy.get('body').then(($body) => {
 		if ($body.find('[data-cy-user-setup] [data-cy-modal-window-close]').length) {
 			cy.get('[data-cy-user-setup] [data-cy-modal-window-close]', { timeout: 30000 }).click({ force: true });
+		}
+	});
+	// Confirm "leave setup?" style dialogs
+	cy.get('body').then(($body) => {
+		if ($body.find('[data-cy-modal-dialog-ok]').length) {
+			cy.get('[data-cy-modal-dialog-ok]').click({ force: true });
+		}
+	});
+	// Any leftover modal windows (announcements, etc.)
+	cy.get('body').then(($body) => {
+		const closes = $body.find('[data-cy-modal-window-close]');
+		if (closes.length) {
+			cy.wrap(closes).each(($el) => {
+				cy.wrap($el).click({ force: true });
+			});
 		}
 	});
 	cy.get('body').then(($body) => {
@@ -135,4 +151,6 @@ Cypress.Commands.add('dismissUserSetup', () => {
 	// Wait until overlays that cover the post button are gone
 	cy.get('[data-cy-user-setup]', { timeout: 15000 }).should('not.exist');
 	cy.get('[data-cy-modal-dialog-ok]').should('not.exist');
+	// MkModalWindow header should not remain covering the page
+	cy.get('.MkModalWindow-header, [class*="MkModalWindow-header"]', { timeout: 10000 }).should('not.exist');
 });

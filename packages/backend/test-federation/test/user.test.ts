@@ -1,4 +1,7 @@
 import assert, { rejects, strictEqual } from 'node:assert';
+
+// AP delivery + waitUntil can exceed Jest's default 5s/60s under CI load.
+jest.setTimeout(180_000);
 import type * as Misskey from 'misskey-js';
 import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, waitUntil } from './utils.js';
 
@@ -295,7 +298,7 @@ describe('User', () => {
 						const requests = await alice.client.request('following/requests/list', {});
 						return requests.length >= 1;
 					});
-				});
+				}, 180_000);
 
 				test('Alice should have a request', async () => {
 					const requests = await alice.client.request('following/requests/list', {});
@@ -328,7 +331,7 @@ describe('User', () => {
 
 				await alice.client.request('following/requests/reject', { userId: bobInA.id });
 				await sleep();
-			});
+			}, 180_000);
 
 			test('Bob should have no requests', async () => {
 				await rejects(
@@ -356,7 +359,7 @@ describe('User', () => {
 
 				await alice.client.request('following/requests/accept', { userId: bobInA.id });
 				await sleep();
-			});
+			}, 180_000);
 
 			test('Bob follows Alice', async () => {
 				await waitUntil(async () => {
