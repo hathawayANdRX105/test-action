@@ -76,9 +76,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			await this.redisClient.flushdb();
 			await resetDb(this.db);
 
-			// DIコンテナで管理しているmetaのインスタンスには上記のリセット処理が届かないため、
-			// 初期値を流して明示的にリフレッシュする
+			// resetDb wipes meta; reseed defaults (same as GlobalModule.fetchMeta).
+			await this.metasRepository.upsert({ id: 'x' }, ['id']);
 			const after = await this.metasRepository.findOneOrFail({ where: { id: Not(IsNull()) }, order: { id: 'DESC' } });
+			// DI meta instance does not see the wipe; push the reseeded row through MetaService.
 			await this.metaService.update(after);
 
 			logger.info('---- Database reset complete.');

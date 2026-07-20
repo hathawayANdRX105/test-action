@@ -13,6 +13,9 @@ services:
       - type: volume
         source: node_modules_misskey-reversi
         target: /misskey/packages/misskey-reversi/node_modules
+      - type: volume
+        source: node_modules_megalodon
+        target: /misskey/packages/megalodon/node_modules
 
   tester:
     networks:
@@ -69,6 +72,9 @@ services:
       - type: volume
         source: node_modules_misskey-reversi
         target: /misskey/packages/misskey-reversi/node_modules
+      - type: volume
+        source: node_modules_megalodon
+        target: /misskey/packages/megalodon/node_modules
 
   b.test:
     networks:
@@ -91,6 +97,9 @@ services:
       - type: volume
         source: node_modules_misskey-reversi
         target: /misskey/packages/misskey-reversi/node_modules
+      - type: volume
+        source: node_modules_megalodon
+        target: /misskey/packages/megalodon/node_modules
 
 networks:
   external_network:
@@ -115,3 +124,4 @@ volumes:
   node_modules_misskey-js:
   node_modules_misskey-js_dev:
   node_modules_misskey-reversi:
+  node_modules_megalodon:

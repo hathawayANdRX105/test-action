@@ -21,9 +21,10 @@ describe('sensitive privacy surfaces', () => {
 		expect(activeUsersMeta.kind).toBe('read:admin:show-user');
 	});
 
-	test('reset-db is admin-only and still hidden outside test runtime', () => {
-		expect(resetDbMeta.requireCredential).toBe(true);
-		expect(resetDbMeta.requireAdmin).toBe(true);
+	test('reset-db is test-only (open in NODE_ENV=test, 404 elsewhere)', () => {
+		// Cypress posts without a token; runtime still hard-gates on NODE_ENV=test.
+		expect(resetDbMeta.requireCredential).toBe(false);
+		expect(resetDbMeta.requireAdmin).toBe(false);
 		expect(resetDbMeta.kind).toBe('write:admin:meta');
 		expect(resetDbMeta.errors.unavailable.httpStatusCode).toBe(404);
 	});
