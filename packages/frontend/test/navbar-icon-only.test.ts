@@ -20,10 +20,14 @@ describe('icon-only navbar', () => {
 	});
 
 	test('keeps mobile drawer brand icon compact', () => {
-		assert.match(mobileNavbarSource, /:src="instance\.iconUrl \|\| instance\.sidebarLogoUrl \|\| '\/apple-touch-icon\.png'"/);
+		assert.include(mobileNavbarSource, ':src="instanceIconUrl"');
+		assert.include(mobileNavbarSource, 'const instanceIconUrl = computed');
+		assert.include(mobileNavbarSource, 'return withBrandAssetVersion(instance.iconUrl) ?? withBrandAssetVersion(instance.sidebarLogoUrl) ?? DEFAULT_BRAND_ICON_URL;');
+		assert.include(mobileNavbarSource, "const BRAND_ASSET_VERSION = 'uf3';");
+		assert.include(mobileNavbarSource, 'const DEFAULT_BRAND_ICON_URL = `/client-assets/about-icon.png?v=${BRAND_ASSET_VERSION}`;');
 		assert.match(mobileNavbarSource, /\.top\s*\{[\s\S]*height: 60px;[\s\S]*padding: 8px 16px;[\s\S]*box-sizing: border-box;[\s\S]*\}/);
 		assert.match(mobileNavbarSource, /\.instance\s*\{[\s\S]*display: inline-flex;[\s\S]*width: 44px;[\s\S]*height: 44px;[\s\S]*overflow: clip;[\s\S]*\}/);
-		assert.match(mobileNavbarSource, /\.instanceIcon\s*\{[\s\S]*width: 34px;[\s\S]*height: 34px;[\s\S]*object-fit: cover;[\s\S]*\}/);
+		assert.match(mobileNavbarSource, /\.instanceIcon\s*\{[\s\S]*width: 34px;[\s\S]*height: 34px;[\s\S]*object-fit: contain;[\s\S]*\}/);
 		assert.strictEqual(/wideInstanceIcon/.test(mobileNavbarSource), false);
 	});
 });

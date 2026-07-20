@@ -175,6 +175,8 @@ describe('ChatService large room fast path', () => {
 			pack: jest.fn(async (userId) => ({ id: userId })),
 		};
 		const chatEntityService: any = {
+			// packedRoomTimeline always overlays viewer-specific read receipts
+			applyRoomReadReceipts: jest.fn(async (messages: any[]) => messages),
 			packMessageLiteForRoom: jest.fn(async (message: any, options?: { mentionedUserIds?: string[] }) => ({
 				id: message.id,
 				createdAt: new Date(0).toISOString(),

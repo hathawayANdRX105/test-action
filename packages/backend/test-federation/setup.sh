@@ -33,3 +33,7 @@ function generate {
 
 generate a.test
 generate b.test
+
+# nginx worker cannot read host-owned 0600 keys from the bind mount
+chmod 644 certificates/*.crt certificates/*.key
+chmod 600 certificates/rootCA.key

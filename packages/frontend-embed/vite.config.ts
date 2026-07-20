@@ -1,7 +1,7 @@
 import path from 'path';
 import pluginVue from '@vitejs/plugin-vue';
 import { type UserConfig, defineConfig } from 'vite';
-import { pluginReplaceIcons } from 'frontend-shared/util/vite.replaceIcons.js';
+import { pluginReplaceIcons } from 'frontend-shared/built/util/vite.replaceIcons.js';
 import { locales, localesVersion } from 'locales';
 import meta from '../../package.json' with { type: 'json' };
 import packageInfo from './package.json' with { type: 'json' };

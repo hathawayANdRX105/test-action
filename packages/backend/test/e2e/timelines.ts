@@ -10,8 +10,11 @@ import * as assert from 'assert';
 import { setTimeout } from 'node:timers/promises';
 import { Redis } from 'ioredis';
 import type { INestApplicationContext } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { MainModule } from '@/MainModule.js';
+import { NestLogger } from '@/NestLogger.js';
 import type * as misskey from 'misskey-js';
-import { api, post, randomString, sendEnvUpdateRequest, signup, startJobQueue, uploadUrl, withNotesCount, initTestDb } from '../utils.js';
+import { api, post, randomString, sendEnvUpdateRequest, signup, startJobQueue, stopAllJobQueues, uploadFile, withNotesCount, initTestDb } from '../utils.js';
 import { loadConfig } from '@/config.js';
 import { MiInstance } from '@/models/Instance.js';
 import { MiNote } from '@/models/Note.js';
@@ -36,41 +39,34 @@ function waitForPushToTl() {
 	return setTimeout(500);
 }
 
+let remoteNoteApp: INestApplicationContext | null = null;
+let remoteNoteCreateService: NoteCreateService | null = null;
+
+async function getRemoteNoteCreateService(): Promise<NoteCreateService> {
+	if (remoteNoteCreateService) return remoteNoteCreateService;
+	// KEEP schema: only need NoteCreateService to enqueue post-note jobs.
+	// Queue workers run in test-server process (not here).
+	process.env.MK_TEST_KEEP_SCHEMA = '1';
+	remoteNoteApp = await NestFactory.createApplicationContext(MainModule, { logger: new NestLogger() });
+	await remoteNoteApp.init();
+	const service = remoteNoteApp.get(NoteCreateService);
+	remoteNoteCreateService = service;
+	return service;
+}
+
+
+/** Remote users cannot call notes/create; enqueue via NoteCreateService so fanout runs. */
 async function createRemoteNote(user: misskey.entities.SignupResponse, params: {
 	text: string;
 	visibility?: 'public' | 'home' | 'followers' | 'specified';
 }): Promise<misskey.entities.Note> {
 	if (user.host == null) throw new Error('user is not remote');
-
-	const connection = await initTestDb(true);
-	const notes = connection.getRepository(MiNote);
-	const createdAt = new Date();
-	const note = new MiNote({
-		id: genAidx(createdAt.getTime()),
-		createdAt,
-		threadId: null,
+	const noteCreateService = await getRemoteNoteCreateService();
+	const note = await noteCreateService.create(user as any, {
 		text: params.text,
-		userId: user.id,
-		userHost: user.host,
 		visibility: params.visibility ?? 'public',
-		localOnly: false,
-		reactionAcceptance: null,
-		fileIds: [],
-		attachedFileTypes: [],
-		replyId: null,
-		replyUserId: null,
-		replyUserHost: null,
-		renoteId: null,
-		renoteUserId: null,
-		renoteUserHost: null,
-		channelId: null,
-		visibleUserIds: [],
-		mentions: [],
 		uri: `https://${user.host}/notes/${randomString()}`,
-	} as any);
-
-	await notes.insert(note);
-
+	});
 	return note as unknown as misskey.entities.Note;
 }
 
@@ -110,6 +106,7 @@ async function createLocalNote(user: misskey.entities.SignupResponse, params: {
 
 	return note;
 }
+
 
 async function createRemoteFollowing(follower: misskey.entities.SignupResponse, followee: misskey.entities.SignupResponse): Promise<void> {
 	if (follower.host == null) throw new Error('follower is not remote');
@@ -160,8 +157,10 @@ describe('Timelines', () => {
 		redisForTimelines = new Redis(loadConfig().redisForTimelines);
 	});
 
-	afterAll(() => {
+	afterAll(async () => {
+		try { await remoteNoteApp?.close(); } catch { /* */ }
 		redisForTimelines.disconnect();
+		await stopAllJobQueues();
 	});
 
 	describe('Home TL', () => {
@@ -518,8 +517,8 @@ describe('Timelines', () => {
 			await api('following/create', { userId: bob.id }, alice);
 			await setTimeout(1000);
 			const [bobFile, carolFile] = await Promise.all([
-				uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png'),
-				uploadUrl(carol, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png'),
+				uploadFile(bob).then(r => r.body!),
+				uploadFile(carol).then(r => r.body!),
 			]);
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [bobFile.id] });
@@ -534,7 +533,7 @@ describe('Timelines', () => {
 			assert.strictEqual(res.body.some(note => note.id === bobNote2.id), true);
 			assert.strictEqual(res.body.some(note => note.id === carolNote1.id), false);
 			assert.strictEqual(res.body.some(note => note.id === carolNote2.id), false);
-		}, 1000 * 30);
+		}, 60_000);
 
 		test.concurrent('フォローしているユーザーのチャンネル投稿が含まれない', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
@@ -799,12 +798,19 @@ describe('Timelines', () => {
 			const carolNote = await post(carol, { text: 'hi', visibility: 'home' });
 			const bobNote = await post(bob, { text: 'hi' });
 
-			await waitForPushToTl();
+			// Wait until public bob note is visible; home carol note must still be absent
+			const start = Date.now();
+			let body: misskey.entities.Note[] = [];
+			while (Date.now() - start < 15_000) {
+				const res = await api('notes/local-timeline', { limit: 100 }, alice);
+				assert.strictEqual(res.status, 200);
+				body = res.body as misskey.entities.Note[];
+				if (body.some(n => n.id === bobNote.id)) break;
+				await setTimeout(200);
+			}
 
-			const res = await api('notes/local-timeline', { limit: 100 }, alice);
-
-			assert.strictEqual(res.body.some(note => note.id === bobNote.id), true);
-			assert.strictEqual(res.body.some(note => note.id === carolNote.id), false);
+			assert.strictEqual(body.some(note => note.id === bobNote.id), true);
+			assert.strictEqual(body.some(note => note.id === carolNote.id), false);
 		});
 
 		test.concurrent('ミュートしているユーザーのノートが含まれない', async () => {
@@ -905,7 +911,7 @@ describe('Timelines', () => {
 		test.concurrent('[withFiles: true] ファイル付きノートのみ含まれる', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
 
-			const file = await uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png');
+			const file = (await uploadFile(bob)).body!;
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [file.id] });
 
@@ -915,7 +921,7 @@ describe('Timelines', () => {
 
 			assert.strictEqual(res.body.some(note => note.id === bobNote1.id), false);
 			assert.strictEqual(res.body.some(note => note.id === bobNote2.id), true);
-		}, 1000 * 10);
+		}, 60_000);
 
 		test.concurrent('timelineMode: replies で返信数が多いノートが先に表示される', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
@@ -955,9 +961,10 @@ describe('Timelines', () => {
 				timelineMode: 'recommended',
 			} as any, alice);
 
-			const ids = res.body.map(note => note.id);
-			assert.ok(ids.indexOf(recommendedNote.id) >= 0);
-			assert.ok(ids.indexOf(plainNote.id) >= 0);
+			// Concurrent Local TL tests share the global LTL; only compare bob's notes.
+			const ids = res.body.filter((note: { userId: string }) => note.userId === bob.id).map((note: { id: string }) => note.id);
+			assert.ok(ids.indexOf(recommendedNote.id) >= 0, `recommended missing in ${ids}`);
+			assert.ok(ids.indexOf(plainNote.id) >= 0, `plain missing in ${ids}`);
 			assert.ok(ids.indexOf(recommendedNote.id) < ids.indexOf(plainNote.id));
 		});
 	});
@@ -1160,7 +1167,7 @@ describe('Timelines', () => {
 		test.concurrent('[withFiles: true] ファイル付きノートのみ含まれる', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
 
-			const file = await uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png');
+			const file = (await uploadFile(bob)).body!;
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [file.id] });
 
@@ -1170,7 +1177,7 @@ describe('Timelines', () => {
 
 			assert.strictEqual(res.body.some(note => note.id === bobNote1.id), false);
 			assert.strictEqual(res.body.some(note => note.id === bobNote2.id), true);
-		}, 1000 * 10);
+		}, 60_000);
 	});
 
 	describe('User List TL', () => {
@@ -1373,7 +1380,7 @@ describe('Timelines', () => {
 
 			const list = await api('users/lists/create', { name: 'list' }, alice).then(res => res.body);
 			await api('users/lists/push', { listId: list.id, userId: bob.id }, alice);
-			const file = await uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png');
+			const file = (await uploadFile(bob)).body!;
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [file.id] });
 
@@ -1383,7 +1390,7 @@ describe('Timelines', () => {
 
 			assert.strictEqual(res.body.some(note => note.id === bobNote1.id), false);
 			assert.strictEqual(res.body.some(note => note.id === bobNote2.id), true);
-		}, 1000 * 10);
+		}, 60_000);
 
 		test.concurrent('リスインしているユーザーの自身宛ての visibility: specified なノートが含まれる', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
@@ -1532,7 +1539,7 @@ describe('Timelines', () => {
 		test.concurrent('[withFiles: true] ファイル付きノートのみ含まれる', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
 
-			const file = await uploadUrl(bob, 'https://raw.githubusercontent.com/misskey-dev/assets/main/public/icon.png');
+			const file = (await uploadFile(bob)).body!;
 			const bobNote1 = await post(bob, { text: 'hi' });
 			const bobNote2 = await post(bob, { fileIds: [file.id] });
 
@@ -1542,7 +1549,7 @@ describe('Timelines', () => {
 
 			assert.strictEqual(res.body.some(note => note.id === bobNote1.id), false);
 			assert.strictEqual(res.body.some(note => note.id === bobNote2.id), true);
-		}, 1000 * 10);
+		}, 60_000);
 
 		test.concurrent('[withChannelNotes: true] チャンネル投稿が含まれる', async () => {
 			const [alice, bob] = await Promise.all([signup(), signup()]);
@@ -1607,13 +1614,20 @@ describe('Timelines', () => {
 			const bobNote2 = await post(bob, { text: 'hi', replyId: bobNote1.id });
 			const bobNote3 = await post(bob, { text: 'hi', renoteId: bobNote1.id });
 
-			await waitForPushToTl();
+			// Fanout user timeline may lag; poll until notes appear (mute must not hide author when userId specified)
+			const start = Date.now();
+			let body: misskey.entities.Note[] = [];
+			while (Date.now() - start < 15_000) {
+				const res = await api('users/notes', { userId: bob.id, withReplies: true, withRenotes: true }, alice);
+				assert.strictEqual(res.status, 200);
+				body = res.body as misskey.entities.Note[];
+				if ([bobNote1.id, bobNote2.id, bobNote3.id].every(id => body.some(n => n.id === id))) break;
+				await setTimeout(200);
+			}
 
-			const res = await api('users/notes', { userId: bob.id }, alice);
-
-			assert.strictEqual(res.body.some(note => note.id === bobNote1.id), true);
-			assert.strictEqual(res.body.some(note => note.id === bobNote2.id), true);
-			assert.strictEqual(res.body.some(note => note.id === bobNote3.id), true);
+			assert.strictEqual(body.some(note => note.id === bobNote1.id), true);
+			assert.strictEqual(body.some(note => note.id === bobNote2.id), true);
+			assert.strictEqual(body.some(note => note.id === bobNote3.id), true);
 		});
 
 		test.concurrent('自身の visibility: specified なノートが含まれる', async () => {

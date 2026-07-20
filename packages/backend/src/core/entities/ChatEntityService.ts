@@ -592,7 +592,6 @@ export class ChatEntityService {
 	 * Overlay viewer-specific readCount onto already-packed room messages.
 	 * Safe to call on shared-cache payloads (mutates a shallow copy per message).
 	 */
-	@bindThis
 	public async applyRoomReadReceipts(
 		messages: Packed<'ChatMessageLiteForRoom'>[],
 		meId: MiUser['id'],
@@ -629,7 +628,26 @@ export class ChatEntityService {
 		});
 	}
 
+	@bindThis
+	private async getRoomMemberCount(roomId: MiChatRoom['id']): Promise<number> {
+		const loading = this.roomMemberCountLoads.get(roomId);
+		if (loading != null) return await loading;
 
+		const load = this.chatRoomMembershipsRepository
+			.countBy({ roomId })
+			.then(count => count + 1);
+		this.roomMemberCountLoads.set(roomId, load);
+
+		try {
+			return await load;
+		} finally {
+			if (this.roomMemberCountLoads.get(roomId) === load) {
+				this.roomMemberCountLoads.delete(roomId);
+			}
+		}
+	}
+
+	@bindThis
 	public async packRoom(
 		src: MiChatRoom['id'] | MiChatRoom,
 		me?: { id: MiUser['id'] },

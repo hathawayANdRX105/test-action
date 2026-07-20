@@ -27,10 +27,10 @@ describe('deleted account identifier release', () => {
 	});
 
 	test('root-note cleanup advances its cursor in the same direction as its query', () => {
-		const noteCleanup = deleteAccountProcessorSource.match(/\{ \/\/ Delete notes[\s\S]*?this\.logger\.info\('All of notes deleted'\);/)?.[0];
+		const noteCleanup = deleteAccountProcessorSource.match(/\{ \/\/ 删除笔记[\s\S]*?this\.logger\.info\('All of notes deleted'\);/)?.[0];
 
 		assert.ok(noteCleanup);
-		assert.match(noteCleanup, /cursor \? \{ id: MoreThan\(cursor\) \} : \{\}/);
+		assert.match(noteCleanup, /\.\.\.\(cursor \? \{ id: MoreThan\(cursor\) \} : \{\}\)/);
 		assert.match(noteCleanup, /order: \{\n\s*id: 1,\n\s*\}/);
 	});
 

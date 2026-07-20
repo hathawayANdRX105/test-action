@@ -139,7 +139,7 @@ describe('chat room manage endpoints', () => {
 	}
 
 	test('delete-user-messages relies on room moderation target permission instead of requireModerator', async () => {
-		expect(deleteUserMessagesMeta.requireModerator).toBeUndefined();
+		expect((deleteUserMessagesMeta as { requireModerator?: unknown }).requireModerator).toBeUndefined();
 		const ctx = createDeleteUserEndpoint();
 
 		await expect(ctx.endpoint.exec({ roomId: 'room', userId: 'target' }, me, null)).resolves.toEqual({

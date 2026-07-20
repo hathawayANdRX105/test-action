@@ -8,7 +8,7 @@
 	},
 	"scripts": {
 		"start": "node ./built/boot/entry.js",
-		"start:test": "cross-env NODE_ENV=test node ./built/boot/entry.js",
+		"start:test": "cross-env NODE_ENV=test MK_ALLOW_RESET_DB=1 node ./built/boot/entry.js",
 		"migrate": "pnpm typeorm migration:run -d ormconfig.js",
 		"migrate:revert": "pnpm typeorm migration:revert -d ormconfig.js",
 		"migrate:generate": "pnpm typeorm migration:generate -d ormconfig.js",

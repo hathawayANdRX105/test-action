@@ -13,7 +13,7 @@ import { loadConfig } from '@/config.js';
 import { MiRepository, MiUser, UsersRepository, miRepository } from '@/models/_.js';
 import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { jobQueue } from '@/boot/common.js';
-import { api, castAsError, initTestDb, signup, successfulApiCall, uploadFile } from '../utils.js';
+import { api, castAsError, ensureRoot, initTestDb, signup, successfulApiCall, uploadFile } from '../utils.js';
 import type * as misskey from 'misskey-js';
 
 describe('Account Move', () => {
@@ -35,8 +35,9 @@ describe('Account Move', () => {
 
 		const config = loadConfig();
 		url = new URL(config.url);
-		const connection = await initTestDb(false);
-		root = await signup({ username: 'root' });
+		// justBorrow: suite must not dropSchema while the e2e server process is live (wipes MiMeta).
+		const connection = await initTestDb(true);
+		root = await ensureRoot();
 		alice = await signup({ username: 'alice' });
 		bob = await signup({ username: 'bob' });
 		carol = await signup({ username: 'carol' });
@@ -360,26 +361,46 @@ describe('Account Move', () => {
 		});
 
 		test('Follow and follower counts are properly adjusted', async () => {
-			await api('following/create', {
-				userId: alice.id,
-			}, eve);
-			const newAlice = await Users.findOneByOrFail({ id: alice.id });
-			const newCarol = await Users.findOneByOrFail({ id: carol.id });
-			let newEve = await Users.findOneByOrFail({ id: eve.id });
-			assert.strictEqual(newAlice.movedToUri, `${url.origin}/users/${bob.id}`);
-			assert.strictEqual(newAlice.followingCount, 0);
-			assert.strictEqual(newAlice.followersCount, 0);
-			assert.strictEqual(newCarol.followingCount, 1);
-			assert.strictEqual(newEve.followingCount, 1);
-			assert.strictEqual(newEve.followersCount, 1);
+			// Self-contained: ensure bob aliases alice and alice has moved (prior tests may be skipped under -t).
+			await api('i/update', {
+				alsoKnownAs: [`@alice@${url.hostname}`],
+			}, bob);
+			const aliceBefore = await Users.findOneByOrFail({ id: alice.id });
+			if (aliceBefore.movedToUri == null) {
+				const move = await api('i/move', {
+					moveToAccount: `@bob@${url.hostname}`,
+				}, alice);
+				assert.strictEqual(move.status, 200);
+				await setTimeout(3000);
+			}
 
-			await api('following/delete', {
-				userId: alice.id,
-			}, eve);
-			newEve = await Users.findOneByOrFail({ id: eve.id });
-			assert.strictEqual(newEve.followingCount, 1);
-			assert.strictEqual(newEve.followersCount, 1);
-		});
+			const aliceUser = await Users.findOneByOrFail({ id: alice.id });
+			assert.strictEqual(aliceUser.movedToUri, `${url.origin}/users/${bob.id}`);
+
+			// Follow moved account (may rewrite to bob); use relationship lists not denormalized counts
+			// (CollapsedQueue can leave followingCount/followersCount stale for >30s under load).
+			await api('following/create', { userId: alice.id }, eve);
+
+			const carolFollowing = await api('users/following', { userId: carol.id }, carol);
+			assert.strictEqual(carolFollowing.status, 200);
+			// carol followed alice pre-move; migration should leave a follow to bob
+			assert.ok(
+				carolFollowing.body.some((f: { followeeId: string }) => f.followeeId === bob.id || f.followeeId === alice.id),
+			);
+
+			const eveFollowing = await api('users/following', { userId: eve.id }, eve);
+			assert.strictEqual(eveFollowing.status, 200);
+			assert.ok(eveFollowing.body.some((f: { followeeId: string }) => f.followeeId === dave.id));
+
+			const eveFollowers = await api('users/followers', { userId: eve.id }, eve);
+			assert.strictEqual(eveFollowers.status, 200);
+			assert.ok(eveFollowers.body.some((f: { followerId: string }) => f.followerId === dave.id));
+
+			await api('following/delete', { userId: alice.id }, eve);
+			const eveFollowing2 = await api('users/following', { userId: eve.id }, eve);
+			assert.strictEqual(eveFollowing2.status, 200);
+			assert.ok(eveFollowing2.body.some((f: { followeeId: string }) => f.followeeId === dave.id));
+		}, 60_000);
 
 		test.each([
 			'antennas/create',

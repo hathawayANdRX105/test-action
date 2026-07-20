@@ -9,6 +9,7 @@ import { beforeEach, describe, test } from '@jest/globals';
 import {
 	api,
 	captureWebhook,
+	ensureRoot,
 	randomString,
 	role,
 	signup,
@@ -42,9 +43,8 @@ describe('[シナリオ] ユーザ作成', () => {
 
 	beforeAll(async () => {
 		queue = await startJobQueue();
-		admin = await signup({ username: 'admin' });
-
-		await role(admin, { isAdministrator: true });
+		// root is the only pre-assigned administrator (role() only creates a Role entity)
+		admin = await ensureRoot();
 	}, 1000 * 60 * 2);
 
 	afterAll(async () => {
@@ -98,14 +98,23 @@ describe('[シナリオ] ユーザ作成', () => {
 		});
 
 		test('ユーザ作成 -> userCreatedが未許可の場合は送出されない', async () => {
+			// unique inactive/empty on so prior userCreated hooks cannot leak
 			await createSystemWebhook({
 				on: [],
 				isActive: true,
 			});
 
+			// also remove any active userCreated hooks that may have been left from prior suites
+			const webhooks = await api('admin/system-webhook/list', {}, admin);
+			for (const webhook of webhooks.body) {
+				if (webhook.on?.includes('userCreated') && webhook.isActive) {
+					await api('admin/system-webhook/delete', { id: webhook.id }, admin);
+				}
+			}
+
 			let alice: any = null;
 			const webhookBody = await captureWebhook(async () => {
-				alice = await signup({ username: 'alice' });
+				alice = await signup({ username: 'alice' + randomString().slice(0, 6) });
 			}).catch(e => e.message);
 
 			expect(webhookBody).toBe('timeout');
@@ -118,9 +127,16 @@ describe('[シナリオ] ユーザ作成', () => {
 				isActive: false,
 			});
 
+			const webhooks = await api('admin/system-webhook/list', {}, admin);
+			for (const webhook of webhooks.body) {
+				if (webhook.on?.includes('userCreated') && webhook.isActive) {
+					await api('admin/system-webhook/delete', { id: webhook.id }, admin);
+				}
+			}
+
 			let alice: any = null;
 			const webhookBody = await captureWebhook(async () => {
-				alice = await signup({ username: 'alice' });
+				alice = await signup({ username: 'alice' + randomString().slice(0, 6) });
 			}).catch(e => e.message);
 
 			expect(webhookBody).toBe('timeout');

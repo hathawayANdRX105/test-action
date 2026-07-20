@@ -1,0 +1,202 @@
+name: CI - Integration
+
+# Heavy suite: main, nightly, manual, or PR with label `run-integration`.
+# Not path-filtered as a required PR check (that lives in CI - PR Validation).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'
+  pull_request:
+    types: [labeled, opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ci-integration-${{ github.event.pull_request.number || github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Skip PR runs unless explicitly labeled — avoids pending required-check traps.
+  browser-e2e:
+    name: Browser end-to-end tests
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-integration') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: misskey
+        options: >-
+          --health-cmd "pg_isready -U postgres -d misskey"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 6379:6379
+    env:
+      MK_CONFIG_DB_HOST: 127.0.0.1
+      MK_CONFIG_REDIS_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORPUBSUB_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORJOBQUEUE_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORTIMELINES_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORREACTIONS_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORRATELIMIT_HOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - name: Configure browser test instance
+        run: |
+          cp .config/cypress-devcontainer.yml .config/default.yml
+          cp .config/cypress-devcontainer.yml .config/test.yml
+          sed -i -e 's|url: http://misskey.local|url: http://localhost:61812|' -e 's|host: db|host: 127.0.0.1|' .config/default.yml .config/test.yml
+          echo 'clusterLimit: 1' >> .config/test.yml
+          # Match cypress registerUser(admin,...,true) setupPassword
+          if ! grep -q '^setupPassword:' .config/test.yml; then
+            echo "setupPassword: example_password_please_change_this_or_you_will_get_hacked" >> .config/default.yml
+            echo "setupPassword: example_password_please_change_this_or_you_will_get_hacked" >> .config/test.yml
+          fi
+      - name: Install and verify Cypress browser
+        run: pnpm cypress install && xvfb-run --auto-servernum pnpm cypress verify
+      - name: Build and migrate test instance
+        run: |
+          pnpm build
+          pnpm migrate
+      - name: Start test server and run Cypress
+        run: pnpm start-server-and-test start:test http://localhost:61812 cy:run
+      - name: Upload Cypress diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: cypress-diagnostics
+          path: |
+            cypress/screenshots
+            cypress/videos
+          if-no-files-found: ignore
+
+  federation:
+    name: Federation integration tests
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-integration') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE_VERSION: '22'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - run: pnpm build
+      - name: Create federation test certificates and config
+        working-directory: packages/backend/test-federation
+        run: bash ./setup.sh
+      - name: Start federated instances
+        working-directory: packages/backend/test-federation
+        run: docker compose --env-file .config/docker.env up --detach --wait --scale tester=0
+      - name: Run federation suite
+        working-directory: packages/backend/test-federation
+        run: docker compose --env-file .config/docker.env run --no-deps --rm tester
+      - name: Collect federation diagnostics
+        if: ${{ failure() }}
+        working-directory: packages/backend/test-federation
+        run: docker compose --env-file .config/docker.env logs --no-color
+      - name: Stop federated instances
+        if: ${{ always() }}
+        working-directory: packages/backend/test-federation
+        run: docker compose --env-file .config/docker.env down --volumes --remove-orphans
+
+  container-smoke:
+    name: Production container smoke test
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-integration') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - name: Build production image
+        run: DOCKER_BUILDKIT=1 docker build --tag universe-federation:${{ github.sha }} .
+      - name: Start PostgreSQL and Redis
+        run: |
+          docker network create universe-federation-test
+          docker run --detach --name universe-federation-postgres \
+            --network universe-federation-test \
+            --network-alias db \
+            --env POSTGRES_DB=misskey \
+            --env POSTGRES_USER=sharkey \
+            --env POSTGRES_PASSWORD=ci \
+            postgres:15-alpine
+          docker run --detach --name universe-federation-redis \
+            --network universe-federation-test \
+            --network-alias redis \
+            redis:7-alpine
+      - name: Wait for dependencies
+        run: |
+          until docker exec universe-federation-postgres pg_isready -U sharkey -d misskey; do sleep 1; done
+          until docker exec universe-federation-redis redis-cli ping; do sleep 1; done
+      - name: Write container configuration
+        run: |
+          cat > "$RUNNER_TEMP/default.yml" <<'EOF'
+          url: http://127.0.0.1:3000
+          port: 3000
+          address: 0.0.0.0
+          id: 'aidx'
+          db:
+            host: db
+            port: 5432
+            db: misskey
+            user: sharkey
+            pass: ci
+          redis:
+            host: redis
+            port: 6379
+          EOF
+          chmod 644 "$RUNNER_TEMP/default.yml"
+      - name: Migrate and start production container
+        run: |
+          docker run --detach --name universe-federation-app \
+            --network universe-federation-test \
+            --publish 3000:3000 \
+            --volume "$RUNNER_TEMP/default.yml:/sharkey/.config/default.yml:ro" \
+            universe-federation:${{ github.sha }}
+      - name: Verify health and public API
+        run: |
+          for _ in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/healthz; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent --show-error http://127.0.0.1:3000/healthz
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data '{"detail":false}' \
+            http://127.0.0.1:3000/api/meta > "$RUNNER_TEMP/meta.json"
+          python3 -c 'import json, sys; assert isinstance(json.load(open(sys.argv[1])), dict)' "$RUNNER_TEMP/meta.json"
+      - name: Collect container diagnostics
+        if: ${{ failure() }}
+        run: |
+          docker logs universe-federation-app || true
+          docker logs universe-federation-postgres || true
+          docker logs universe-federation-redis || true
+      - name: Stop containers
+        if: ${{ always() }}
+        run: |
+          docker rm --force universe-federation-app universe-federation-postgres universe-federation-redis 2>/dev/null || true
+          docker network rm universe-federation-test 2>/dev/null || true

@@ -11,10 +11,17 @@ const __dirname = dirname(__filename);
 export const ADMIN_PARAMS = { username: 'admin', password: 'admin' };
 const ADMIN_CACHE = new Map<Host, SigninResponse>();
 
-await Promise.all([
-	fetchAdmin('a.test'),
-	fetchAdmin('b.test'),
-]);
+try {
+	await Promise.all([
+		fetchAdmin('a.test'),
+		fetchAdmin('b.test'),
+	]);
+} catch (err) {
+	// Jest serializes fetch/TLS failures poorly; surface the real cause for CI logs.
+	console.error('federation bootstrap failed', err);
+	if (err && typeof err === 'object' && 'cause' in err) console.error('cause', (err as { cause: unknown }).cause);
+	throw err;
+}
 
 type SigninResponse = Omit<Misskey.entities.SigninFlowResponse & { finished: true }, 'finished'>;
 
@@ -36,15 +43,64 @@ export type Request = <
 
 type Host = 'a.test' | 'b.test';
 
-export async function sleep(ms = 250): Promise<void> {
+export async function sleep(ms = 3000): Promise<void> {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+/** Poll until predicate is true or timeout (AP delivery is async via BullMQ). */
+export async function waitUntil(
+	fn: () => Promise<boolean>,
+	{ timeoutMs = 90000, intervalMs = 1000 }: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	let lastErr: unknown;
+	while (Date.now() < deadline) {
+		try {
+			if (await fn()) return;
+		} catch (e) {
+			lastErr = e;
+		}
+		await sleep(intervalMs);
+	}
+	throw new Error(`waitUntil timed out after ${timeoutMs}ms${lastErr ? `: ${lastErr}` : ''}`);
+}
+
+/**
+ * Local→remote follow creates a pending request then waits for remote Accept.
+ * Use this instead of bare following/create + sleep().
+ */
+export async function ensureFollowing(follower: LoginUser, followeeId: string): Promise<void> {
+	try {
+		await follower.client.request('following/create', { userId: followeeId });
+	} catch (err: any) {
+		const code = err?.code ?? err?.error?.code ?? err?.info?.e?.code;
+		if (code !== 'ALREADY_FOLLOWING') throw err;
+	}
+	await waitUntil(async () => {
+		const following = await follower.client.request('users/following', { userId: follower.id });
+		return following.some(v => v.followeeId === followeeId);
+	});
+}
+
+export async function ensureNotFollowing(follower: LoginUser, followeeId: string): Promise<void> {
+	try {
+		await follower.client.request('following/delete', { userId: followeeId });
+	} catch (err: any) {
+		// already not following
+		if (String(err?.message ?? err?.code ?? '').match(/not following|NO_SUCH|FOLLOWING/i)) return;
+	}
+	await waitUntil(async () => {
+		const following = await follower.client.request('users/following', { userId: follower.id });
+		return !following.some(v => v.followeeId === followeeId);
+	});
+}
+
 
 async function signin(
 	host: Host,
 	params: Misskey.entities.SigninFlowRequest,
 ): Promise<SigninResponse> {
-	// wait for a second to prevent hit rate limit
+	// wait for a second to prevent hit rate limit (fixed, not the AP delivery sleep)
 	await sleep(1000);
 
 	return await (new Misskey.api.APIClient({ origin: `https://${host}` }).request as Request)('signin-flow', params)
@@ -63,38 +119,52 @@ async function signin(
 		});
 }
 
-async function createAdmin(host: Host): Promise<Misskey.entities.SignupResponse | undefined> {
+async function createAdmin(host: Host): Promise<(Misskey.entities.SignupResponse & { token?: string }) | undefined> {
 	const client = new Misskey.api.APIClient({ origin: `https://${host}` });
-	return await client.request('admin/accounts/create', ADMIN_PARAMS).then(res => {
-		ADMIN_CACHE.set(host, {
-			id: res.id,
-			// @ts-expect-error FIXME: openapi-typescript generates incorrect response type for this endpoint, so ignore this
-			i: res.token,
-		});
-		return res as Misskey.entities.SignupResponse;
-	}).then(async res => {
-		await client.request('admin/roles/update-default-policies', {
-			policies: {
-				/** TODO: @see https://github.com/misskey-dev/misskey/issues/14169 */
-				rateLimitFactor: 0 as never,
-			},
-		}, res.token);
+	try {
+		// endpoint returns MeDetailed & { token }
+		const res = await client.request('admin/accounts/create', ADMIN_PARAMS) as Misskey.entities.SignupResponse & { token: string };
+		ADMIN_CACHE.set(host, { id: res.id, i: res.token });
+		try {
+			await client.request('admin/roles/update-default-policies', {
+				policies: {
+					/** TODO: @see https://github.com/misskey-dev/misskey/issues/14169 */
+					rateLimitFactor: 0.01 as never,
+				},
+			}, res.token);
+		} catch (roleErr) {
+			// Non-fatal for bootstrap: admin token is still usable for tests.
+			console.warn('update-default-policies failed', roleErr);
+		}
 		return res;
-	}).catch(err => {
-		if (err.info.e.message === 'access denied') return undefined;
+	} catch (err: any) {
+		// Admin already exists: ACCESS_DENIED (legacy) or CREDENTIAL_REQUIRED (rootUserId set).
+		const msg = (err?.info?.e?.message ?? err?.message ?? '').toLowerCase();
+		if (
+			msg === 'access denied' ||
+			err?.code === 'ACCESS_DENIED' ||
+			err?.code === 'CREDENTIAL_REQUIRED' ||
+			err?.id === '1384574d-a912-4b81-8601-c7b1c4085df1'
+		) {
+			return undefined;
+		}
 		throw err;
-	});
+	}
 }
 
 export async function fetchAdmin(host: Host): Promise<LoginUser> {
-	const admin = ADMIN_CACHE.get(host) ?? await signin(host, ADMIN_PARAMS)
-		.catch(async err => {
-			if (err.id === '6cc579cc-885d-43d8-95c2-b8c7fc963280') {
-				await createAdmin(host);
-				return await signin(host, ADMIN_PARAMS);
-			}
-			throw err;
-		});
+	// signin-flow throws EntityNotFound (HTTP 500) when admin is missing, not a clean
+	// NO_SUCH_USER code — so always try createAdmin first (no-ops if already exists).
+	let admin = ADMIN_CACHE.get(host);
+	if (!admin) {
+		const created = await createAdmin(host);
+		if (created?.token) {
+			admin = { id: created.id, i: created.token as string };
+			ADMIN_CACHE.set(host, admin);
+		} else {
+			admin = await signin(host, ADMIN_PARAMS);
+		}
+	}
 
 	return {
 		...admin,

@@ -32,7 +32,8 @@ describe('wide layout sizing', () => {
 		assert.match(universalSource, /\.bustCap\s*\{[\s\S]*width:\s*82vw;[\s\S]*max-width:\s*82vw;[\s\S]*margin-inline:\s*auto;/);
 		assert.match(universalSource, /\.wideWithWidgets\s*\{[\s\S]*width:\s*82vw;[\s\S]*max-width:\s*82vw;[\s\S]*margin-inline:\s*auto;/);
 		assert.match(universalSource, /isDesktop && !pageMetadata\?\.needWideArea \? \$style\.standardContents : null/);
-		assert.match(universalSource, /\.standardContents\s*\{[\s\S]*flex:\s*0 1 var\(--layout-main-column-width\);[\s\S]*width:\s*var\(--layout-main-column-width\);[\s\S]*max-width:\s*min\(100%,\s*var\(--layout-main-column-width\)\);/);
+		assert.match(universalSource, /\.standardContents\s*\{[\s\S]*flex:\s*1 1 var\(--layout-main-column-width\);[\s\S]*min-width:\s*0;/);
+		assert.notMatch(universalSource, /\.standardContents\s*\{[\s\S]*flex:\s*0 1 var\(--layout-main-column-width\)/);
 		assert.match(universalSource, /flex:\s*0 0 var\(--layout-side-rail-width\);[\s\S]*width:\s*var\(--layout-side-rail-width\);/);
 		assert.match(universalSource, /margin-left:\s*var\(--layout-column-gap\);/);
 		assert.match(universalSource, /@media \(max-width:\s*1600px\)\s*\{[\s\S]*display:\s*none;/);
@@ -46,7 +47,7 @@ describe('wide layout sizing', () => {
 		assert.match(exploreSource, /width:\s*100%;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*var\(--explore-rail-width\);/);
 		assert.match(exploreSource, /const discoverySectionLimit = 10;/);
 		assert.match(exploreSource, /const categoryNoteLimit = 14;/);
-		assert.match(exploreSource, /notes\/discovery-sections',\s*\{\s*limit:\s*discoverySectionLimit\s*\}/);
+		assert.match(exploreSource, /notes\/discovery-sections',\s*\{\s*limit:\s*discoverySectionLimit,\s*scope:\s*exploreScope\.value\s*\}/);
 		assert.match(exploreSource, /limit:\s*categoryNoteLimit,[\s\S]*withRenotes:\s*false,/);
 		assert.match(exploreSource, /\.channelGrid\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(220px,\s*100%\),\s*1fr\)\);/);
 		assert.match(exploreSource, /\.channelCard\s*\{[\s\S]*min-height:\s*142px;[\s\S]*grid-template-rows:\s*56px minmax\(0,\s*auto\) auto;/);
@@ -93,7 +94,7 @@ describe('wide layout sizing', () => {
 		assert.match(timelineSource, /\.rightRail\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*var\(--right-rail-sticky-top,\s*0px\);[\s\S]*height:\s*auto;[\s\S]*overflow:\s*visible;[\s\S]*overscroll-behavior:\s*auto;[\s\S]*scrollbar-gutter:\s*auto;/);
 		assert.match(timelineSource, /footer\._gaps > button > :is\(i,\s*svg\)/);
 		assert.match(timelineSource, /footer\._gaps > button:hover > :is\(i,\s*svg\)/);
-		assert.notMatch(timelineSource, /overflow-y:\s*auto;/);
+		assert.match(timelineSource, /overflow-y:\s*auto;/);
 		assert.notMatch(timelineSource, /height:\s*100dvh;/);
 		assert.notMatch(timelineSource, /overscroll-behavior:\s*contain;/);
 		assert.notMatch(timelineSource, /scrollbar-gutter:\s*stable;/);

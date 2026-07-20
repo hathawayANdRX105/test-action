@@ -68,7 +68,7 @@ describe('chart theme colors', () => {
 
 		expect(getChartThemeColors().textColor).toBe('rgb(17, 24, 39)');
 		expect(getChartThemeColors().gridColor).toBe('rgba(0, 0, 0, 0.1)');
-		expect(getChartThemeColors().miniChartLineColor).toBe('#86b300');
+		expect(getChartThemeColors().miniChartLineColor).toBe('#2AABEE');
 		expect(getChartThemeColors().activityNotesColor).toBe('#41ddde');
 	});
 

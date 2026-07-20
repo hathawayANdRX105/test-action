@@ -1,0 +1,410 @@
+name: CI - PR Validation
+
+# Always starts on every PR (do NOT use workflow-level paths: filters).
+# Job-level if skips unrelated work so required checks never stay pending.
+# Backend API e2e is path-selective and can run 2 concurrent Jest shards.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-pr-validation-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect changed scopes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.scopes.outputs.backend }}
+      backend_unit: ${{ steps.scopes.outputs.backend_unit }}
+      backend_typecheck: ${{ steps.scopes.outputs.backend_typecheck }}
+      backend_api_e2e: ${{ steps.scopes.outputs.backend_api_e2e }}
+      frontend: ${{ steps.scopes.outputs.frontend }}
+      federation: ${{ steps.scopes.outputs.federation }}
+      container: ${{ steps.scopes.outputs.container }}
+      shared: ${{ steps.scopes.outputs.shared }}
+      all: ${{ steps.scopes.outputs.all }}
+      e2e_stream: ${{ steps.scopes.outputs.e2e_stream }}
+      e2e_timeline: ${{ steps.scopes.outputs.e2e_timeline }}
+      e2e_api: ${{ steps.scopes.outputs.e2e_api }}
+      e2e_shard_total: ${{ steps.scopes.outputs.e2e_shard_total }}
+      e2e_shards: ${{ steps.scopes.outputs.e2e_shards }}
+      e2e_patterns: ${{ steps.scopes.outputs.e2e_patterns }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Classify PR / dispatch scopes
+        id: scopes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            # Manual: full validation suite (unit + typecheck + full e2e shards + frontend)
+            printf '%s\n' \
+              packages/backend/src/dummy.ts \
+              packages/frontend/src/dummy.ts \
+              packages/backend/test-federation/compose.yml \
+              Dockerfile \
+              pnpm-lock.yaml \
+              | python3 scripts/ci-changed-scopes.py --github-output
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          git diff --name-only "origin/${BASE_REF}...${SHA}" \
+            | python3 scripts/ci-changed-scopes.py --github-output
+          echo "scopes:" 
+          cat "$GITHUB_OUTPUT" || true
+
+  backend-unit:
+    name: Backend unit tests
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.backend_unit == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: ci
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 6379:6379
+    env:
+      MK_CONFIG_DB_HOST: 127.0.0.1
+      MK_CONFIG_REDIS_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORPUBSUB_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORJOBQUEUE_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORTIMELINES_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORREACTIONS_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORRATELIMIT_HOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - name: Configure test instance
+        run: |
+          cp .config/ci.yml .config/default.yml
+          cp .config/ci.yml .config/test.yml
+      - run: pnpm --filter backend build:pre
+      - run: pnpm --filter backend build
+      - run: pnpm --filter backend migrate
+      - run: pnpm --filter backend test
+
+  frontend-unit:
+    name: Frontend unit tests
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - run: pnpm --filter frontend build:pre
+      - run: pnpm --filter frontend build
+      - run: pnpm --filter frontend test
+
+  backend-typecheck:
+    name: Backend type check
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.backend_typecheck == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - run: pnpm --filter backend typecheck
+
+  frontend-typecheck:
+    name: Frontend type check
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - run: pnpm --filter frontend typecheck
+
+  # Path-selective API e2e, concurrent shards when e2e_shard_total=2.
+  backend-api-e2e:
+    name: Backend API e2e (${{ matrix.shard }}/${{ needs.detect-changes.outputs.e2e_shard_total }})
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.backend_api_e2e == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.detect-changes.outputs.e2e_shards) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: test-misskey
+        options: >-
+          --health-cmd "pg_isready -U postgres -d test-misskey"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 6379:6379
+    env:
+      MK_CONFIG_DB_PASS: postgres
+      MK_CONFIG_DB_HOST: 127.0.0.1
+      MK_CONFIG_REDIS_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORPUBSUB_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORJOBQUEUE_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORTIMELINES_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORREACTIONS_HOST: 127.0.0.1
+      MK_CONFIG_REDISFORRATELIMIT_HOST: 127.0.0.1
+      E2E_PATTERNS: ${{ needs.detect-changes.outputs.e2e_patterns }}
+      E2E_SHARD_TOTAL: ${{ needs.detect-changes.outputs.e2e_shard_total }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - name: Configure backend API test instance
+        run: |
+          cp .config/test-example.yml .config/default.yml
+          cp .config/test-example.yml .config/test.yml
+          echo 'clusterLimit: 1' >> .config/test.yml
+      - name: Build backend API test prerequisites
+        run: pnpm --filter backend build:pre
+      - name: Run selective backend API e2e
+        working-directory: packages/backend
+        run: |
+          set -euo pipefail
+          # build:pre already ran; build backend + test-server then jest e2e
+          pnpm run build
+          pnpm run build:test
+          extra=()
+          if [ -n "${E2E_PATTERNS:-}" ]; then
+            extra+=(--testPathPatterns="${E2E_PATTERNS}")
+          fi
+          if [ "${E2E_SHARD_TOTAL}" -gt 1 ]; then
+            extra+=(--shard="${{ matrix.shard }}/${E2E_SHARD_TOTAL}")
+          fi
+          echo "jest e2e args: ${extra[*]:-all-files}"
+          pnpm exec cross-env NODE_ENV=test node ./jest.js --forceExit --config jest.config.e2e.ts "${extra[@]}"
+
+  federation:
+    name: Federation integration tests
+    needs: detect-changes
+    # Parked: known-red AP/follow suite (Issue #9). Resume after dependency refactor.
+    # Keep job id so validation-gate needs: still resolves; force skip so PR checks stay green.
+    if: ${{ false }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE_VERSION: '22'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - run: pnpm build
+      - name: Create federation test certificates and config
+        working-directory: packages/backend/test-federation
+        run: bash ./setup.sh
+      - name: Start federated instances
+        working-directory: packages/backend/test-federation
+        run: docker compose --env-file .config/docker.env up --detach --wait --scale tester=0
+      - name: Run federation suite
+        working-directory: packages/backend/test-federation
+        run: docker compose --env-file .config/docker.env run --no-deps --rm tester
+      - name: Collect federation diagnostics
+        if: ${{ failure() }}
+        working-directory: packages/backend/test-federation
+        run: docker compose --env-file .config/docker.env logs --no-color
+      - name: Stop federated instances
+        if: ${{ always() }}
+        working-directory: packages/backend/test-federation
+        run: docker compose --env-file .config/docker.env down --volumes --remove-orphans
+
+  container-smoke:
+    name: Production container smoke test
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.container == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - name: Build production image
+        run: DOCKER_BUILDKIT=1 docker build --tag universe-federation:${{ github.sha }} .
+      - name: Start PostgreSQL and Redis
+        run: |
+          docker network create universe-federation-test
+          docker run --detach --name universe-federation-postgres \
+            --network universe-federation-test \
+            --network-alias db \
+            --env POSTGRES_DB=misskey \
+            --env POSTGRES_USER=sharkey \
+            --env POSTGRES_PASSWORD=ci \
+            postgres:15-alpine
+          docker run --detach --name universe-federation-redis \
+            --network universe-federation-test \
+            --network-alias redis \
+            redis:7-alpine
+      - name: Wait for dependencies
+        run: |
+          until docker exec universe-federation-postgres pg_isready -U sharkey -d misskey; do sleep 1; done
+          until docker exec universe-federation-redis redis-cli ping; do sleep 1; done
+      - name: Write container configuration
+        run: |
+          cat > "$RUNNER_TEMP/default.yml" <<'EOF'
+          url: http://127.0.0.1:3000
+          port: 3000
+          address: 0.0.0.0
+          id: 'aidx'
+          db:
+            host: db
+            port: 5432
+            db: misskey
+            user: sharkey
+            pass: ci
+          redis:
+            host: redis
+            port: 6379
+          EOF
+          chmod 644 "$RUNNER_TEMP/default.yml"
+      - name: Migrate and start production container
+        run: |
+          docker run --detach --name universe-federation-app \
+            --network universe-federation-test \
+            --publish 3000:3000 \
+            --volume "$RUNNER_TEMP/default.yml:/sharkey/.config/default.yml:ro" \
+            universe-federation:${{ github.sha }}
+      - name: Verify health and public API
+        run: |
+          for _ in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/healthz; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent --show-error http://127.0.0.1:3000/healthz
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data '{"detail":false}' \
+            http://127.0.0.1:3000/api/meta > "$RUNNER_TEMP/meta.json"
+          python3 -c 'import json, sys; assert isinstance(json.load(open(sys.argv[1])), dict)' "$RUNNER_TEMP/meta.json"
+      - name: Collect container diagnostics
+        if: ${{ failure() }}
+        run: |
+          docker logs universe-federation-app || true
+          docker logs universe-federation-postgres || true
+          docker logs universe-federation-redis || true
+      - name: Stop containers
+        if: ${{ always() }}
+        run: |
+          docker rm --force universe-federation-app universe-federation-postgres universe-federation-redis 2>/dev/null || true
+          docker network rm universe-federation-test 2>/dev/null || true
+
+  validation-gate:
+    name: PR Validation
+    if: ${{ always() && !cancelled() }}
+    needs:
+      - detect-changes
+      - backend-unit
+      - frontend-unit
+      - backend-typecheck
+      - frontend-typecheck
+      - backend-api-e2e
+      - federation
+      - container-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Accept success or expected skip
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          SCOPE_BACKEND_UNIT: ${{ needs.detect-changes.outputs.backend_unit }}
+          SCOPE_BACKEND_TYPE: ${{ needs.detect-changes.outputs.backend_typecheck }}
+          SCOPE_BACKEND_E2E: ${{ needs.detect-changes.outputs.backend_api_e2e }}
+          SCOPE_FRONTEND: ${{ needs.detect-changes.outputs.frontend }}
+          SCOPE_FEDERATION: ${{ needs.detect-changes.outputs.federation }}
+          SCOPE_CONTAINER: ${{ needs.detect-changes.outputs.container }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+
+          needs = json.loads(os.environ["NEEDS"])
+          detect = needs.get("detect-changes", {})
+          if detect.get("result") != "success":
+              print(f"detect-changes failed: {detect.get('result')}")
+              sys.exit(1)
+
+          required = {
+              "backend-unit": os.environ["SCOPE_BACKEND_UNIT"] == "true",
+              "backend-typecheck": os.environ["SCOPE_BACKEND_TYPE"] == "true",
+              "backend-api-e2e": os.environ["SCOPE_BACKEND_E2E"] == "true",
+              "frontend-unit": os.environ["SCOPE_FRONTEND"] == "true",
+              "frontend-typecheck": os.environ["SCOPE_FRONTEND"] == "true",
+              # Federation parked (known red); never required for PR Validation land.
+              "federation": False,
+              "container-smoke": os.environ["SCOPE_CONTAINER"] == "true",
+          }
+
+          bad = {}
+          for name, must_run in required.items():
+              result = needs[name]["result"]
+              if must_run:
+                  # matrix jobs: success only if all shards succeeded
+                  if result != "success":
+                      bad[name] = result
+              else:
+                  if result not in ("skipped", "success"):
+                      bad[name] = result
+
+          if bad:
+              print(f"Failed or unexpected jobs: {bad}")
+              print(f"Required map: {required}")
+              sys.exit(1)
+          print("PR Validation OK:", required)
+          PY

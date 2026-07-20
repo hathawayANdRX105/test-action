@@ -369,8 +369,10 @@ export function createPostgresDataSource(config: Config, globalLogger?: MisskeyL
 				})) ?? [],
 			},
 		} : {}),
-		synchronize: envService.env.NODE_ENV === 'test',
-		dropSchema: envService.env.NODE_ENV === 'test',
+		// Secondary Nest apps in the Jest process set MK_TEST_KEEP_SCHEMA=1 so they
+		// neither drop nor re-sync the live e2e server schema mid-suite.
+		synchronize: envService.env.NODE_ENV === 'test' && process.env.MK_TEST_KEEP_SCHEMA !== '1',
+		dropSchema: envService.env.NODE_ENV === 'test' && process.env.MK_TEST_KEEP_SCHEMA !== '1',
 		cache: config.db.disableCache === false && envService.env.NODE_ENV !== 'test' ? { // dbをcloseしても何故かredisのコネクションが内部的に残り続けるようで、テストの際に支障が出るため無効にする(キャッシュも含めてテストしたいため本当は有効にしたいが...)
 			type: 'ioredis',
 			options: {
@@ -388,6 +390,6 @@ export function createPostgresDataSource(config: Config, globalLogger?: MisskeyL
 		maxQueryExecutionTime: config.db.slowQueryThreshold,
 		entities: entities,
 		// Absolute glob so cwd does not break TypeORM migration discovery at runtime
-		migrations: [backendMigrationsGlob],
+		migrations: envService.env.NODE_ENV === 'test' ? [] : [backendMigrationsGlob],
 	});
 }

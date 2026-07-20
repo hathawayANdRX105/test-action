@@ -5,16 +5,18 @@
 
 import { describe, expect, jest, test } from '@jest/globals';
 import { serializeChatChannelEventForWs } from '@/server/api/stream/channels/chat-channel-serialization.js';
+import type { ChatEventPayload } from '@/core/GlobalEventService.js';
 
 describe('serializeChatChannelEventForWs', () => {
 	test('reuses serialized chat channel payloads for the same event object and channel id', () => {
+		// serialization only needs object identity + JSON shape for this unit
 		const data = {
 			type: 'message',
 			body: {
 				id: 'message-id',
 				text: 'hello',
 			},
-		} as const;
+		} as unknown as ChatEventPayload;
 		const stringifySpy = jest.spyOn(JSON, 'stringify');
 
 		const first = serializeChatChannelEventForWs('channel-id', data);

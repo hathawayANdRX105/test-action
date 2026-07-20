@@ -116,6 +116,7 @@ export class FanoutTimelineEndpointService {
 				filter = (note, populated, visData) => {
 					const { accessible, silence } = this.noteVisibilityService.checkNoteVisibility(populated, me, { data: visData, filters: {
 						includeSilencedAuthor: ps.ignoreAuthorFromUserSilence,
+						includeMutedAuthor: ps.ignoreAuthorFromMute,
 						includeReplies: true, // Include replies because we check them elsewhere
 					} });
 					if (!accessible || silence) return false;

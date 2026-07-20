@@ -7,6 +7,8 @@ import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaEntityService } from '@/core/entities/MetaEntityService.js';
 import { CacheManagementService, type ManagedMemorySingleCache } from '@/global/CacheManagementService.js';
+import { InternalEventService } from '@/global/InternalEventService.js';
+import { bindThis } from '@/decorators.js';
 import type { Packed } from '@/misc/json-schema.js';
 
 export const meta = {
@@ -43,13 +45,14 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	// 进程内 30s 内存缓存:同 worker 30s 窗口内的所有 meta 请求只算一次;管理员改 meta 后
-	// 最多等 30s 才能在所有 worker 上一致(可接受 —— meta 本身就允许 30s HTTP cache)。
+	// 通过 metaUpdated 主动失效,避免 requireSetup 等字段长时间陈旧。
 	private readonly liteCache: ManagedMemorySingleCache<Packed<'MetaLite'>>;
 	private readonly detailedCache: ManagedMemorySingleCache<Packed<'MetaDetailed'>>;
 
 	constructor(
 		private metaEntityService: MetaEntityService,
 		cacheManagementService: CacheManagementService,
+		private readonly internalEventService: InternalEventService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			if (ps.detail) {
@@ -60,5 +63,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		this.liteCache = cacheManagementService.createMemorySingleCache<Packed<'MetaLite'>>('apiMetaLite', 1000 * 30);
 		this.detailedCache = cacheManagementService.createMemorySingleCache<Packed<'MetaDetailed'>>('apiMetaDetailed', 1000 * 30);
+		this.internalEventService.on('metaUpdated', this.onMetaUpdated);
+	}
+
+	@bindThis
+	private onMetaUpdated(): void {
+		this.liteCache.clear();
+		this.detailedCache.clear();
 	}
 }

@@ -1,6 +1,6 @@
 import assert, { strictEqual } from 'node:assert';
 import type * as Misskey from 'misskey-js';
-import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, uploadFile } from './utils.js';
+import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, uploadFile, ensureFollowing } from './utils.js';
 
 const bAdmin = await fetchAdmin('b.test');
 
@@ -104,8 +104,7 @@ describe('Drive', () => {
 					resolveRemoteUser('a.test', alice.id, bob),
 				]);
 
-				await bob.client.request('following/create', { userId: aliceInB.id });
-				await sleep();
+				await ensureFollowing(bob, aliceInB.id);
 			});
 
 			test('Alice uploads sensitive image and it is shown as sensitive from Bob', async () => {

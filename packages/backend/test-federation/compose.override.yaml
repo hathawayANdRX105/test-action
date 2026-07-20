@@ -1,18 +1,33 @@
+# Use host node_modules from CI/local `pnpm i` (setup-ci already ran).
+# In-container pnpm install fails: @transfem-org/summaly is only on
+# activitypub.software (not npmjs), and full install OOMs.
 services:
   setup:
     volumes:
-      - type: volume
-        source: node_modules
+      - type: bind
+        source: ../../../node_modules
         target: /misskey/node_modules
-      - type: volume
-        source: node_modules_backend
+        read_only: true
+      - type: bind
+        source: ../node_modules
         target: /misskey/packages/backend/node_modules
-      - type: volume
-        source: node_modules_misskey-js
+        read_only: true
+      - type: bind
+        source: ../../misskey-js/node_modules
         target: /misskey/packages/misskey-js/node_modules
-      - type: volume
-        source: node_modules_misskey-reversi
+        read_only: true
+      - type: bind
+        source: ../../misskey-reversi/node_modules
         target: /misskey/packages/misskey-reversi/node_modules
+        read_only: true
+      - type: bind
+        source: ../../megalodon/node_modules
+        target: /misskey/packages/megalodon/node_modules
+        read_only: true
+      - type: bind
+        source: ../../stub
+        target: /misskey/packages/stub
+        read_only: true
 
   tester:
     networks:
@@ -20,15 +35,22 @@ services:
       internal_network:
         ipv4_address: 172.20.1.1
     volumes:
-      - type: volume
-        source: node_modules_dev
+      - type: bind
+        source: ../../../node_modules
         target: /misskey/node_modules
-      - type: volume
-        source: node_modules_backend_dev
+        read_only: true
+      - type: bind
+        source: ../node_modules
         target: /misskey/packages/backend/node_modules
-      - type: volume
-        source: node_modules_misskey-js_dev
+        read_only: true
+      - type: bind
+        source: ../../misskey-js/node_modules
         target: /misskey/packages/misskey-js/node_modules
+        read_only: true
+      - type: bind
+        source: ../../stub
+        target: /misskey/packages/stub
+        read_only: true
 
   daemon:
     networks:
@@ -36,12 +58,18 @@ services:
       - internal_network_a
       - internal_network_b
     volumes:
-      - type: volume
-        source: node_modules_dev
+      - type: bind
+        source: ../../../node_modules
         target: /misskey/node_modules
-      - type: volume
-        source: node_modules_backend_dev
+        read_only: true
+      - type: bind
+        source: ../node_modules
         target: /misskey/packages/backend/node_modules
+        read_only: true
+      - type: bind
+        source: ../../stub
+        target: /misskey/packages/stub
+        read_only: true
 
   redis.test:
     networks:
@@ -57,18 +85,30 @@ services:
       - external_network
       - internal_network
     volumes:
-      - type: volume
-        source: node_modules
+      - type: bind
+        source: ../../../node_modules
         target: /misskey/node_modules
-      - type: volume
-        source: node_modules_backend
+        read_only: true
+      - type: bind
+        source: ../node_modules
         target: /misskey/packages/backend/node_modules
-      - type: volume
-        source: node_modules_misskey-js
+        read_only: true
+      - type: bind
+        source: ../../misskey-js/node_modules
         target: /misskey/packages/misskey-js/node_modules
-      - type: volume
-        source: node_modules_misskey-reversi
+        read_only: true
+      - type: bind
+        source: ../../misskey-reversi/node_modules
         target: /misskey/packages/misskey-reversi/node_modules
+        read_only: true
+      - type: bind
+        source: ../../megalodon/node_modules
+        target: /misskey/packages/megalodon/node_modules
+        read_only: true
+      - type: bind
+        source: ../../stub
+        target: /misskey/packages/stub
+        read_only: true
 
   b.test:
     networks:
@@ -79,18 +119,30 @@ services:
       - external_network
       - internal_network
     volumes:
-      - type: volume
-        source: node_modules
+      - type: bind
+        source: ../../../node_modules
         target: /misskey/node_modules
-      - type: volume
-        source: node_modules_backend
+        read_only: true
+      - type: bind
+        source: ../node_modules
         target: /misskey/packages/backend/node_modules
-      - type: volume
-        source: node_modules_misskey-js
+        read_only: true
+      - type: bind
+        source: ../../misskey-js/node_modules
         target: /misskey/packages/misskey-js/node_modules
-      - type: volume
-        source: node_modules_misskey-reversi
+        read_only: true
+      - type: bind
+        source: ../../misskey-reversi/node_modules
         target: /misskey/packages/misskey-reversi/node_modules
+        read_only: true
+      - type: bind
+        source: ../../megalodon/node_modules
+        target: /misskey/packages/megalodon/node_modules
+        read_only: true
+      - type: bind
+        source: ../../stub
+        target: /misskey/packages/stub
+        read_only: true
 
 networks:
   external_network:
@@ -106,12 +158,3 @@ networks:
       config:
         - subnet: 172.20.0.0/16
           ip_range: 172.20.0.0/24
-
-volumes:
-  node_modules:
-  node_modules_dev:
-  node_modules_backend:
-  node_modules_backend_dev:
-  node_modules_misskey-js:
-  node_modules_misskey-js_dev:
-  node_modules_misskey-reversi:

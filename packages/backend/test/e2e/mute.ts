@@ -6,7 +6,7 @@
 process.env.NODE_ENV = 'test';
 
 import * as assert from 'assert';
-import { api, post, react, signup, waitFire } from '../utils.js';
+import { api, post, react, signup, waitFire, waitForTimelineNote } from '../utils.js';
 import type * as misskey from 'misskey-js';
 
 describe('Mute', () => {
@@ -66,13 +66,10 @@ describe('Mute', () => {
 			const bobNote = await post(bob, { text: 'hi' });
 			const carolNote = await post(carol, { text: 'hi' });
 
-			const res = await api('notes/local-timeline', {}, alice);
-
-			assert.strictEqual(res.status, 200);
-			assert.strictEqual(Array.isArray(res.body), true);
-			assert.strictEqual(res.body.some(note => note.id === aliceNote.id), true);
-			assert.strictEqual(res.body.some(note => note.id === bobNote.id), true);
-			assert.strictEqual(res.body.some(note => note.id === carolNote.id), false);
+			const body = await waitForTimelineNote('notes/local-timeline', alice, aliceNote.id);
+			assert.strictEqual(body.some(note => note.id === aliceNote.id), true);
+			assert.strictEqual(body.some(note => note.id === bobNote.id), true);
+			assert.strictEqual(body.some(note => note.id === carolNote.id), false);
 		});
 
 		test('タイムラインにミュートしているユーザーの投稿のRenoteが含まれない', async () => {
@@ -82,13 +79,10 @@ describe('Mute', () => {
 				renoteId: carolNote.id,
 			});
 
-			const res = await api('notes/local-timeline', {}, alice);
-
-			assert.strictEqual(res.status, 200);
-			assert.strictEqual(Array.isArray(res.body), true);
-			assert.strictEqual(res.body.some(note => note.id === aliceNote.id), true);
-			assert.strictEqual(res.body.some(note => note.id === bobNote.id), false);
-			assert.strictEqual(res.body.some(note => note.id === carolNote.id), false);
+			const body = await waitForTimelineNote('notes/local-timeline', alice, aliceNote.id);
+			assert.strictEqual(body.some(note => note.id === aliceNote.id), true);
+			assert.strictEqual(body.some(note => note.id === bobNote.id), false);
+			assert.strictEqual(body.some(note => note.id === carolNote.id), false);
 		});
 	});
 

@@ -10,6 +10,8 @@ dbReplications: false
 redis:
   host: redis.test
   port: 6379
+  # Isolate a.test vs b.test job queues / caches on shared redis
+  prefix: ${HOST}
 id: 'aidx'
 proxyBypassHosts:
   - api.deepl.com
@@ -22,3 +24,6 @@ signToActivityPubGet: true
 allowedPrivateNetworks:
   - 127.0.0.1/32
   - 172.20.0.0/16
+  - 172.21.0.0/16
+  - 172.22.0.0/16
+  - 172.23.0.0/16

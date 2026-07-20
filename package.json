@@ -33,7 +33,7 @@
 		"build-storybook": "pnpm --filter frontend build-storybook",
 		"build-misskey-js-with-types": "pnpm build-pre && pnpm --filter backend... --filter=!misskey-js build && pnpm --filter backend generate-api-json --no-build && ncp packages/backend/built/api.json packages/misskey-js/generator/api.json && pnpm --filter misskey-js update-autogen-code && pnpm --filter misskey-js build && pnpm --filter misskey-js api",
 		"start": "pnpm check:connect && cd packages/backend && MK_WARNED_ABOUT_CONFIG=true node ./built/boot/entry.js",
-		"start:test": "cd packages/backend && cross-env NODE_ENV=test node ./built/boot/entry.js",
+		"start:test": "cd packages/backend && cross-env NODE_ENV=test MK_ALLOW_RESET_DB=1 node ./built/boot/entry.js",
 		"init": "pnpm migrate",
 		"migrate": "pnpm --filter backend migrate",
 		"revert": "pnpm --filter backend revert",

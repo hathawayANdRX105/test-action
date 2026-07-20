@@ -7,12 +7,13 @@ services:
     extends:
       file: ./compose.tpl.yml
       service: misskey
+    # Host node_modules bind-mounted (compose.override.yaml). No in-container install.
     command: >
       bash -c "
-        npm install -g pnpm
-        pnpm -F backend i
-        pnpm -F misskey-js i
-        pnpm -F misskey-reversi i
+        test -d /misskey/node_modules
+        test -d /misskey/packages/backend/node_modules
+        test -e /misskey/packages/backend/node_modules/@misskey-dev/summaly || test -e /misskey/node_modules/@misskey-dev/summaly
+        echo 'federation setup: host node_modules OK'
       "
 
   tester:
@@ -29,6 +30,7 @@ services:
     environment:
       - NODE_ENV=development
       - NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/rootCA.crt
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     volumes:
       - type: bind
         source: ../package.json
@@ -43,12 +45,12 @@ services:
         target: /misskey/packages/backend/test-federation/test
         read_only: true
       - type: bind
-        source: ../jest.config.cjs
-        target: /misskey/packages/backend/jest.config.cjs
+        source: ../jest.config.common.ts
+        target: /misskey/packages/backend/jest.config.common.ts
         read_only: true
       - type: bind
-        source: ../jest.config.fed.cjs
-        target: /misskey/packages/backend/jest.config.fed.cjs
+        source: ../jest.config.fed.ts
+        target: /misskey/packages/backend/jest.config.fed.ts
         read_only: true
       - type: bind
         source: ../jest.js
@@ -75,19 +77,20 @@ services:
         target: /misskey/pnpm-workspace.yaml
         read_only: true
       - type: bind
+        source: ../../shared
+        target: /misskey/packages/shared
+        read_only: true
+      - type: bind
+        source: ../../../locales
+        target: /misskey/locales
+        read_only: true
+      - type: bind
         source: ./certificates/rootCA.crt
         target: /usr/local/share/ca-certificates/rootCA.crt
         read_only: true
     working_dir: /misskey
-    entrypoint: >
-      bash -c '
-        npm install -g pnpm
-        pnpm -F misskey-js i --frozen-lockfile
-        pnpm -F backend i --frozen-lockfile
-        exec "$0" "$@"
-      '
-    command: pnpm -F backend test:fed
-
+    entrypoint: ["bash", "-lc"]
+    command: ["cp /usr/local/share/ca-certificates/rootCA.crt /usr/local/share/ca-certificates/misskey-rootCA.crt 2>/dev/null || true; (command -v update-ca-certificates >/dev/null && update-ca-certificates) || true; corepack enable && corepack prepare pnpm@10.26.2 --activate && pnpm -F backend jest:fed"]
   daemon:
     image: node:${NODE_VERSION}
     depends_on:
@@ -118,11 +121,18 @@ services:
         source: ../../../pnpm-workspace.yaml
         target: /misskey/pnpm-workspace.yaml
         read_only: true
+      - type: bind
+        source: ../../shared
+        target: /misskey/packages/shared
+        read_only: true
+      - type: bind
+        source: ../../../locales
+        target: /misskey/locales
+        read_only: true
     working_dir: /misskey
     command: >
       bash -c "
         npm install -g pnpm
-        pnpm -F backend i --frozen-lockfile
         pnpm exec tsc -p ./packages/backend/test-federation
         node ./packages/backend/test-federation/built/daemon.js
       "

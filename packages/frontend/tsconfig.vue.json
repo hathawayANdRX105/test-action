@@ -41,6 +41,8 @@
 		"**/coverage",
 		"**/*.min.js",
 		".storybook/**/*",
+		"**/*.stories.ts",
+		"**/*.stories.impl.ts",
 		"src/utility/libopenmpt"
 	]
 }

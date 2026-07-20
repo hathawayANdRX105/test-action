@@ -1,0 +1,80 @@
+name: CI - PR Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-pr-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - run: pnpm run build-assets
+      - run: pnpm run eslint
+
+  misskey-js:
+    name: misskey-js tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - run: pnpm --filter misskey-js build
+      - run: pnpm --filter misskey-js test
+
+  megalodon:
+    name: Megalodon tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci
+      - run: pnpm --filter megalodon build
+      - run: pnpm --filter megalodon test
+
+  pr-gate:
+    name: PR Gate
+    if: ${{ always() && !cancelled() }}
+    needs:
+      - lint
+      - misskey-js
+      - megalodon
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every PR gate check to pass
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          failed = {
+              name: job['result']
+              for name, job in json.loads(os.environ['NEEDS']).items()
+              if job['result'] != 'success'
+          }
+          if failed:
+              print(f'Failed or incomplete required jobs: {failed}')
+              sys.exit(1)
+          PY

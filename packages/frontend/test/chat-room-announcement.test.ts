@@ -23,9 +23,8 @@ describe('chat room announcement', () => {
 		assert.match(roomSource, /announcementPreview"><Mfm :text="room!\.announcement \?\? ''" :plain="true"\/>/);
 		assert.match(roomSource, /announcementTextExpanded]"><Mfm :text="room!\.announcement \?\? ''" :isBlock="true"\/>/);
 		// 普通用户不可永久关闭
-		// vitest's assert (chai) has no doesNotMatch; use negative match
-		assert.ok(!/permanentlyDismissAnnouncement/.test(roomSource));
-		assert.ok(!/chatRoomAnnouncementDismissed/.test(roomSource));
+		assert.notMatch(roomSource, /permanentlyDismissAnnouncement/);
+		assert.notMatch(roomSource, /chatRoomAnnouncementDismissed/);
 	});
 
 	test('persists announcement expanded state per room', () => {
@@ -42,7 +41,7 @@ describe('chat room announcement', () => {
 		assert.match(announcementsSource, /deleteCurrent/);
 		assert.match(announcementsSource, /deleteHistoryItem/);
 		assert.match(announcementsSource, /canManage/);
-		assert.ok(!/pinToChat|setPinnedCurrent|pinHistoryItem/.test(announcementsSource));
+		assert.notMatch(announcementsSource, /pinToChat|setPinnedCurrent|pinHistoryItem/);
 	});
 
 	test('adds announcements history tab after management', () => {

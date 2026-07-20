@@ -49,7 +49,7 @@
 	const maxRepairAttempts = 2;
 
 	/**
-	 * @param {unknown} reason
+	 * @param {any} reason
 	 * @returns {boolean}
 	 */
 	function isFrontendAssetLoadError(reason) {

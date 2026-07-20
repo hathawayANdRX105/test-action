@@ -53,6 +53,8 @@ describe('NoteCreateService', () => {
 			renoteUserInstance: null,
 			processErrors: [],
 			mandatoryCW: null,
+			ip: null,
+			fingerprint: null,
 		};
 
 		const poll: IPoll = {

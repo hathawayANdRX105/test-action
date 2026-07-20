@@ -776,7 +776,7 @@ export class CacheService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	private async onProfileEvent<E extends 'updateUserProfile'>(body: InternalEventTypes[E], _type: E, ctx: Partial<InternalEventContext>): Promise<void> {
+	private async onProfileEvent<E extends 'updateUserProfile'>(body: InternalEventTypes[E], _type: E, _ctx: Partial<InternalEventContext>): Promise<void> {
 		// Update the relation cache for all events, but only if mutedInstances have changed.
 		if (body.keys == null || body.keys.includes('mutedInstances')) {
 			const relationKeysToClear: string[] = [];
@@ -789,11 +789,9 @@ export class CacheService implements OnApplicationShutdown {
 			this.userRelationsCache.dropMany(relationKeysToClear);
 		}
 
-		// Update the profile cache for local events only
-		// (isLocal may be undefined for local events, but will *always* be true for remote ones)
-		if (ctx.isLocal !== true) {
-			await this.userProfileCache.delete(body.userId);
-		}
+		// Always drop profile cache so mutedInstances / notification config refresh
+		// for both local i/update and remote profile updates (stream WS listens here).
+		await this.userProfileCache.delete(body.userId);
 	}
 
 	@bindThis

@@ -144,8 +144,8 @@ export async function common(createVue: () => Promise<App<Element>>) {
 	};
 
 	const currentFrontendDeployment: FrontendDeploymentFingerprint = {
-		version: typeof (window as { VERSION?: unknown }).VERSION === 'string' ? (window as { VERSION: string }).VERSION : version,
-		clientEntry: typeof (window as { CLIENT_ENTRY?: unknown }).CLIENT_ENTRY === 'string' ? (window as { CLIENT_ENTRY: string }).CLIENT_ENTRY : '',
+		version: typeof window.VERSION === 'string' ? window.VERSION : version,
+		clientEntry: typeof window.CLIENT_ENTRY === 'string' ? window.CLIENT_ENTRY : '',
 	};
 	let frontendUpdateCheckInFlight = false;
 	let frontendUpdatePromptShowing = false;

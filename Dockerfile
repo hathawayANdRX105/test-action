@@ -27,7 +27,7 @@ RUN mv packages/frontend-embed/assets sharkey-embed-assets
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
 	pnpm prune
 # Remove frontend packages (already built into root)
-RUN rm -r node_modules packages/frontend packages/frontend-shared packages/frontend-embed packages/sw locales
+RUN rm -r node_modules packages/frontend packages/frontend-shared packages/frontend-embed packages/sw
 # Remove dev packages (no longer needed)
 RUN rm -r packages/shared packages/misskey-js/generator
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
@@ -61,8 +61,8 @@ COPY --chown=sharkey:sharkey --from=build /sharkey/tossface-emojis/dist ./tossfa
 COPY --chown=sharkey:sharkey --from=build /sharkey/sharkey-assets ./packages/frontend/assets
 COPY --chown=sharkey:sharkey --from=build /sharkey/sharkey-embed-assets ./packages/frontend-embed/assets
 
-# locales
-# (not needed, bundled into frontend)
+# locales (backend imports locales/index.js at runtime)
+COPY --chown=sharkey:sharkey --from=build /sharkey/locales ./locales
 
 # backend
 COPY --chown=sharkey:sharkey --from=build /sharkey/packages/backend/package.json ./packages/backend/package.json

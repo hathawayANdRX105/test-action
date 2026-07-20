@@ -11,6 +11,7 @@ import {
 	api,
 	connectStream,
 	createAppToken,
+	ensureRoot,
 	failedApiCall,
 	relativeFetch,
 	signup,
@@ -26,7 +27,8 @@ describe('API', () => {
 	let bob: misskey.entities.SignupResponse;
 
 	beforeAll(async () => {
-		alice = await signup({ username: 'alice' });
+		// admin-only endpoints require root (meta.rootUserId), not a plain signup
+		alice = await ensureRoot();
 		bob = await signup({ username: 'bob' });
 	}, 1000 * 60 * 2);
 

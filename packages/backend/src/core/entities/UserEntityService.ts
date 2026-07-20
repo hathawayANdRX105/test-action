@@ -251,15 +251,24 @@ export class UserEntityService implements OnModuleInit {
 			return null;
 		}
 
-		const akaUsers = new Map(await this.cacheService.uriPersonCache.fetchMany(user.alsoKnownAs));
-		if (akaUsers.size < 1) {
+		// Local users store null uri; alsoKnownAs uses genLocalUserUri paths which
+		// uriPersonCache cannot resolve (it only indexes remote user.uri).
+		const localPrefix = `${this.config.url}/users/`;
+		const remoteUris = user.alsoKnownAs.filter(uri => !uri.startsWith(localPrefix));
+		const akaUsers = remoteUris.length > 0
+			? new Map(await this.cacheService.uriPersonCache.fetchMany(remoteUris))
+			: new Map<string, string>();
+
+		const resolved = user.alsoKnownAs.map(uri => {
+			if (uri.startsWith(localPrefix)) {
+				return { uri, id: uri.slice(localPrefix.length) || null };
+			}
+			return { uri, id: akaUsers.get(uri) ?? null };
+		});
+		if (!resolved.some(a => a.id != null)) {
 			return null;
 		}
-
-		return user.alsoKnownAs.map(uri => ({
-			uri,
-			id: akaUsers.get(uri) ?? null,
-		}));
+		return resolved;
 	}
 
 	@bindThis

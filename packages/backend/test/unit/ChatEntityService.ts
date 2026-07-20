@@ -5,6 +5,7 @@
 
 import { describe, expect, jest, test } from '@jest/globals';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
+import type { MiChatRoom } from '@/models/ChatRoom.js';
 
 describe('ChatEntityService', () => {
 	function createService() {
@@ -228,7 +229,7 @@ describe('ChatEntityService', () => {
 			owner: { id: 'owner-1' },
 			memberLimitOverride: null,
 			messageRetentionDays: null,
-		};
+		} as unknown as MiChatRoom;
 
 		const packed = await ctx.service.packRooms([room1, room1, 'room-2', 'room-2'], { id: 'me' });
 
@@ -282,7 +283,7 @@ describe('ChatEntityService', () => {
 			owner: { id: 'me' },
 			memberLimitOverride: null,
 			messageRetentionDays: 30,
-		};
+		} as unknown as MiChatRoom;
 
 		const packed = await ctx.service.packRoom(room, { id: 'me' });
 
@@ -311,7 +312,7 @@ describe('ChatEntityService', () => {
 			owner: { id: 'me' },
 			memberLimitOverride: null,
 			messageRetentionDays: null,
-		};
+		} as unknown as MiChatRoom;
 
 		const packedRooms = Promise.all([
 			ctx.service.packRoom(room, { id: 'me' }),
@@ -344,7 +345,7 @@ describe('ChatEntityService', () => {
 			owner: { id: 'me' },
 			memberLimitOverride: null,
 			messageRetentionDays: null,
-		};
+		} as unknown as MiChatRoom;
 
 		await expect(ctx.service.packRoom(room, { id: 'me' })).rejects.toThrow('database unavailable');
 		await expect(ctx.service.packRoom(room, { id: 'me' })).resolves.toEqual(expect.objectContaining({ memberCount: 3 }));
@@ -375,7 +376,7 @@ describe('ChatEntityService', () => {
 			avatarUrl: null,
 			memberLimitOverride: null,
 			messageRetentionDays: null,
-		};
+		} as unknown as MiChatRoom;
 
 		const packed = await ctx.service.packRoom(room, { id: 'me' });
 
@@ -402,7 +403,7 @@ describe('ChatEntityService', () => {
 			owner: { id: 'owner' },
 			memberLimitOverride: null,
 			messageRetentionDays: 14,
-		};
+		} as unknown as MiChatRoom;
 
 		const [packed] = await ctx.service.packRooms([room], { id: 'moderator' });
 
@@ -433,7 +434,7 @@ describe('ChatEntityService', () => {
 			owner: { id: 'owner' },
 			memberLimitOverride: null,
 			messageRetentionDays: 7,
-		};
+		} as unknown as MiChatRoom;
 
 		const [packed] = await ctx.service.packRooms([room], { id: 'admin' });
 

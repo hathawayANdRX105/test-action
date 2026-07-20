@@ -99,7 +99,7 @@ describe('timeline preview optimization', () => {
 	});
 
 	test('uses clear scope and view mode labels', () => {
-		assert.match(timelineSource, /title:\s*'本地\+联邦'/);
+		assert.match(timelineSource, /title:\s*'全部'/);
 		assert.match(timelineSource, /title:\s*'本地服务器'/);
 		assert.match(timelineSource, /title:\s*'联邦服务器'/);
 		assert.match(viewSwitchSource, /label:\s*i18n\.ts\._viewMode\?\.twitter \?\? 'X 风格'/);

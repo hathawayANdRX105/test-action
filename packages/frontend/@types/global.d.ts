@@ -22,4 +22,6 @@ declare const _LANGS_FULL_: string[][];
 // TagCanvas
 interface Window {
 	TagCanvas: any;
+	VERSION?: string;
+	CLIENT_ENTRY?: string;
 }

@@ -20,8 +20,8 @@ describe('chat room channel bootstrap', () => {
 		};
 		const chatRoomsRepository: any = {
 			findOne: jest.fn()
-				.mockResolvedValueOnce(room)
-				.mockResolvedValueOnce(room),
+				.mockResolvedValueOnce(room as never)
+				.mockResolvedValueOnce(room as never),
 		};
 		const chatService: any = {
 			hasPermissionToViewRoomTimeline: jest.fn(async () => true),

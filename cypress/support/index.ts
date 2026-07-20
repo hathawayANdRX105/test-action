@@ -12,6 +12,8 @@ declare global {
 			resetState(): Chainable<void>;
 
 			visitHome(): Chainable<void>;
+
+			dismissUserSetup(): Chainable<void>;
 		}
 	}
 }

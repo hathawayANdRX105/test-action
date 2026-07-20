@@ -140,7 +140,7 @@ function createRouteContext({
 	const apiCallService = createApiCallService(apiAccessMode, nodeEnv, developerRateLimit, apiPublicPermissions);
 	const guardSpy = jest.spyOn(apiCallService, 'assertDeveloperApiAccess');
 	const aiService = {
-		streamChat: jest.fn(async () => ({ id: 'assistant-message-1' })),
+		streamChat: jest.fn(async (..._args: unknown[]) => ({ id: 'assistant-message-1' })),
 	};
 	const authenticateService = {
 		authenticate: jest.fn(async () => [user, token]),

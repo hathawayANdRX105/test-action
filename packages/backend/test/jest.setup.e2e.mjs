@@ -3,9 +3,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { initTestDb, sendEnvResetRequest } from './utils.js';
+import { sendEnvResetRequest, stopAllJobQueues } from './utils.js';
+
+// Jest process only: secondary Nest (if any) must not drop/sync shared DB.
+process.env.MK_TEST_KEEP_SCHEMA = '1';
 
 beforeAll(async () => {
-		await initTestDb(false);
-		await sendEnvResetRequest();
-});
+	await stopAllJobQueues();
+	// Nest test DataSource dropSchema+synchronize on restart — no parallel TypeORM drop.
+	await sendEnvResetRequest();
+}, 1000 * 60 * 3);

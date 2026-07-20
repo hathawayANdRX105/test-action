@@ -8,6 +8,7 @@
 import { assert, describe, test } from 'vitest';
 import settingsIndexSource from '@/pages/settings/index.vue?raw';
 import developerCenterSource from '@/pages/settings/connect.vue?raw';
+import mkApiScopePickerSource from '@/components/MkApiScopePicker.vue?raw';
 import adminIndexSource from '@/pages/admin/index.vue?raw';
 import adminApiSource from '@/pages/admin/api.vue?raw';
 import routerSource from '@/router.definition.ts?raw';
@@ -72,9 +73,9 @@ describe('API developer center', () => {
 		assert.notInclude(developerCenterSource, 'customAppRedirectUri');
 		assert.notInclude(developerCenterSource, 'buildDefaultRedirectUri');
 		assert.notInclude(developerCenterSource, 'websiteUrl: newAppWebsiteUrl');
-		assert.include(developerCenterSource, 'POST /api/notes/create');
-		assert.include(developerCenterSource, 'POST /api/notes/delete');
-		assert.include(developerCenterSource, 'GET /oauth/authorize');
+		assert.include(developerCenterSource, "method: 'POST', path: '/api/notes/create'");
+		assert.include(developerCenterSource, "method: 'POST', path: '/api/notes/delete'");
+		assert.include(developerCenterSource, "method: 'GET', path: '/oauth/authorize'");
 		assert.include(developerCenterSource, '/oauth/userinfo');
 		assert.include(developerCenterSource, "permissions: ['read:profile']");
 		assert.include(developerCenterSource, 'scope=read:profile');
@@ -95,9 +96,11 @@ describe('API developer center', () => {
 		assert.notInclude(adminApiSource, 'settings.defaultOAuthCallbackUrl');
 		assert.notInclude(adminApiSource, '作为普通开发者创建应用时的默认建议地址');
 		assert.include(adminApiSource, '权限范围');
-		assert.include(adminApiSource, '全选');
-		assert.include(adminApiSource, '清空');
-		assert.include(adminApiSource, '恢复推荐默认权限');
+		assert.include(adminApiSource, '<MkApiScopePicker');
+		assert.include(adminApiSource, '恢复推荐默认');
+		assert.include(mkApiScopePickerSource, '全选');
+		assert.include(mkApiScopePickerSource, '清空');
+		assert.include(mkApiScopePickerSource, 'function selectAll');
 		assert.notInclude(adminApiSource, 'publicPermissionsText');
 		assert.notInclude(adminApiSource, '<MkTextarea v-model="publicPermissionsText"');
 		assert.include(adminApiSource, "scope: 'read:profile'");
@@ -200,7 +203,7 @@ describe('API developer center', () => {
 		assert.include(endpointListSource, "'admin/api/apps/suspend'");
 		assert.include(endpointListSource, "'admin/api/tokens/revoke'");
 		assert.include(apiCallServiceSource, 'assertDeveloperApiAccess');
-		assert.include(apiCallServiceSource, "this.meta.apiAccessMode === 'closed'");
+		assert.include(apiCallServiceSource, "apiMeta.apiAccessMode === 'closed'");
 		assert.include(apiCallServiceSource, 'isDeveloperApiAccessApproved');
 		assert.include(apiCallServiceSource, 'token.app ? token.app.userId : token.userId');
 		assert.include(apiCallServiceSource, 'API_TOKEN_RATE_LIMIT_EXCEEDED');

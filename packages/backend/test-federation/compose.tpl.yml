@@ -51,6 +51,14 @@ services:
         target: /misskey/packages/misskey-js/package.json
         read_only: true
       - type: bind
+        source: ../../megalodon/built
+        target: /misskey/packages/megalodon/built
+        read_only: true
+      - type: bind
+        source: ../../megalodon/package.json
+        target: /misskey/packages/megalodon/package.json
+        read_only: true
+      - type: bind
         source: ../../misskey-reversi/built
         target: /misskey/packages/misskey-reversi/built
         read_only: true
@@ -75,6 +83,14 @@ services:
         target: /misskey/pnpm-workspace.yaml
         read_only: true
       - type: bind
+        source: ../../../locales
+        target: /misskey/locales
+        read_only: true
+      - type: bind
+        source: ../../shared
+        target: /misskey/packages/shared
+        read_only: true
+      - type: bind
         source: ./certificates/rootCA.crt
         target: /usr/local/share/ca-certificates/rootCA.crt
         read_only: true
@@ -88,13 +104,14 @@ services:
     healthcheck:
       test: bash /misskey/healthcheck.sh
       interval: 5s
-      retries: 20
+      timeout: 5s
+      retries: 40
+      start_period: 30s
 
   db:
     image: postgres:15-alpine
     env_file:
       - ./.config/docker.env
-    volumes:
     healthcheck:
       test: pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
       interval: 5s

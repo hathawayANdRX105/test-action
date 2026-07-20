@@ -1,0 +1,46 @@
+name: Set up CI
+description: Install the shared toolchain and workspace dependencies for a CI job.
+runs:
+  using: composite
+  steps:
+    - name: Install native build dependencies
+      shell: bash
+      run: |
+        if command -v gcc >/dev/null && command -v make >/dev/null && command -v python3 >/dev/null && command -v pkg-config >/dev/null && pkg-config --exists cairo pango 2>/dev/null && command -v ffmpeg >/dev/null && command -v xvfb-run >/dev/null; then
+          exit 0
+        fi
+        sudo apt-get update
+        sudo apt-get install --yes \
+          build-essential \
+          python3 \
+          pkg-config \
+          ffmpeg \
+          libcairo2-dev \
+          libpango1.0-dev \
+          xvfb
+
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: .node-version
+
+    - name: Enable Corepack
+      shell: bash
+      run: |
+        corepack enable
+        corepack install
+
+    - name: Configure pnpm store
+      shell: bash
+      run: pnpm config set store-dir .pnpm-store
+
+    - name: Restore pnpm store
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        path: .pnpm-store
+        key: pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
+        restore-keys: pnpm-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Install workspace dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

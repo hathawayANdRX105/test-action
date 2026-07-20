@@ -48,7 +48,9 @@ export class UserSuspendService {
 
 		await this.chatRoomBanningsRepository.delete({ userId: user.id });
 
+		// Invalidate caches immediately (do not wait for post-suspend background job).
 		await this.internalEventService.emit(user.host == null ? 'localUserUpdated' : 'remoteUserUpdated', { id: user.id });
+		await this.internalEventService.emit('userChangeSuspendedState', { id: user.id, isSuspended: true });
 
 		await this.moderationLogService.log(moderator, 'suspend', {
 			userId: user.id,
@@ -65,7 +67,9 @@ export class UserSuspendService {
 			isSuspended: false,
 		});
 
+		// Invalidate caches immediately (do not wait for post-unsuspend background job).
 		await this.internalEventService.emit(user.host == null ? 'localUserUpdated' : 'remoteUserUpdated', { id: user.id });
+		await this.internalEventService.emit('userChangeSuspendedState', { id: user.id, isSuspended: false });
 
 		await this.moderationLogService.log(moderator, 'unsuspend', {
 			userId: user.id,

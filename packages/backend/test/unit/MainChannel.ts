@@ -15,7 +15,7 @@ describe('MainChannel registryUpdated audience', () => {
 				on: jest.fn(),
 				off: jest.fn(),
 			},
-			sendMessageToWs: jest.fn(async () => undefined),
+			sendMessageToWs: jest.fn(async (..._args: unknown[]) => undefined),
 			userMutedInstances: new Set<string>(),
 		};
 		const noteEntityService = {};
@@ -30,7 +30,7 @@ describe('MainChannel registryUpdated audience', () => {
 	test('forwards registryUpdated to native session clients (token null)', async () => {
 		const { channel, connection } = createChannel(null);
 		// private onEvent — test harness only
-		const onEvent = (channel as { onEvent: (data: { type: string; body: unknown }) => Promise<void> }).onEvent;
+		const onEvent = (channel as unknown as { onEvent: (data: { type: string; body: unknown }) => Promise<void> }).onEvent;
 
 		await onEvent({
 			type: 'registryUpdated',
@@ -47,7 +47,7 @@ describe('MainChannel registryUpdated audience', () => {
 	test('drops registryUpdated for third-party access token clients', async () => {
 		const { channel, connection } = createChannel({ id: 'access-token' });
 		// private onEvent — test harness only
-		const onEvent = (channel as { onEvent: (data: { type: string; body: unknown }) => Promise<void> }).onEvent;
+		const onEvent = (channel as unknown as { onEvent: (data: { type: string; body: unknown }) => Promise<void> }).onEvent;
 
 		await onEvent({
 			type: 'registryUpdated',
@@ -60,7 +60,7 @@ describe('MainChannel registryUpdated audience', () => {
 	test('still forwards other main events to third-party token clients', async () => {
 		const { channel, connection } = createChannel({ id: 'access-token' });
 		// private onEvent — test harness only
-		const onEvent = (channel as { onEvent: (data: { type: string; body: unknown }) => Promise<void> }).onEvent;
+		const onEvent = (channel as unknown as { onEvent: (data: { type: string; body: unknown }) => Promise<void> }).onEvent;
 
 		await onEvent({
 			type: 'readAllNotifications',

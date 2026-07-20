@@ -6,8 +6,7 @@
 process.env.NODE_ENV = 'test';
 
 import * as assert from 'assert';
-import { setTimeout } from 'node:timers/promises';
-import { api, post, signup, waitFire } from '../utils.js';
+import { api, post, signup, waitFire, waitForTimelineNotes } from '../utils.js';
 import type * as misskey from 'misskey-js';
 
 describe('Renote Mute', () => {
@@ -35,16 +34,11 @@ describe('Renote Mute', () => {
 		const carolRenote = await post(carol, { renoteId: bobNote.id });
 		const carolNote = await post(carol, { text: 'hi' });
 
-		// redisに追加されるのを待つ
-		await setTimeout(100);
-
-		const res = await api('notes/local-timeline', {}, alice);
-
-		assert.strictEqual(res.status, 200);
-		assert.strictEqual(Array.isArray(res.body), true);
-		assert.strictEqual(res.body.some(note => note.id === bobNote.id), true);
-		assert.strictEqual(res.body.some(note => note.id === carolRenote.id), false);
-		assert.strictEqual(res.body.some(note => note.id === carolNote.id), true);
+		// Wait for notes that should appear (pure renote is silenced for muter).
+		const body = await waitForTimelineNotes('notes/local-timeline', alice, [bobNote.id, carolNote.id]);
+		assert.strictEqual(body.some(note => note.id === bobNote.id), true);
+		assert.strictEqual(body.some(note => note.id === carolRenote.id), false);
+		assert.strictEqual(body.some(note => note.id === carolNote.id), true);
 	});
 
 	test('タイムラインにリノートミュートしているユーザーの引用が含まれる', async () => {
@@ -52,16 +46,10 @@ describe('Renote Mute', () => {
 		const carolRenote = await post(carol, { renoteId: bobNote.id, text: 'kore' });
 		const carolNote = await post(carol, { text: 'hi' });
 
-		// redisに追加されるのを待つ
-		await setTimeout(100);
-
-		const res = await api('notes/local-timeline', {}, alice);
-
-		assert.strictEqual(res.status, 200);
-		assert.strictEqual(Array.isArray(res.body), true);
-		assert.strictEqual(res.body.some(note => note.id === bobNote.id), true);
-		assert.strictEqual(res.body.some(note => note.id === carolRenote.id), true);
-		assert.strictEqual(res.body.some(note => note.id === carolNote.id), true);
+		const body = await waitForTimelineNotes('notes/local-timeline', alice, [bobNote.id, carolRenote.id, carolNote.id]);
+		assert.strictEqual(body.some(note => note.id === bobNote.id), true);
+		assert.strictEqual(body.some(note => note.id === carolRenote.id), true);
+		assert.strictEqual(body.some(note => note.id === carolNote.id), true);
 	});
 
 	// #12956
@@ -69,15 +57,9 @@ describe('Renote Mute', () => {
 		const carolNote = await post(carol, { text: 'hi' });
 		const bobRenote = await post(bob, { renoteId: carolNote.id });
 
-		// redisに追加されるのを待つ
-		await setTimeout(100);
-
-		const res = await api('notes/local-timeline', {}, alice);
-
-		assert.strictEqual(res.status, 200);
-		assert.strictEqual(Array.isArray(res.body), true);
-		assert.strictEqual(res.body.some(note => note.id === carolNote.id), true);
-		assert.strictEqual(res.body.some(note => note.id === bobRenote.id), true);
+		const body = await waitForTimelineNotes('notes/local-timeline', alice, [carolNote.id, bobRenote.id]);
+		assert.strictEqual(body.some(note => note.id === carolNote.id), true);
+		assert.strictEqual(body.some(note => note.id === bobRenote.id), true);
 	});
 
 	test('ストリームにリノートミュートしているユーザーのリノートが流れない', async () => {

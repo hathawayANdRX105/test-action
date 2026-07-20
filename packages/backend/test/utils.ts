@@ -21,7 +21,34 @@ import type * as misskey from 'misskey-js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import { validateContentTypeSetAsActivityPub } from '@/core/activitypub/misc/validator.js';
 import { ApiError } from '@/server/api/error.js';
-export { server as startServer, jobQueue as startJobQueue } from '@/boot/common.js';
+import { server as _startServer, jobQueue as _startJobQueue } from '@/boot/common.js';
+import type { INestApplicationContext } from '@nestjs/common';
+export const startServer = _startServer;
+
+// Secondary Nest apps (queue processors) opened in the Jest process.
+// Must be closed before schema drops or they race the live e2e DB.
+const openJobQueues: INestApplicationContext[] = [];
+
+/** Start queue processors without dropSchema/synchronize (shared test DB). */
+export async function startJobQueue() {
+	process.env.MK_TEST_KEEP_SCHEMA = '1';
+	const app = await _startJobQueue();
+	openJobQueues.push(app);
+	return app;
+}
+
+/** Close every startJobQueue() app still open in this process. */
+export async function stopAllJobQueues() {
+	while (openJobQueues.length > 0) {
+		const app = openJobQueues.pop()!;
+		try {
+			await app.close();
+		} catch (e) {
+			console.warn('stopAllJobQueues close failed', e);
+		}
+	}
+}
+
 
 export interface UserToken {
 	token: string;
@@ -149,25 +176,41 @@ export const signup = async (params?: Partial<misskey.Endpoints['signup']['req']
 	}, params);
 
 	const res = await api('signup', q);
-
-	return res.body;
+	const body = res.body;
+	if (res.status !== 200 || body == null || typeof body !== 'object' || !('token' in body) || typeof body.token !== 'string') {
+		throw new Error(`signup failed status=${res.status} body=${inspect(body, { depth: 5 })}`);
+	}
+	return body as NonNullable<misskey.Endpoints['signup']['res']>;
 };
 
 export const post = async (user: UserToken, params: misskey.Endpoints['notes/create']['req']): Promise<misskey.entities.Note> => {
-	const q = params;
-
-	const res = await api('notes/create', q, user);
-
-	// FIXME: the return type should reflect this fact.
-	return (res.body ? res.body.createdNote : null)!;
+	const res = await api('notes/create', params, user);
+	const created = (res.body as { createdNote?: misskey.entities.Note } | null)?.createdNote;
+	if (res.status !== 200 || created == null || typeof created.id !== 'string') {
+		throw new Error(`post failed status=${res.status} body=${inspect(res.body, { depth: 8, breakLength: 120 })}`);
+	}
+	return created;
 };
 
 export const createAppToken = async (user: UserToken, permissions: (typeof misskey.permissions)[number][]) => {
+	// Only scopes in meta.apiPublicPermissions survive gen-token for non-admins.
+	// defaultApiPublicPermissions includes read:profile (NOT read:account).
+	// Admin scopes additionally require administrator + rank=admin.
+	const needsAdmin = permissions.some(p => p.includes(':admin:'));
+	const permission = permissions.length > 0 ? [...permissions] : ['read:profile'];
+	// Ensure at least one public scope so gen-token does not reject empty filtered lists
+	// when only admin scopes were requested (non-admin callers still get a token without admin).
+	if (!permission.some(p => !p.includes(':admin:'))) {
+		permission.push('read:profile');
+	}
 	const res = await api('miauth/gen-token', {
 		session: randomUUID(),
-		permission: permissions,
+		permission,
+		...(needsAdmin ? { rank: 'admin' as const } : {}),
 	}, user);
-
+	if (res.status !== 200 || res.body == null || typeof (res.body as any).token !== 'string') {
+		throw new Error(`createAppToken failed status=${res.status} body=${inspect(res.body, { depth: 5 })}`);
+	}
 	return (res.body as misskey.entities.MiauthGenTokenResponse).token;
 };
 
@@ -267,6 +310,21 @@ export const channel = async (user: UserToken, channel: Partial<misskey.entities
 };
 
 export const role = async (user: UserToken, role: Partial<misskey.entities.Role> = {}, policies: any = {}): Promise<misskey.entities.Role> => {
+	// Role policies must be { priority, useDefault, value } — bare booleans fail AJV.
+	const shaped: Record<string, { priority: number; useDefault: boolean; value: unknown }> = Object.fromEntries(
+		Object.entries(DEFAULT_POLICIES).map(([k, v]) => [k, {
+			priority: 0,
+			useDefault: true,
+			value: v,
+		}]),
+	);
+	for (const [k, v] of Object.entries(policies ?? {})) {
+		if (v != null && typeof v === 'object' && 'useDefault' in (v as object)) {
+			shaped[k] = v as any;
+		} else {
+			shaped[k] = { priority: 0, useDefault: false, value: v };
+		}
+	}
 	const res = await api('admin/roles/create', {
 		asBadge: false,
 		canEditMembersByModerator: false,
@@ -283,16 +341,12 @@ export const role = async (user: UserToken, role: Partial<misskey.entities.Role>
 		isPublic: false,
 		name: 'New Role',
 		target: 'manual',
-		policies: {
-			...Object.entries(DEFAULT_POLICIES).map(([k, v]) => [k, {
-				priority: 0,
-				useDefault: true,
-				value: v,
-			}]),
-			...policies,
-		},
+		policies: shaped,
 		...role,
 	}, user);
+	if (res.status !== 200 || res.body == null) {
+		throw new Error(`role create failed status=${res.status} body=${inspect(res.body, { depth: 5 })}`);
+	}
 	return res.body;
 };
 
@@ -413,32 +467,41 @@ export function connectStream<C extends keyof misskey.Channels>(user: UserToken,
 export const waitFire = async <C extends keyof misskey.Channels>(user: UserToken, channel: C, trgr: () => any, cond: (msg: Record<string, any>) => boolean, params?: misskey.Channels[C]['params']) => {
 	return new Promise<boolean>(async (res, rej) => {
 		let timer: NodeJS.Timeout | null = null;
+		let settled = false;
+
+		const finish = (v: boolean) => {
+			if (settled) return;
+			settled = true;
+			if (timer) clearTimeout(timer);
+			try { ws?.close(); } catch { /* ignore */ }
+			res(v);
+		};
 
 		let ws: WebSocket;
 		try {
 			ws = await connectStream(user, channel, msg => {
 				if (cond(msg)) {
-					ws.close();
-					if (timer) clearTimeout(timer);
-					res(true);
+					finish(true);
 				}
 			}, params);
 		} catch (e) {
-			rej(e);
+			// Connect failure (e.g. 1005) → no event
+			res(false);
+			return;
 		}
 
-		if (!ws!) return;
+		// Let channel subscription fully register before firing the trigger
+		await new Promise(r => setTimeout(r, 200));
 
 		timer = setTimeout(() => {
-			ws.close();
-			res(false);
-		}, 3000);
+			finish(false);
+		}, 15000);
 
 		try {
 			await trgr();
 		} catch (e) {
-			ws.close();
 			if (timer) clearTimeout(timer);
+			try { ws.close(); } catch { /* ignore */ }
 			rej(e);
 		}
 	});
@@ -627,6 +690,82 @@ export async function initTestDb(justBorrow = false, initEntities?: any[]) {
 	await db.initialize();
 
 	return db;
+}
+
+
+/** Poll a notes timeline endpoint until it contains noteId (or timeout). */
+export async function waitForTimelineNote(
+	endpoint: keyof misskey.Endpoints,
+	user: UserToken,
+	noteId: string,
+	parameters: Record<string, unknown> = {},
+	timeoutMs = 15000,
+): Promise<misskey.entities.Note[]> {
+	return waitForTimelineNotes(endpoint, user, [noteId], parameters, timeoutMs);
+}
+
+/** Poll until every noteId is present (post-note fanout is async; first note ≠ all notes). */
+export async function waitForTimelineNotes(
+	endpoint: keyof misskey.Endpoints,
+	user: UserToken,
+	noteIds: string[],
+	parameters: Record<string, unknown> = {},
+	timeoutMs = 15000,
+): Promise<misskey.entities.Note[]> {
+	const start = Date.now();
+	let body: misskey.entities.Note[] = [];
+	const need = new Set(noteIds);
+	while (Date.now() - start < timeoutMs) {
+		const res = await api(endpoint as any, { limit: 100, ...parameters } as any, user);
+		if (res.status === 200 && Array.isArray(res.body)) {
+			body = res.body as misskey.entities.Note[];
+			const have = new Set(body.map(n => n.id));
+			if ([...need].every(id => have.has(id))) return body;
+		}
+		await new Promise(r => setTimeout(r, 200));
+	}
+	return body;
+}
+
+/** Resolve the instance root user for admin e2e calls (signup 'root' fails once preserved). */
+export async function ensureRoot(password = 'test'): Promise<misskey.entities.SignupResponse> {
+	const res = await api('signup', { username: 'root', password });
+	if (res.status === 200 && res.body != null && typeof res.body === 'object' && 'token' in res.body && typeof res.body.token === 'string') {
+		return res.body as misskey.entities.SignupResponse;
+	}
+
+	// Root already exists / username preserved — borrow DB only (never dropSchema).
+	const db = await initTestDb(true);
+	try {
+		const rows: { id: string; username: string; token: string | null }[] = await db.query(
+			`SELECT u.id, u.username, TRIM(u.token) AS token FROM meta m JOIN "user" u ON u.id = m."rootUserId" WHERE m.id = 'x'`,
+		);
+		let row = rows[0];
+		if (row?.token == null || row.token === '') {
+			const fallback: { id: string; username: string; token: string | null }[] = await db.query(
+				`SELECT id, username, TRIM(token) AS token FROM "user" WHERE "usernameLower" = 'root' AND host IS NULL ORDER BY id ASC LIMIT 1`,
+			);
+			row = fallback[0];
+		}
+		if (row == null) {
+			throw new Error(`ensureRoot: no root user (signup status ${res.status} body=${inspect(res.body, { depth: 3 })})`);
+		}
+
+		let token = row.token;
+		// Validate; if native token is dead (char padding / regeneration), mint a fresh 16-char token.
+		const probe = token ? await api('i', {}, { token }) : { status: 401, body: null as any };
+		if (probe.status !== 200 || token == null || token.length !== 16) {
+			const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+			let fresh = '';
+			for (let i = 0; i < 16; i++) fresh += chars[Math.floor(Math.random() * chars.length)];
+			await db.query(`UPDATE "user" SET token = $1 WHERE id = $2`, [fresh, row.id]);
+			token = fresh;
+		}
+		const me = await successfulApiCall({ endpoint: 'i', parameters: {}, user: { token } });
+		return { ...me, token } as misskey.entities.SignupResponse;
+	} finally {
+		await db.destroy();
+	}
 }
 
 export async function sendEnvUpdateRequest(params: { key: string, value?: string }) {

@@ -1146,7 +1146,8 @@ export class ActivityPubServerService {
 	}
 
 	private async getUnsignedFetchAllowance(userId: string | undefined) {
-		const user = userId ? await this.cacheService.findLocalUserById(userId) : null;
+		// optional: missing/malformed user ids must not throw (would become HTTP 500)
+		const user = userId ? await this.cacheService.findOptionalLocalUserById(userId) : null;
 
 		// User system value if there is no user, or if user has deferred the choice.
 		if (!user?.allowUnsignedFetch || user.allowUnsignedFetch === 'staff') {

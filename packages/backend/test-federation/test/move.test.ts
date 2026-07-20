@@ -1,5 +1,5 @@
 import assert, { strictEqual } from 'node:assert';
-import { createAccount, type LoginUser, sleep } from './utils.js';
+import { createAccount, type LoginUser, sleep, ensureFollowing } from './utils.js';
 
 describe('Move', () => {
 	test('Minimum move', async () => {
@@ -24,7 +24,7 @@ describe('Move', () => {
 			carol = await createAccount('a.test');
 
 			// Follow @carol@a.test ==> @alice@a.test
-			await carol.client.request('following/create', { userId: alice.id });
+			await ensureFollowing(carol, alice.id);
 
 			// Move @alice@a.test ==> @bob@b.test
 			await bob.client.request('i/update', { alsoKnownAs: [`@${alice.username}@a.test`] });

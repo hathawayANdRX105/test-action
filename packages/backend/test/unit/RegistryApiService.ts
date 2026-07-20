@@ -71,7 +71,12 @@ describe('RegistryApiService.set', () => {
 			}
 		});
 
-		const orUpdate = jest.fn(function (this: { _values: Partial<Row> }) {
+		const orUpdate = jest.fn(function (
+			this: { _values: Partial<Row> },
+			_columns: string[],
+			_conflict: string[],
+			_opts?: { upsertType: string },
+		) {
 			return {
 				execute: async () => insertExecute(this._values),
 			};
@@ -172,7 +177,7 @@ describe('RegistryApiService.set', () => {
 		});
 
 		const globalEventService = {
-			publishMainStream: jest.fn(async () => undefined),
+			publishMainStream: jest.fn(async (..._args: unknown[]) => undefined),
 		};
 		const timeService = { date: new Date('2026-01-01T00:00:00.000Z') };
 
@@ -294,7 +299,7 @@ describe('RegistryApiService.set', () => {
 		expect(orUpdate.mock.calls.every(call =>
 			call[0][0] === 'updatedAt'
 			&& call[1].includes('domain')
-			&& (call[2] as { upsertType: string }).upsertType === 'on-conflict-do-update',
+			&& call[2]?.upsertType === 'on-conflict-do-update',
 		)).toBe(true);
 		expect(rows.filter(r => r.key === 'race')).toHaveLength(1);
 	});

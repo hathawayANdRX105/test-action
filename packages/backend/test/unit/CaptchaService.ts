@@ -31,7 +31,7 @@ describe('CaptchaService', () => {
 				CoreModule,
 			],
 		})
-			.overrideProvider(HttpRequestService).useValue({ send: jest.fn() })
+			.overrideProvider(HttpRequestService).useValue({ send: jest.fn(), closeResponseBody: jest.fn() })
 			.compile();
 
 		await app.init();

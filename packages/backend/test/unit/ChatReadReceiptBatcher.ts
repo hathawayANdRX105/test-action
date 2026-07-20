@@ -10,7 +10,7 @@ describe('ChatReadReceiptBatcher', () => {
 	test('coalesces reads within the interval', async () => {
 		let now = 0;
 		const scheduledTimers: (() => void)[] = [];
-		const run = jest.fn();
+		const run = jest.fn<() => void | Promise<void>>();
 		const batcher = new ChatReadReceiptBatcher({
 			minIntervalMs: 2000,
 			run,
@@ -43,7 +43,7 @@ describe('ChatReadReceiptBatcher', () => {
 
 	test('flushes one pending read immediately', async () => {
 		let now = 0;
-		const run = jest.fn();
+		const run = jest.fn<() => void | Promise<void>>();
 		const batcher = new ChatReadReceiptBatcher({
 			minIntervalMs: 2000,
 			run,

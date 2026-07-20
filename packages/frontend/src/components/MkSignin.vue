@@ -103,7 +103,7 @@ const waiting = ref(false);
 const passwordPageEl = useTemplateRef('passwordPageEl');
 const needCaptcha = ref(false);
 
-const userInfo = ref<null | Misskey.entities.UserDetailed>(null);
+const userInfo = ref<null | Misskey.entities.UserDetailed | { username: string }>(null);
 const password = ref('');
 
 //#region Passkey Passwordless
@@ -162,13 +162,32 @@ function onUseTotp(): void {
 async function onUsernameSubmitted(username: string) {
 	waiting.value = true;
 
-	userInfo.value = await misskeyApi('users/show', {
-		username,
-	}).catch(() => null);
+	try {
+		const shown = await misskeyApi('users/show', {
+			username,
+		}).catch(() => null);
+		if (shown != null) {
+			userInfo.value = shown;
+		}
 
-	await tryLogin({
-		username,
-	});
+		// signin-flow decides next step; do not invent a user object before the server accepts the username.
+		await tryLogin({
+			username,
+		});
+
+		// Rate-limited users/show can still proceed; keep username for password/totp pages only after success.
+		if (userInfo.value == null) {
+			userInfo.value = { username };
+		}
+	} catch {
+		// tryLogin already surfaces errors via onSigninApiError
+	} finally {
+		if (waiting.value) {
+			nextTick(() => {
+				waiting.value = false;
+			});
+		}
+	}
 }
 
 async function onPasswordSubmitted(pw: PwResponse) {
@@ -290,6 +309,11 @@ async function onLoginSucceeded(res: Misskey.entities.SigninFlowResponse & { fin
 
 function onSigninApiError(err?: any): void {
 	const id = err?.id ?? null;
+	if (err?.code === 'ACCOUNT_SUSPENDED') {
+		showSuspendedDialog();
+		waiting.value = false;
+		return;
+	}
 
 	switch (id) {
 		case '6cc579cc-885d-43d8-95c2-b8c7fc963280': {
@@ -308,7 +332,8 @@ function onSigninApiError(err?: any): void {
 			});
 			break;
 		}
-		case 'e03a5f46-d309-4865-9b69-56282d94e1eb': {
+		case 'e03a5f46-d309-4865-9b69-56282d94e1eb':
+		case 'a8c724b3-6e9c-4b46-b1a8-bc3ed6258370': { // ACCOUNT_SUSPENDED (ServerUtilityService)
 			showSuspendedDialog();
 			break;
 		}

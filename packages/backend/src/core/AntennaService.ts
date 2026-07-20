@@ -44,19 +44,20 @@ export class AntennaService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	private async onAntennaEvent<E extends 'antennaCreated' | 'antennaUpdated' | 'antennaDeleted'>(body: InternalEventTypes[E], type: E): Promise<void> {
-		{
-			{
-				if (type !== 'antennaDeleted') {
-					this.antennas.set(body.id, { // TODO: このあたりのデシリアライズ処理は各modelファイル内に関数としてexportしたい
-						...body,
-						lastUsedAt: new Date(body.lastUsedAt),
-						user: null, // joinなカラムは通常取ってこないので
-						userList: null, // joinなカラムは通常取ってこないので
-					});
-				} else {
-					this.antennas.delete(body.id);
-				}
-			}
+		// Ensure cache is warm so a concurrent getAntennas() does not wipe a just-created entry
+		// with a slightly-stale DB snapshot under e2e load.
+		if (!this.antennasFetched) {
+			await this.getAntennas();
+		}
+		if (type !== 'antennaDeleted') {
+			this.antennas.set(body.id, { // TODO: このあたりのデシリアライズ処理は各modelファイル内に関数としてexportしたい
+				...body,
+				lastUsedAt: new Date(body.lastUsedAt),
+				user: null, // joinなカラムは通常取ってこないので
+				userList: null, // joinなカラムは通常取ってこないので
+			});
+		} else {
+			this.antennas.delete(body.id);
 		}
 	}
 
@@ -198,7 +199,12 @@ export class AntennaService implements OnModuleInit, OnApplicationShutdown {
 			const allAntennas = await this.antennasRepository.findBy({
 				isActive: true,
 			});
-			this.antennas = new Map(allAntennas.map(a => [a.id, a]));
+			// Preserve any entries already inserted by concurrent antennaCreated handlers
+			for (const a of allAntennas) {
+				if (!this.antennas.has(a.id)) {
+					this.antennas.set(a.id, a);
+				}
+			}
 			this.antennasFetched = true;
 		}
 

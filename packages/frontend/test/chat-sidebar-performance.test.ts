@@ -25,7 +25,7 @@ describe('chat sidebar realtime refresh', () => {
 	});
 
 	test('keeps room stream recovery as a low-frequency safety net while connected', () => {
-		assert.match(roomSource, /const STREAM_RECOVERY_POLL_INTERVAL_MS = 1000 \* 60 \* 5;/);
+		assert.match(roomSource, /const STREAM_RECOVERY_POLL_INTERVAL_MS = 1000 \* 30;/);
 		assert.match(roomSource, /const STREAM_RECOVERY_ERROR_RETRY_MS = 5000;/);
 	});
 });
