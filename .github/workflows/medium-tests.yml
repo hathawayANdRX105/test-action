@@ -234,9 +234,8 @@ jobs:
   federation:
     name: Federation integration tests
     needs: detect-changes
-    # Parked: known-red AP/follow suite (Issue #9). Resume after dependency refactor.
-    # Keep job id so validation-gate needs: still resolves; force skip so PR checks stay green.
-    if: ${{ false }}
+    # Deferred fix for #11 — re-enabled on this draft branch to record the red suite.
+    if: ${{ needs.detect-changes.outputs.federation == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -386,8 +385,7 @@ jobs:
               "backend-api-e2e": os.environ["SCOPE_BACKEND_E2E"] == "true",
               "frontend-unit": os.environ["SCOPE_FRONTEND"] == "true",
               "frontend-typecheck": os.environ["SCOPE_FRONTEND"] == "true",
-              # Federation parked (known red); never required for PR Validation land.
-              "federation": False,
+              "federation": os.environ["SCOPE_FEDERATION"] == "true",
               "container-smoke": os.environ["SCOPE_CONTAINER"] == "true",
           }
 
