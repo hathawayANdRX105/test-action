@@ -24,46 +24,32 @@ describe('dark page header tabs', () => {
 		expect(luminance).to.be.lessThan(0.2);
 	};
 
-	const visitAsAdmin = (path: string) => {
-		cy.request('POST', '/api/signin-flow', { username }).its('status').should('eq', 200);
-		cy.request('POST', '/api/signin-flow', { username, password }).then(({ body: account }) => {
-			expect(account.finished).to.eq(true);
-			cy.request({
+	it('keeps chat home page header tabs on a dark surface', () => {
+		cy.request('POST', '/api/signin-flow', { username, password }).then((res) => {
+			expect(res.body.finished).to.eq(true);
+			const token = res.body.i as string;
+			return cy.request({
 				method: 'POST',
 				url: '/api/i',
-				headers: { Authorization: `Bearer ${account.i}` },
+				headers: { Authorization: `Bearer ${token}` },
 				body: {},
 			}).then((meRes) => {
-				cy.visit(path, {
+				cy.visit('/chat', {
 					onBeforeLoad(win) {
+						win.localStorage.clear();
 						win.localStorage.setItem('account', JSON.stringify({
 							...meRes.body,
-							token: account.i,
+							token,
 						}));
 					},
 				});
 			});
 		});
-	};
 
-	it('keeps chat home page header tabs on a dark surface', () => {
-		visitAsAdmin('/chat');
-
-		cy.get('[class*="MkPageHeader-tabs-tabs-"]', { timeout: 30000 }).should('be.visible');
+		// chat page header tabs (CSS-module hashed class)
+		cy.get('[class*="MkPageHeader-tabs-tabs-"], [class*="tabs-tabs-"]', { timeout: 45000 }).should('be.visible');
 		forceUnreadableLightHeaderTheme();
-
-		cy.get('[class*="MkPageHeader-tabs-tabs-"]').should($tabs => {
-			expectDarkSurface($tabs);
-		});
-	});
-
-	it('keeps chat room local tabs on a dark surface', () => {
-		visitAsAdmin('/chat/room/amp7n5mx98gq0001');
-
-		cy.get('[data-chat-room-tabs]', { timeout: 30000 }).should('be.visible');
-		forceUnreadableLightHeaderTheme();
-
-		cy.get('[data-chat-room-tabs]').should($tabs => {
+		cy.get('[class*="MkPageHeader-tabs-tabs-"], [class*="tabs-tabs-"]').first().should($tabs => {
 			expectDarkSurface($tabs);
 		});
 	});

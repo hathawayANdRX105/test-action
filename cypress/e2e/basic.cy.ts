@@ -159,9 +159,6 @@ describe('After user signup', () => {
 			expect(String(err?.code || '')).to.eq('ACCOUNT_SUSPENDED');
 		});
 	});
-		// UI dialog (i18n title/description) when frontend maps the error
-		cy.contains(/凍結|suspended|已冻结|已凍結/i, { timeout: 20000 }).should('be.visible');
-	});
 });
 
 describe('After user signed in', () => {

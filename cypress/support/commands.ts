@@ -78,17 +78,14 @@ Cypress.Commands.add('registerUser', (username, password, isAdmin = false) => {
 	}
 });
 
-// API login — UI signin flow is multi-step + captcha-branch flaky under Cypress.
+// API login — UI multi-step is flaky; captcha is skipped when NODE_ENV=test.
 Cypress.Commands.add('login', (username, password) => {
-	// signin-flow step 1 (username only) then step 2 (password); captcha skipped in NODE_ENV=test
-	cy.request('POST', '/api/signin-flow', { username }).its('status').should('eq', 200);
 	cy.request('POST', '/api/signin-flow', { username, password }).then((res) => {
 		expect(res.status).to.eq(200);
 		expect(res.body.finished, 'signin finished').to.eq(true);
 		const token = res.body.i as string;
 		expect(token).to.be.a('string');
-
-		cy.request({
+		return cy.request({
 			method: 'POST',
 			url: '/api/i',
 			headers: { Authorization: `Bearer ${token}` },
@@ -96,13 +93,14 @@ Cypress.Commands.add('login', (username, password) => {
 		}).then((meRes) => {
 			expect(meRes.status).to.eq(200);
 			const account = { ...meRes.body, token };
-			cy.visit('/', {
+			return cy.visit('/', {
 				onBeforeLoad(win) {
+					win.localStorage.clear();
 					win.localStorage.setItem('account', JSON.stringify(account));
 				},
 			});
-			// signed-in shell: setup wizard or main chrome
-			cy.get('[data-cy-user-setup-continue], [data-cy-open-post-form], button', { timeout: 30000 }).should('exist');
 		});
+	}).then(() => {
+		cy.get('[data-cy-user-setup-continue], [data-cy-open-post-form]', { timeout: 30000 }).should('exist');
 	});
 });

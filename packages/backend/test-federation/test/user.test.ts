@@ -288,7 +288,10 @@ describe('User', () => {
 			describe('Bob sends follow request to Alice', () => {
 				beforeAll(async () => {
 					await bob.client.request('following/create', { userId: aliceInB.id });
-					await sleep();
+					await waitUntil(async () => {
+						const requests = await alice.client.request('following/requests/list', {});
+						return requests.length >= 1;
+					});
 				});
 
 				test('Alice should have a request', async () => {
@@ -315,7 +318,10 @@ describe('User', () => {
 		describe('Send follow request from Bob to Alice and reject', () => {
 			beforeAll(async () => {
 				await bob.client.request('following/create', { userId: aliceInB.id });
-				await sleep();
+				await waitUntil(async () => {
+					const requests = await alice.client.request('following/requests/list', {});
+					return requests.some(r => r.follower.id === bobInA.id);
+				});
 
 				await alice.client.request('following/requests/reject', { userId: bobInA.id });
 				await sleep();
@@ -340,7 +346,10 @@ describe('User', () => {
 		describe('Send follow request from Bob to Alice and accept', () => {
 			beforeAll(async () => {
 				await bob.client.request('following/create', { userId: aliceInB.id });
-				await sleep();
+				await waitUntil(async () => {
+					const requests = await alice.client.request('following/requests/list', {});
+					return requests.some(r => r.follower.id === bobInA.id);
+				});
 
 				await alice.client.request('following/requests/accept', { userId: bobInA.id });
 				await sleep();
