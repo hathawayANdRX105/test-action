@@ -112,9 +112,11 @@ export abstract class NoteChannel extends Channel {
 	 */
 	@bindThis
 	protected async prepareNote(note: Packed<'Note'>): Promise<Packed<'Note'> | null> {
+		// Omit userMutedInstances from hint so visibility always reloads muted
+		// instances from profile cache (mid-session i/update must take effect even
+		// if the WS connection set has not yet observed the quantum cache event).
 		const { accessible, silence } = await this.noteVisibilityService.checkNoteVisibilityAsync(note, this.user, {
 			hint: {
-				userMutedInstances: this.userMutedInstances,
 				userMutedThreads: this.userMutedThreads,
 				userMutedNotes: this.userMutedNotes,
 			},

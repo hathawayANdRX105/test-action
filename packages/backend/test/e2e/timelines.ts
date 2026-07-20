@@ -961,9 +961,10 @@ describe('Timelines', () => {
 				timelineMode: 'recommended',
 			} as any, alice);
 
-			const ids = res.body.map(note => note.id);
-			assert.ok(ids.indexOf(recommendedNote.id) >= 0);
-			assert.ok(ids.indexOf(plainNote.id) >= 0);
+			// Concurrent Local TL tests share the global LTL; only compare bob's notes.
+			const ids = res.body.filter((note: { userId: string }) => note.userId === bob.id).map((note: { id: string }) => note.id);
+			assert.ok(ids.indexOf(recommendedNote.id) >= 0, `recommended missing in ${ids}`);
+			assert.ok(ids.indexOf(plainNote.id) >= 0, `plain missing in ${ids}`);
 			assert.ok(ids.indexOf(recommendedNote.id) < ids.indexOf(plainNote.id));
 		});
 	});
