@@ -2,6 +2,7 @@ name: CI - PR Validation
 
 # Always starts on every PR (do NOT use workflow-level paths: filters).
 # Job-level if skips unrelated work so required checks never stay pending.
+# Backend API e2e is path-selective and can run 2 concurrent Jest shards.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -21,11 +22,20 @@ jobs:
     timeout-minutes: 5
     outputs:
       backend: ${{ steps.scopes.outputs.backend }}
+      backend_unit: ${{ steps.scopes.outputs.backend_unit }}
+      backend_typecheck: ${{ steps.scopes.outputs.backend_typecheck }}
+      backend_api_e2e: ${{ steps.scopes.outputs.backend_api_e2e }}
       frontend: ${{ steps.scopes.outputs.frontend }}
       federation: ${{ steps.scopes.outputs.federation }}
       container: ${{ steps.scopes.outputs.container }}
       shared: ${{ steps.scopes.outputs.shared }}
       all: ${{ steps.scopes.outputs.all }}
+      e2e_stream: ${{ steps.scopes.outputs.e2e_stream }}
+      e2e_timeline: ${{ steps.scopes.outputs.e2e_timeline }}
+      e2e_api: ${{ steps.scopes.outputs.e2e_api }}
+      e2e_shard_total: ${{ steps.scopes.outputs.e2e_shard_total }}
+      e2e_shards: ${{ steps.scopes.outputs.e2e_shards }}
+      e2e_patterns: ${{ steps.scopes.outputs.e2e_patterns }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -35,12 +45,11 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
-          BEFORE: ${{ github.event.before }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            # Manual run: full selective suite (not browser e2e).
+            # Manual: full validation suite (unit + typecheck + full e2e shards + frontend)
             printf '%s\n' \
               packages/backend/src/dummy.ts \
               packages/frontend/src/dummy.ts \
@@ -53,11 +62,13 @@ jobs:
           git fetch --no-tags --depth=1 origin "$BASE_REF"
           git diff --name-only "origin/${BASE_REF}...${SHA}" \
             | python3 scripts/ci-changed-scopes.py --github-output
+          echo "scopes:" 
+          cat "$GITHUB_OUTPUT" || true
 
   backend-unit:
     name: Backend unit tests
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.backend == 'true' }}
+    if: ${{ needs.detect-changes.outputs.backend_unit == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
@@ -121,7 +132,7 @@ jobs:
   backend-typecheck:
     name: Backend type check
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.backend == 'true' }}
+    if: ${{ needs.detect-changes.outputs.backend_typecheck == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -146,10 +157,15 @@ jobs:
       - uses: ./.github/actions/setup-ci
       - run: pnpm --filter frontend typecheck
 
+  # Path-selective API e2e, concurrent shards when e2e_shard_total=2.
   backend-api-e2e:
-    name: Backend API integration tests
+    name: Backend API e2e (${{ matrix.shard }}/${{ needs.detect-changes.outputs.e2e_shard_total }})
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.backend == 'true' }}
+    if: ${{ needs.detect-changes.outputs.backend_api_e2e == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.detect-changes.outputs.e2e_shards) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
@@ -184,6 +200,8 @@ jobs:
       MK_CONFIG_REDISFORTIMELINES_HOST: 127.0.0.1
       MK_CONFIG_REDISFORREACTIONS_HOST: 127.0.0.1
       MK_CONFIG_REDISFORRATELIMIT_HOST: 127.0.0.1
+      E2E_PATTERNS: ${{ needs.detect-changes.outputs.e2e_patterns }}
+      E2E_SHARD_TOTAL: ${{ needs.detect-changes.outputs.e2e_shard_total }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -196,8 +214,22 @@ jobs:
           echo 'clusterLimit: 1' >> .config/test.yml
       - name: Build backend API test prerequisites
         run: pnpm --filter backend build:pre
-      - name: Run backend API tests
-        run: pnpm --filter backend test:e2e
+      - name: Run selective backend API e2e
+        working-directory: packages/backend
+        run: |
+          set -euo pipefail
+          # build:pre already ran; build backend + test-server then jest e2e
+          pnpm run build
+          pnpm run build:test
+          extra=()
+          if [ -n "${E2E_PATTERNS:-}" ]; then
+            extra+=(--testPathPatterns="${E2E_PATTERNS}")
+          fi
+          if [ "${E2E_SHARD_TOTAL}" -gt 1 ]; then
+            extra+=(--shard="${{ matrix.shard }}/${E2E_SHARD_TOTAL}")
+          fi
+          echo "jest e2e args: ${extra[*]:-all-files}"
+          pnpm exec cross-env NODE_ENV=test node ./jest.js --forceExit --config jest.config.e2e.ts "${extra[@]}"
 
   federation:
     name: Federation integration tests
@@ -330,7 +362,9 @@ jobs:
       - name: Accept success or expected skip
         env:
           NEEDS: ${{ toJSON(needs) }}
-          SCOPE_BACKEND: ${{ needs.detect-changes.outputs.backend }}
+          SCOPE_BACKEND_UNIT: ${{ needs.detect-changes.outputs.backend_unit }}
+          SCOPE_BACKEND_TYPE: ${{ needs.detect-changes.outputs.backend_typecheck }}
+          SCOPE_BACKEND_E2E: ${{ needs.detect-changes.outputs.backend_api_e2e }}
           SCOPE_FRONTEND: ${{ needs.detect-changes.outputs.frontend }}
           SCOPE_FEDERATION: ${{ needs.detect-changes.outputs.federation }}
           SCOPE_CONTAINER: ${{ needs.detect-changes.outputs.container }}
@@ -345,9 +379,9 @@ jobs:
               sys.exit(1)
 
           required = {
-              "backend-unit": os.environ["SCOPE_BACKEND"] == "true",
-              "backend-typecheck": os.environ["SCOPE_BACKEND"] == "true",
-              "backend-api-e2e": os.environ["SCOPE_BACKEND"] == "true",
+              "backend-unit": os.environ["SCOPE_BACKEND_UNIT"] == "true",
+              "backend-typecheck": os.environ["SCOPE_BACKEND_TYPE"] == "true",
+              "backend-api-e2e": os.environ["SCOPE_BACKEND_E2E"] == "true",
               "frontend-unit": os.environ["SCOPE_FRONTEND"] == "true",
               "frontend-typecheck": os.environ["SCOPE_FRONTEND"] == "true",
               "federation": os.environ["SCOPE_FEDERATION"] == "true",
@@ -358,6 +392,7 @@ jobs:
           for name, must_run in required.items():
               result = needs[name]["result"]
               if must_run:
+                  # matrix jobs: success only if all shards succeeded
                   if result != "success":
                       bad[name] = result
               else:
