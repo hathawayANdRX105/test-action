@@ -7,15 +7,13 @@ services:
     extends:
       file: ./compose.tpl.yml
       service: misskey
+    # Host node_modules bind-mounted (compose.override.yaml). No in-container install.
     command: >
       bash -c "
-        npm install -g pnpm
-        pnpm -F backend i
-        pnpm -F misskey-js i
-        pnpm -F megalodon i
-        pnpm -F misskey-reversi i
-        # fetch-blob optional peer used at runtime; filtered installs omit it.
-        pnpm add -w node-domexception@1.0.0
+        test -d /misskey/node_modules
+        test -d /misskey/packages/backend/node_modules
+        test -e /misskey/packages/backend/node_modules/@misskey-dev/summaly || test -e /misskey/node_modules/@misskey-dev/summaly
+        echo 'federation setup: host node_modules OK'
       "
 
   tester:
@@ -90,14 +88,8 @@ services:
         target: /usr/local/share/ca-certificates/rootCA.crt
         read_only: true
     working_dir: /misskey
-    entrypoint: >
-      bash -c '
-        npm install -g pnpm
-        pnpm -F misskey-js i --frozen-lockfile
-        pnpm -F backend i --frozen-lockfile
-        exec "$0" "$@"
-      '
-    command: pnpm -F backend jest:fed
+    entrypoint: ["bash", "-lc"]
+    command: ["corepack enable && corepack prepare pnpm@10.26.2 --activate && pnpm -F backend jest:fed"]
   daemon:
     image: node:${NODE_VERSION}
     depends_on:
@@ -140,7 +132,6 @@ services:
     command: >
       bash -c "
         npm install -g pnpm
-        pnpm -F backend i --frozen-lockfile
         pnpm exec tsc -p ./packages/backend/test-federation
         node ./packages/backend/test-federation/built/daemon.js
       "

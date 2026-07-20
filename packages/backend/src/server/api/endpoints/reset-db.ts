@@ -6,25 +6,24 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { type DataSource, IsNull, Not } from 'typeorm';
 import * as Redis from 'ioredis';
-import type { MetasRepository } from '@/models/_.js';
+import type { MetasRepository, MiMeta } from '@/models/_.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { resetDb } from '@/misc/reset-db.js';
-import { MetaService } from '@/core/MetaService.js';
-import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { EnvService } from '@/global/EnvService.js';
+import { InternalEventService } from '@/global/InternalEventService.js';
 import { ApiError } from '../error.js';
 
 export const meta = {
 	tags: ['non-productive'],
 
-	// Cypress and e2e harness call this without a token under NODE_ENV=test.
+	// Cypress posts without a token under NODE_ENV=test; runtime still gates on NODE_ENV.
 	requireCredential: false,
 	requireAdmin: false,
 	kind: 'write:admin:meta',
 
-	description: 'Only available when running with <code>NODE_ENV=testing</code>. Reset the database and flush Redis.',
+	description: 'Only available when running with <code>NODE_ENV=test</code>. Reset the database and flush Redis.',
 
 	errors: {
 		unavailable: {
@@ -61,13 +60,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.metasRepository)
 		private readonly metasRepository: MetasRepository,
 
+		@Inject(DI.meta)
+		private readonly instanceMeta: MiMeta,
+
 		private loggerService: LoggerService,
-		private metaService: MetaService,
-		private globalEventService: GlobalEventService,
+		private readonly internalEventService: InternalEventService,
 
 		envService: EnvService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async () => {
 			if (envService.env.NODE_ENV !== 'test') throw new ApiError(meta.errors.unavailable);
 
 			const logger = this.loggerService.getLogger('reset-db');
@@ -76,18 +77,22 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			await this.redisClient.flushdb();
 			await resetDb(this.db);
 
-			// resetDb wipes meta; reseed defaults (same as GlobalModule.fetchMeta).
-			// Column default disableRegistration=true hides Cypress signup; open it for tests.
+			// resetDb wipes meta; reseed defaults. Open registration so Cypress visitor signup shows.
 			await this.metasRepository.upsert({ id: 'x', disableRegistration: false }, ['id']);
 			const after = await this.metasRepository.findOneOrFail({ where: { id: Not(IsNull()) }, order: { id: 'DESC' } });
-			// DI meta instance does not see the wipe; push the reseeded row through MetaService.
-			await this.metaService.update(after);
+
+			// Refresh in-process DI meta (MetaService.update is for partial field patches, not full reseed).
+			const before = Object.assign({}, this.instanceMeta);
+			Object.assign(this.instanceMeta, after);
+			await this.internalEventService.emit('metaUpdated', { before, after });
 
 			logger.info('---- Database reset complete.');
 
 			// Ignore rule - this is just testing code.
 			// eslint-disable-next-line no-restricted-globals
-			await new Promise(resolve => setTimeout(resolve, 1000));
+			const { promise, resolve } = Promise.withResolvers<void>();
+			setTimeout(resolve, 1000);
+			await promise;
 		});
 	}
 }
