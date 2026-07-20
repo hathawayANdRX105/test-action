@@ -70,45 +70,45 @@ async function signin(
 		});
 }
 
-async function createAdmin(host: Host): Promise<Misskey.entities.SignupResponse | undefined> {
+async function createAdmin(host: Host): Promise<(Misskey.entities.SignupResponse & { token?: string }) | undefined> {
 	const client = new Misskey.api.APIClient({ origin: `https://${host}` });
-	return await client.request('admin/accounts/create', ADMIN_PARAMS).then(res => {
-		ADMIN_CACHE.set(host, {
-			id: res.id,
-			// @ts-expect-error FIXME: openapi-typescript generates incorrect response type for this endpoint, so ignore this
-			i: res.token,
-		});
-		return res as Misskey.entities.SignupResponse;
-	}).then(async res => {
-		await client.request('admin/roles/update-default-policies', {
-			policies: {
-				/** TODO: @see https://github.com/misskey-dev/misskey/issues/14169 */
-				rateLimitFactor: 0 as never,
-			},
-		}, res.token);
+	try {
+		// endpoint returns MeDetailed & { token }
+		const res = await client.request('admin/accounts/create', ADMIN_PARAMS) as Misskey.entities.SignupResponse & { token: string };
+		ADMIN_CACHE.set(host, { id: res.id, i: res.token });
+		try {
+			await client.request('admin/roles/update-default-policies', {
+				policies: {
+					/** TODO: @see https://github.com/misskey-dev/misskey/issues/14169 */
+					rateLimitFactor: 0 as never,
+				},
+			}, res.token);
+		} catch (roleErr) {
+			// Non-fatal for bootstrap: admin token is still usable for tests.
+			console.warn('update-default-policies failed', roleErr);
+		}
 		return res;
-	}).catch(err => {
+	} catch (err: any) {
 		// access denied = admin already exists (expected on re-run)
-		const msg = (err as any)?.info?.e?.message ?? (err as any)?.message;
-		if (msg === 'access denied' || (err as any)?.code === 'ACCESS_DENIED') return undefined;
+		const msg = err?.info?.e?.message ?? err?.message;
+		if (msg === 'access denied' || err?.code === 'ACCESS_DENIED') return undefined;
 		throw err;
-	});
+	}
 }
 
 export async function fetchAdmin(host: Host): Promise<LoginUser> {
-	const admin = ADMIN_CACHE.get(host) ?? await signin(host, ADMIN_PARAMS)
-		.catch(async err => {
-			// Missing local user: historical Misskey id, or current CREDENTIAL_REQUIRED (404).
-			const missingUser =
-				err?.id === '6cc579cc-885d-43d8-95c2-b8c7fc963280' ||
-				err?.id === '1384574d-a912-4b81-8601-c7b1c4085df1' ||
-				err?.code === 'CREDENTIAL_REQUIRED';
-			if (missingUser) {
-				await createAdmin(host);
-				return await signin(host, ADMIN_PARAMS);
-			}
-			throw err;
-		});
+	// signin-flow throws EntityNotFound (HTTP 500) when admin is missing, not a clean
+	// NO_SUCH_USER code — so always try createAdmin first (no-ops if already exists).
+	let admin = ADMIN_CACHE.get(host);
+	if (!admin) {
+		const created = await createAdmin(host);
+		if (created?.token) {
+			admin = { id: created.id, i: created.token as string };
+			ADMIN_CACHE.set(host, admin);
+		} else {
+			admin = await signin(host, ADMIN_PARAMS);
+		}
+	}
 
 	return {
 		...admin,

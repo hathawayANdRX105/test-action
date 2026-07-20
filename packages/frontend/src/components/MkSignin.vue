@@ -290,6 +290,11 @@ async function onLoginSucceeded(res: Misskey.entities.SigninFlowResponse & { fin
 
 function onSigninApiError(err?: any): void {
 	const id = err?.id ?? null;
+	if (err?.code === 'ACCOUNT_SUSPENDED') {
+		showSuspendedDialog();
+		waiting.value = false;
+		return;
+	}
 
 	switch (id) {
 		case '6cc579cc-885d-43d8-95c2-b8c7fc963280': {
@@ -308,7 +313,8 @@ function onSigninApiError(err?: any): void {
 			});
 			break;
 		}
-		case 'e03a5f46-d309-4865-9b69-56282d94e1eb': {
+		case 'e03a5f46-d309-4865-9b69-56282d94e1eb':
+		case 'a8c724b3-6e9c-4b46-b1a8-bc3ed6258370': { // ACCOUNT_SUSPENDED (ServerUtilityService)
 			showSuspendedDialog();
 			break;
 		}
