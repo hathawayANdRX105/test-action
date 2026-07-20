@@ -11,10 +11,17 @@ const __dirname = dirname(__filename);
 export const ADMIN_PARAMS = { username: 'admin', password: 'admin' };
 const ADMIN_CACHE = new Map<Host, SigninResponse>();
 
-await Promise.all([
-	fetchAdmin('a.test'),
-	fetchAdmin('b.test'),
-]);
+try {
+	await Promise.all([
+		fetchAdmin('a.test'),
+		fetchAdmin('b.test'),
+	]);
+} catch (err) {
+	// Jest serializes fetch/TLS failures poorly; surface the real cause for CI logs.
+	console.error('federation bootstrap failed', err);
+	if (err && typeof err === 'object' && 'cause' in err) console.error('cause', (err as { cause: unknown }).cause);
+	throw err;
+}
 
 type SigninResponse = Omit<Misskey.entities.SigninFlowResponse & { finished: true }, 'finished'>;
 
@@ -81,7 +88,8 @@ async function createAdmin(host: Host): Promise<Misskey.entities.SignupResponse 
 		}, res.token);
 		return res;
 	}).catch(err => {
-		if (err.info.e.message === 'access denied') return undefined;
+		// access denied = admin already exists (expected on re-run)
+		if (err && typeof err === 'object' && 'info' in err && (err as any).info?.e?.message === 'access denied') return undefined;
 		throw err;
 	});
 }

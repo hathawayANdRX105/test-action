@@ -42,6 +42,9 @@ export class MetaService {
 		// Propagate changes to hiddenTags
 		await this.persistTags(before, after);
 
+		// Keep the shared DI meta object current for this process before broadcasting.
+		Object.assign(this.meta, after);
+
 		// Propagate changes to other instances.
 		// (do this last to make sure listeners get the results of persistBlocks / persistTags)
 		await this.internalEventService.emit('metaUpdated', { before, after });

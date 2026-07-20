@@ -30,6 +30,7 @@ services:
     environment:
       - NODE_ENV=development
       - NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/rootCA.crt
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     volumes:
       - type: bind
         source: ../package.json
@@ -89,7 +90,7 @@ services:
         read_only: true
     working_dir: /misskey
     entrypoint: ["bash", "-lc"]
-    command: ["corepack enable && corepack prepare pnpm@10.26.2 --activate && pnpm -F backend jest:fed"]
+    command: ["cp /usr/local/share/ca-certificates/rootCA.crt /usr/local/share/ca-certificates/misskey-rootCA.crt 2>/dev/null || true; (command -v update-ca-certificates >/dev/null && update-ca-certificates) || true; corepack enable && corepack prepare pnpm@10.26.2 --activate && pnpm -F backend jest:fed"]
   daemon:
     image: node:${NODE_VERSION}
     depends_on:

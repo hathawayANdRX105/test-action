@@ -38,6 +38,12 @@ Cypress.Commands.add('resetState', () => {
 		onBeforeLoad(win) {
 			win.localStorage.clear();
 			win.sessionStorage.clear();
+			// belt-and-suspenders: miLocalStorage keys that control UI
+			try {
+				win.localStorage.removeItem('account');
+				win.localStorage.removeItem('instance');
+				win.localStorage.removeItem('instanceCachedAt');
+			} catch { /* ignore */ }
 		},
 	});
 	// Setup wizard (no root user) or visitor dashboard (after admin exists)
@@ -52,6 +58,13 @@ Cypress.Commands.add('registerUser', (username, password, isAdmin = false) => {
 		password: password,
 		...(isAdmin ? { setupPassword: 'example_password_please_change_this_or_you_will_get_hacked' } : {}),
 	}).its('body').as(username);
+
+	// First admin flips requireSetup; wait until API reflects it before visiting UI.
+	if (isAdmin) {
+		cy.request('POST', '/api/meta', { detail: true })
+			.its('body.requireSetup')
+			.should('eq', false);
+	}
 });
 
 Cypress.Commands.add('login', (username, password) => {
