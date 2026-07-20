@@ -1,6 +1,6 @@
 import assert, { rejects, strictEqual } from 'node:assert';
 import type * as Misskey from 'misskey-js';
-import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep } from './utils.js';
+import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, waitUntil } from './utils.js';
 
 const [aAdmin, bAdmin] = await Promise.all([
 	fetchAdmin('a.test'),
@@ -347,6 +347,10 @@ describe('User', () => {
 			});
 
 			test('Bob follows Alice', async () => {
+				await waitUntil(async () => {
+					const following = await bob.client.request('users/following', { userId: bob.id });
+					return following.length === 1 && following[0].followeeId === aliceInB.id;
+				});
 				const following = await bob.client.request('users/following', { userId: bob.id });
 				strictEqual(following.length, 1);
 				strictEqual(following[0].followeeId, aliceInB.id);

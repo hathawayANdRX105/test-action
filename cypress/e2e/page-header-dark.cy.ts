@@ -1,6 +1,11 @@
 describe('dark page header tabs', () => {
-	const username = Cypress.env('loginUser') ?? 'admin';
-	const password = Cypress.env('loginPassword') ?? 'admin1234';
+	const username = 'admin';
+	const password = 'admin1234';
+
+	before(() => {
+		cy.resetState();
+		cy.registerUser(username, password, true);
+	});
 
 	const forceUnreadableLightHeaderTheme = () => {
 		cy.window().then(win => {
@@ -19,20 +24,30 @@ describe('dark page header tabs', () => {
 		expect(luminance).to.be.lessThan(0.2);
 	};
 
-	it('keeps chat home page header tabs on a dark surface', () => {
-		cy.request('POST', '/api/signin-flow', {
-			username,
-			password,
-		}).then(({ body: account }) => {
-			cy.visit('/chat', {
-				onBeforeLoad(win) {
-					win.localStorage.setItem('account', JSON.stringify({
-						...account,
-						token: account.i,
-					}));
-				},
+	const visitAsAdmin = (path: string) => {
+		cy.request('POST', '/api/signin-flow', { username }).its('status').should('eq', 200);
+		cy.request('POST', '/api/signin-flow', { username, password }).then(({ body: account }) => {
+			expect(account.finished).to.eq(true);
+			cy.request({
+				method: 'POST',
+				url: '/api/i',
+				headers: { Authorization: `Bearer ${account.i}` },
+				body: {},
+			}).then((meRes) => {
+				cy.visit(path, {
+					onBeforeLoad(win) {
+						win.localStorage.setItem('account', JSON.stringify({
+							...meRes.body,
+							token: account.i,
+						}));
+					},
+				});
 			});
 		});
+	};
+
+	it('keeps chat home page header tabs on a dark surface', () => {
+		visitAsAdmin('/chat');
 
 		cy.get('[class*="MkPageHeader-tabs-tabs-"]', { timeout: 30000 }).should('be.visible');
 		forceUnreadableLightHeaderTheme();
@@ -43,19 +58,7 @@ describe('dark page header tabs', () => {
 	});
 
 	it('keeps chat room local tabs on a dark surface', () => {
-		cy.request('POST', '/api/signin-flow', {
-			username,
-			password,
-		}).then(({ body: account }) => {
-			cy.visit('/chat/room/amp7n5mx98gq0001', {
-				onBeforeLoad(win) {
-					win.localStorage.setItem('account', JSON.stringify({
-						...account,
-						token: account.i,
-					}));
-				},
-			});
-		});
+		visitAsAdmin('/chat/room/amp7n5mx98gq0001');
 
 		cy.get('[data-chat-room-tabs]', { timeout: 30000 }).should('be.visible');
 		forceUnreadableLightHeaderTheme();

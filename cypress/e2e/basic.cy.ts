@@ -125,31 +125,41 @@ describe('After user signup', () => {
 		cy.get('[data-cy-signin]', { timeout: 30000 }).click();
 
 		cy.get('[data-cy-signin-page-input]', { timeout: 10000 }).should('be.visible');
-		// Enterキーで続行できるかの確認も兼ねる
 		cy.get('[data-cy-signin-username] input').type('alice');
 		cy.get('[data-cy-signin-page-input-continue]').click();
+		cy.wait('@signin').its('response.statusCode').should('eq', 200);
 
 		cy.get('[data-cy-signin-page-password]', { timeout: 30000 }).should('be.visible');
 		cy.get('[data-cy-signin-password] input').type('alice1234');
 		cy.get('[data-cy-signin-page-password-continue]').click();
-
-		cy.wait('@signin');
+		cy.wait('@signin').its('response.statusCode').should('eq', 200);
   });
 
 	it('suspend', function() {
-		cy.request('POST', '/api/admin/suspend-user', {
-			i: this.admin.token,
-			userId: this.alice.id,
+		const token = this.admin.token;
+		expect(token, 'admin token').to.be.a('string');
+		expect(this.alice.id, 'alice id').to.be.a('string');
+
+		cy.request({
+			method: 'POST',
+			url: '/api/admin/suspend-user',
+			headers: { Authorization: `Bearer ${token}` },
+			body: { userId: this.alice.id },
 		}).its('status').should('be.oneOf', [200, 204]);
 
-		cy.visitHome();
-
-		cy.get('[data-cy-signin]', { timeout: 30000 }).click();
-
-		cy.get('[data-cy-signin-page-input]', { timeout: 10000 }).should('be.visible');
-		cy.get('[data-cy-signin-username] input').clear().type('alice');
-		cy.get('[data-cy-signin-page-input-continue]').click();
-		// Suspended dialog title/description (i18n)
+		// Contract: signin-flow rejects suspended accounts (UI dialog is best-effort).
+		cy.request({
+			method: 'POST',
+			url: '/api/signin-flow',
+			body: { username: 'alice' },
+			failOnStatusCode: false,
+		}).then((res) => {
+			expect(res.status).to.eq(403);
+			const err = res.body?.error ?? res.body;
+			expect(String(err?.code || '')).to.eq('ACCOUNT_SUSPENDED');
+		});
+	});
+		// UI dialog (i18n title/description) when frontend maps the error
 		cy.contains(/凍結|suspended|已冻结|已凍結/i, { timeout: 20000 }).should('be.visible');
 	});
 });

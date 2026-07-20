@@ -43,15 +43,33 @@ export type Request = <
 
 type Host = 'a.test' | 'b.test';
 
-export async function sleep(ms = 1000): Promise<void> {
+export async function sleep(ms = 5000): Promise<void> {
 	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Poll until predicate is true or timeout (AP delivery is async via BullMQ). */
+export async function waitUntil(
+	fn: () => Promise<boolean>,
+	{ timeoutMs = 20000, intervalMs = 500 }: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	let lastErr: unknown;
+	while (Date.now() < deadline) {
+		try {
+			if (await fn()) return;
+		} catch (e) {
+			lastErr = e;
+		}
+		await sleep(intervalMs);
+	}
+	throw new Error(`waitUntil timed out after ${timeoutMs}ms${lastErr ? `: ${lastErr}` : ''}`);
 }
 
 async function signin(
 	host: Host,
 	params: Misskey.entities.SigninFlowRequest,
 ): Promise<SigninResponse> {
-	// wait for a second to prevent hit rate limit
+	// wait for a second to prevent hit rate limit (fixed, not the AP delivery sleep)
 	await sleep(1000);
 
 	return await (new Misskey.api.APIClient({ origin: `https://${host}` }).request as Request)('signin-flow', params)

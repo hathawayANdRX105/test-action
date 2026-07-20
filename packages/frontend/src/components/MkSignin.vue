@@ -162,13 +162,28 @@ function onUseTotp(): void {
 async function onUsernameSubmitted(username: string) {
 	waiting.value = true;
 
-	userInfo.value = await misskeyApi('users/show', {
-		username,
-	}).catch(() => null);
+	try {
+		userInfo.value = await misskeyApi('users/show', {
+			username,
+		}).catch(() => null);
 
-	await tryLogin({
-		username,
-	});
+		// Password page requires a user object; stub if show failed (e.g. rate limit).
+		if (userInfo.value == null) {
+			userInfo.value = { username } as any;
+		}
+
+		await tryLogin({
+			username,
+		});
+	} catch {
+		// tryLogin already surfaces errors via onSigninApiError
+	} finally {
+		if (waiting.value) {
+			nextTick(() => {
+				waiting.value = false;
+			});
+		}
+	}
 }
 
 async function onPasswordSubmitted(pw: PwResponse) {

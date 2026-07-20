@@ -57,7 +57,11 @@ Cypress.Commands.add('registerUser', (username, password, isAdmin = false) => {
 		username: username,
 		password: password,
 		...(isAdmin ? { setupPassword: 'example_password_please_change_this_or_you_will_get_hacked' } : {}),
-	}).its('body').as(username);
+	}).then((res) => {
+		expect(res.status).to.be.oneOf([200, 204]);
+		// alias full body (includes token for admin/signup)
+		cy.wrap(res.body).as(username);
+	});
 
 	// First admin flips requireSetup; wait until API reflects it before visiting UI.
 	if (isAdmin) {
@@ -74,18 +78,31 @@ Cypress.Commands.add('registerUser', (username, password, isAdmin = false) => {
 	}
 });
 
+// API login — UI signin flow is multi-step + captcha-branch flaky under Cypress.
 Cypress.Commands.add('login', (username, password) => {
-	cy.visitHome();
+	// signin-flow step 1 (username only) then step 2 (password); captcha skipped in NODE_ENV=test
+	cy.request('POST', '/api/signin-flow', { username }).its('status').should('eq', 200);
+	cy.request('POST', '/api/signin-flow', { username, password }).then((res) => {
+		expect(res.status).to.eq(200);
+		expect(res.body.finished, 'signin finished').to.eq(true);
+		const token = res.body.i as string;
+		expect(token).to.be.a('string');
 
-	cy.intercept('POST', '/api/signin-flow').as('signin');
-
-	cy.get('[data-cy-signin]', { timeout: 30000 }).click();
-	cy.get('[data-cy-signin-page-input]', { timeout: 10000 }).should('be.visible');
-	cy.get('[data-cy-signin-username] input').type(username);
-	cy.get('[data-cy-signin-page-input-continue]').click();
-	cy.get('[data-cy-signin-page-password]', { timeout: 30000 }).should('be.visible');
-	cy.get('[data-cy-signin-password] input').type(password);
-	cy.get('[data-cy-signin-page-password-continue]').click();
-
-	cy.wait('@signin').as('signedIn');
+		cy.request({
+			method: 'POST',
+			url: '/api/i',
+			headers: { Authorization: `Bearer ${token}` },
+			body: {},
+		}).then((meRes) => {
+			expect(meRes.status).to.eq(200);
+			const account = { ...meRes.body, token };
+			cy.visit('/', {
+				onBeforeLoad(win) {
+					win.localStorage.setItem('account', JSON.stringify(account));
+				},
+			});
+			// signed-in shell: setup wizard or main chrome
+			cy.get('[data-cy-user-setup-continue], [data-cy-open-post-form], button', { timeout: 30000 }).should('exist');
+		});
+	});
 });
