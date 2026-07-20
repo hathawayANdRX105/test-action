@@ -1,6 +1,6 @@
 import { strictEqual } from 'assert';
 import type * as Misskey from 'misskey-js';
-import { createAccount, fetchAdmin, isNoteUpdatedEventFired, isFired, type LoginUser, type Request, resolveRemoteUser, sleep, createRole } from './utils.js';
+import { createAccount, fetchAdmin, isNoteUpdatedEventFired, isFired, type LoginUser, type Request, resolveRemoteUser, sleep, createRole, ensureFollowing } from './utils.js';
 
 const bAdmin = await fetchAdmin('b.test');
 
@@ -19,8 +19,7 @@ describe('Timeline', () => {
 			resolveRemoteUser('a.test', alice.id, bob),
 		]);
 
-		await bob.client.request('following/create', { userId: aliceInB.id });
-		await sleep();
+		await ensureFollowing(bob, aliceInB.id);
 	});
 
 	type TimelineChannel = keyof Misskey.Channels & (`${string}Timeline` | 'antenna' | 'userList' | 'hashtag');

@@ -1,5 +1,5 @@
 import type * as Misskey from 'misskey-js';
-import { assertNotificationReceived, createAccount, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep } from './utils.js';
+import { assertNotificationReceived, createAccount, ensureFollowing, ensureNotFollowing, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, waitUntil } from './utils.js';
 
 describe('Notification', () => {
 	let alice: LoginUser, bob: LoginUser;
@@ -19,30 +19,46 @@ describe('Notification', () => {
 
 	describe('Follow', () => {
 		test('Get notification when follow', async () => {
+			// Local→remote follow is request+Accept; assertNotificationReceived triggers create,
+			// then we still need the accept path to complete for followRequestAccepted.
 			await assertNotificationReceived(
 				'b.test', bob,
-				async () => await bob.client.request('following/create', { userId: aliceInB.id }),
+				async () => {
+					await ensureFollowing(bob, aliceInB.id);
+				},
 				notification => notification.type === 'followRequestAccepted' && notification.userId === aliceInB.id,
 				true,
 			);
 
-			await bob.client.request('following/delete', { userId: aliceInB.id });
-			await sleep();
+			await ensureNotFollowing(bob, aliceInB.id);
 		});
 
 		test('Get notification when get followed', async () => {
 			await assertNotificationReceived(
 				'a.test', alice,
-				async () => await bob.client.request('following/create', { userId: aliceInB.id }),
+				async () => {
+					await ensureFollowing(bob, aliceInB.id);
+				},
 				notification => notification.type === 'follow' && notification.userId === bobInA.id,
 				true,
 			);
 		});
 
-		afterAll(async () => await bob.client.request('following/delete', { userId: aliceInB.id }));
+		afterAll(async () => {
+			try {
+				await ensureNotFollowing(bob, aliceInB.id);
+			} catch {
+				/* ignore */
+			}
+		});
 	});
 
 	describe('Note', () => {
+		beforeAll(async () => {
+			// reactions/replies need a follow for home timeline delivery in some paths
+			await ensureFollowing(bob, aliceInB.id);
+		});
+
 		test('Get notification when get a reaction', async () => {
 			const note = (await alice.client.request('notes/create', { text: 'a' })).createdNote;
 			const noteInB = await resolveRemoteNote('a.test', note.id, bob);

@@ -1,6 +1,6 @@
 import assert, { rejects, strictEqual } from 'node:assert';
 import type * as Misskey from 'misskey-js';
-import { addCustomEmoji, createAccount, createModerator, deepStrictEqualWithExcludedFields, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, uploadFile, waitUntil } from './utils.js';
+import { addCustomEmoji, createAccount, createModerator, deepStrictEqualWithExcludedFields, ensureFollowing, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, uploadFile, waitUntil } from './utils.js';
 
 describe('Note', () => {
 	let alice: LoginUser, bob: LoginUser;
@@ -16,6 +16,9 @@ describe('Note', () => {
 			resolveRemoteUser('b.test', bob.id, alice),
 			resolveRemoteUser('a.test', alice.id, bob),
 		]);
+
+		// Home/followers timelines and some AP deliveries need an established follow.
+		await ensureFollowing(bob, aliceInB.id);
 	});
 
 	describe('Note content', () => {
@@ -160,8 +163,7 @@ describe('Note', () => {
 				beforeAll(async () => {
 					carol = await createAccount('a.test');
 
-					await carol.client.request('following/create', { userId: bobInA.id });
-					await sleep();
+					await ensureFollowing(carol, bobInA.id);
 				});
 
 				test('Check', async () => {
@@ -376,8 +378,7 @@ describe('Note', () => {
 					createAccount('b.test'),
 				]);
 
-				await bobRemoteFollower.client.request('following/create', { userId: bobInA.id });
-				await sleep();
+				await ensureFollowing(bobRemoteFollower, bobInA.id);
 			});
 
 			test('A vote in Bob\'s server is delivered to Bob\'s remote followers', async () => {

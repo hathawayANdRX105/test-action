@@ -65,6 +65,37 @@ export async function waitUntil(
 	throw new Error(`waitUntil timed out after ${timeoutMs}ms${lastErr ? `: ${lastErr}` : ''}`);
 }
 
+/**
+ * Local→remote follow creates a pending request then waits for remote Accept.
+ * Use this instead of bare following/create + sleep().
+ */
+export async function ensureFollowing(follower: LoginUser, followeeId: string): Promise<void> {
+	try {
+		await follower.client.request('following/create', { userId: followeeId });
+	} catch (err: any) {
+		const code = err?.code ?? err?.error?.code ?? err?.info?.e?.code;
+		if (code !== 'ALREADY_FOLLOWING') throw err;
+	}
+	await waitUntil(async () => {
+		const following = await follower.client.request('users/following', { userId: follower.id });
+		return following.some(v => v.followeeId === followeeId);
+	});
+}
+
+export async function ensureNotFollowing(follower: LoginUser, followeeId: string): Promise<void> {
+	try {
+		await follower.client.request('following/delete', { userId: followeeId });
+	} catch (err: any) {
+		// already not following
+		if (String(err?.message ?? err?.code ?? '').match(/not following|NO_SUCH|FOLLOWING/i)) return;
+	}
+	await waitUntil(async () => {
+		const following = await follower.client.request('users/following', { userId: follower.id });
+		return !following.some(v => v.followeeId === followeeId);
+	});
+}
+
+
 async function signin(
 	host: Host,
 	params: Misskey.entities.SigninFlowRequest,

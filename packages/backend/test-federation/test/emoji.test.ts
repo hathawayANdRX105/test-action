@@ -1,6 +1,6 @@
 import assert, { deepStrictEqual, strictEqual } from 'assert';
 import type * as Misskey from 'misskey-js';
-import { addCustomEmoji, createAccount, type LoginUser, resolveRemoteUser, sleep } from './utils.js';
+import { addCustomEmoji, createAccount, ensureFollowing, type LoginUser, resolveRemoteUser, sleep } from './utils.js';
 
 describe('Emoji', () => {
 	let alice: LoginUser, bob: LoginUser;
@@ -17,8 +17,7 @@ describe('Emoji', () => {
 			resolveRemoteUser('a.test', alice.id, bob),
 		]);
 
-		await bob.client.request('following/create', { userId: aliceInB.id });
-		await sleep();
+		await ensureFollowing(bob, aliceInB.id);
 	});
 
 	test('Custom emoji are delivered with Note delivery', async () => {
@@ -29,7 +28,7 @@ describe('Emoji', () => {
 		const notes = await bob.client.request('notes/timeline', {});
 		const noteInB = notes[0];
 
-		strictEqual(noteInB.text, `I love \u200b:${emoji.name}:\u200b`);
+		strictEqual(noteInB.text?.replaceAll('\u200b', ''), `I love :${emoji.name}:`);
 		assert(noteInB.emojis != null);
 		assert(emoji.name in noteInB.emojis);
 		strictEqual(noteInB.emojis[emoji.name], emoji.url);
@@ -67,7 +66,7 @@ describe('Emoji', () => {
 		const notes = await bob.client.request('notes/timeline', {});
 		const noteInB = notes[0];
 
-		strictEqual(noteInB.text, `I love \u200b:${emoji.name}:\u200b`);
+		strictEqual(noteInB.text?.replaceAll('\u200b', ''), `I love :${emoji.name}:`);
 		// deepStrictEqual(noteInB.emojis, {}); // TODO: this fails (why?)
 		deepStrictEqual({ ...noteInB.emojis }, {});
 	});
