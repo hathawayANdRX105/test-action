@@ -8,7 +8,7 @@ Instructions for **AI agents** and human contributors working in this repository
 |-----|---------|
 | [`agent/README.md`](agent/README.md) | Index of agent docs |
 | [`agent/01-dev-workflow.md`](agent/01-dev-workflow.md) | **Issue → branch → dev → PR → CI → review** |
-| [`agent/02-issue-guide.md`](agent/02-issue-guide.md) | How to open Issues (templates) |
+| [`agent/02-issue-guide.md`](agent/02-issue-guide.md) | How to open Issues (templates) — includes **demo issue** links |
 | [`agent/03-pr-guide.md`](agent/03-pr-guide.md) | How to open PRs (templates) |
 
 GitHub templates (forms members fill):
@@ -23,10 +23,10 @@ GitHub templates (forms members fill):
 
 1. **No direct pushes to `main` or `dev`.** Branch → PR → review → merge into **`dev`**. `main` is stable; only merge from `dev` when explicitly stabilizing a release.
 2. **One Issue = one PR.** PR body must include `Fixes #N` / `Closes #N`. Never pack multiple Issues into one PR.
-3. **Issue first.** Discuss / file Issue before coding (except trivial typo with maintainer OK).
+3. **Issue first.** Discuss / file Issue before coding (except trivial typo with maintainer OK). Prefer the **demo issues** linked in `agent/02-issue-guide.md` as structure examples.
 4. **Single assignee** per Issue. Help via comments / `help-wanted`, not dual ownership.
 5. **Use templates.** Do not open blank free-form Issues when a template fits.
-6. **Keep the tree clean.** No random dirs/files, no secrets, no real instance config, no local tooling DBs committed.
+6. **Keep the tree clean.** No random dirs/files, no secrets, no real instance config, no local tooling DB directories committed (see `.gitignore`).
 7. **Match existing style.** Misskey/Sharkey-derived tree; no drive-by renames or rebrands.
 
 ## Branch names
@@ -41,17 +41,6 @@ GitHub templates (forms members fill):
 
 Open PRs against **`dev`**, not `main`.
 
-## Local agent tooling (optional)
-
-- **bd (beads)** — agent-local task graph. Run `bd prime` when initialized.  
-  - Do **not** use `bd q` for lookup (creates issues). Use `bd show` / `bd list` / `bd search`.  
-  - Do **not** use `bd edit` (opens `$EDITOR`). Use `bd update`.  
-  - Prefer readable IDs (`uf-m1`, `docs-handbook`, `dh-i2-implement`), not auto hash junk.
-- **codegraph** — `codegraph init` → `.codegraph/` (gitignored).
-- **code-review-graph** — `code-review-graph build` → `.code-review-graph/` (gitignored).
-
-Never commit: `.beads/`, `.codegraph/`, `.code-review-graph/`, `.worktree/`.
-
 ## Before asking for review
 
 - Diff matches **one** Issue scope.
@@ -63,4 +52,4 @@ Never commit: `.beads/`, `.codegraph/`, `.code-review-graph/`, `.worktree/`.
 
 1. Push branch; open/update the PR **into `dev`** with `Fixes #N`.
 2. Update Issue / Project column if used.
-3. If using bd: close/update beads with reason; do not leave work only in chat.
+3. Do not leave unfinished work only in chat memory — leave a PR or Issue comment.
