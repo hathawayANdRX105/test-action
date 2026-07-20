@@ -110,7 +110,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const isAdmin = await this.roleService.isAdministrator(me);
 			const catalog = new Set(permissions);
 			const permission = unique(ps.permission.map(v => v.replace(/^(.+)(\/|-)(read|write)$/, '$3:$1')))
-				.filter(scope => {
+			const catalog: Set<string> = new Set(permissions);
 					if (isAdminApiScope(scope)) return isAdmin;
 					return catalog.has(scope);
 				});
