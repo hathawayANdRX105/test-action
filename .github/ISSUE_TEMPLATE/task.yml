@@ -1,28 +1,39 @@
 name: Task / Refactor
-description: Scoped internal work — refactor, CI, docs, chore (one PR-sized unit)
+description: Internal scoped work — refactor, CI, docs, chore, active perf (one PR-sized unit)
 body:
   - type: markdown
     attributes:
       value: |
-        One issue = one mergeable PR. Prefer a Milestone for the batch.
-        Title prefix: `refactor:` / `chore:` / `docs:` / `test:` / `perf:` (optimization, not a regression).
-        User-facing **new capability** → Feature template. **Bugs** → Bug template.
         Guide: [agent/02-issue-guide.md](../../agent/02-issue-guide.md)
+
+        For **user-facing new capability** use Feature. For **broken behavior / regression** use Bug.
+        Title prefixes: `refactor:` / `chore:` / `docs:` / `test:` / `perf:` (optimization, not a regression).
+
+        **Good internal tasks** state Goal, Done when, and bounds. Perf tasks should include how success is observed (see e.g. omp perf-style reports).
 
   - type: textarea
     id: goal
     attributes:
       label: Goal
-      description: What should change when this is done?
+      description: What should change in the codebase/product when this is done?
     validations:
       required: true
 
   - type: textarea
+    id: background
+    attributes:
+      label: Background / why now (optional)
+      description: Pain, context, or link to related bug/feature. Keep short.
+    validations:
+      required: false
+
+  - type: textarea
     id: done
     attributes:
-      label: Done when
-      description: Acceptance checks (bullet list).
+      label: Done when (acceptance)
+      description: Checklist a single PR can close.
       placeholder: |
+        - [ ]
         - [ ]
         - [ ]
     validations:
@@ -32,6 +43,29 @@ body:
     id: out
     attributes:
       label: Out of scope (optional)
-      description: What this issue must NOT expand into.
+      description: What this must not expand into.
+    validations:
+      required: false
+
+  - type: textarea
+    id: observe
+    attributes:
+      label: How to observe success (optional)
+      description: Especially for `perf:` — metric, log, bench, or before/after note the PR should include.
+    validations:
+      required: false
+
+  - type: textarea
+    id: suspected
+    attributes:
+      label: Suspected areas (optional)
+      description: Packages/files/symbols if known. Do not require a full design.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context (optional)
     validations:
       required: false

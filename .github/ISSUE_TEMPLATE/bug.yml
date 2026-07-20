@@ -1,80 +1,132 @@
 name: Bug
-description: Report a reproducible defect or regression
+description: Reproducible defect or regression (facts first; optional deep analysis)
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Read [agent/02-issue-guide.md](../../agent/02-issue-guide.md) and [agent/01-dev-workflow.md](../../agent/01-dev-workflow.md).
+        Guide: [agent/02-issue-guide.md](../../agent/02-issue-guide.md)
 
-        **Issues for actionable bugs (and maintainer work).** Feature ideas → use the Feature template. Internal refactor/CI/docs → Task template. Questions → Discussions or chat (not Issues).
+        **Good bugs** (see e.g. [omp#5995](https://github.com/can1357/oh-my-pi/issues/5995), [omp#6011](https://github.com/can1357/oh-my-pi/issues/6011)):
+        specific title · what breaks and why it matters · numbered repro · expected authoritative outcome · version/env · optional evidence / related issues / regression ideas.
 
-        Keep it short and factual: what you did, what happened, what you expected. Do **not** paste root-cause essays, implementation plans, or AI diagnosis dumps unless a maintainer asks.
+        Prefer **facts you observed**. Root-cause walls are optional; only add them when solid.
 
   - type: checkboxes
     id: bug-confirmation
     attributes:
-      label: Is this a reproducible bug?
-      description: Feature requests and open-ended ideas belong in the Feature template (or discussion), not here.
+      label: Confirmation
       options:
-        - label: I confirm this is a reproducible bug or regression, not a feature request or general question.
+        - label: This is a reproducible bug or regression (not a feature idea or support question).
+          required: true
+        - label: I searched for similar issues / related reports (or explain in Additional context).
           required: true
 
   - type: textarea
-    id: current-behavior
+    id: description
     attributes:
-      label: Current behavior
-      description: What is happening now? Describe what you observed, not a guessed cause.
-    validations:
-      required: true
-
-  - type: textarea
-    id: expected-behavior
-    attributes:
-      label: Expected behavior
-      description: What should happen instead?
+      label: Description
+      description: What breaks? Why does it matter / what is unsafe or misleading? Prefer concrete symptoms over vague “it doesn’t work”.
     validations:
       required: true
 
   - type: textarea
     id: reproduction
     attributes:
-      label: Reproduction
-      description: Shortest exact steps (or commands) that show the problem. If you cannot reproduce yet, discuss first instead of opening a vague bug.
+      label: Steps to reproduce
+      description: Shortest exact steps. Include commands/payloads when relevant. Note if timing/race/size matters.
       placeholder: |
         1.
         2.
         3.
+        4. Observe …
     validations:
       required: true
 
   - type: textarea
-    id: impact
+    id: expected
     attributes:
-      label: Impact
-      description: How does this affect you or your instance? (optional but helpful)
+      label: Expected behavior
+      description: Authoritative outcome (what must happen; what must not be reported as success/skip/etc.).
     validations:
-      required: false
+      required: true
 
   - type: textarea
-    id: error-output
+    id: actual
     attributes:
-      label: Error output
-      description: Logs, stack traces, or console errors if any.
-      render: shell
+      label: Actual behavior
+      description: What you observed. Paste UI text, status, or failure mode.
     validations:
-      required: false
+      required: true
 
   - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: Fill what you know. Version / OS or browser help a lot.
+      description: Fill every line you can. Version + client/OS are especially important.
       value: |
         - Instance URL (if relevant):
-        - Universe Federation / app version:
-        - Client (web / other):
+        - App / UF version (or commit):
+        - Client (web / API / other):
         - Browser or OS:
-        - Deploy method (docker / bare / unknown):
+        - Deploy (docker / bare / unknown):
+        - Related services (Postgres/Redis/… if relevant):
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error output / logs (optional)
+      description: Stack traces, console, server logs. Use fenced code.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact (optional)
+      description: Who is hurt? Frequency? Workarounds?
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence (optional)
+      description: Measurements, counts, before/after, captures. For perf bugs include how you measured.
+    validations:
+      required: false
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related issues / duplicates (optional)
+      description: "Related but distinct: #N … Duplicate check: searched X, not the same as #M because …"
+    validations:
+      required: false
+
+  - type: textarea
+    id: suspected
+    attributes:
+      label: Suspected code paths (optional)
+      description: Only if you actually inspected code. File/symbol paths help; do not invent a full design.
+    validations:
+      required: false
+
+  - type: textarea
+    id: regression-tests
+    attributes:
+      label: Suggested regression coverage (optional)
+      description: Minimal test or assertion that would catch this (omp-style “regression coverage”).
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context (optional)
+      description: Screenshots, config snippets (redact secrets), notes.
     validations:
       required: false

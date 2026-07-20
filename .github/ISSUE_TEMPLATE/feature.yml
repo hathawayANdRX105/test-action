@@ -1,54 +1,81 @@
 name: Feature
-description: Propose a new capability or user-facing improvement
+description: New capability or user-facing improvement (problem + acceptance)
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        For **bugs**, use the Bug template. For **refactor / CI / docs / internal chores**, use Task.
         Guide: [agent/02-issue-guide.md](../../agent/02-issue-guide.md)
 
-        One feature idea per issue. Large ideas should be split into smaller, mergeable units before implementation.
+        **Good features** (see e.g. [omp#4815](https://github.com/can1357/oh-my-pi/issues/4815), [omp#4983](https://github.com/can1357/oh-my-pi/issues/4983), [omp#5793](https://github.com/can1357/oh-my-pi/issues/5793)):
+        clear ask · problem / use case · **Done when / acceptance** · non-goals · optional design notes.
+
+        One mergeable idea per issue when possible. Prefer MVP + non-goals over a novel.
 
   - type: textarea
     id: description
     attributes:
       label: Description
-      description: What would you like?
+      description: What should exist after this ships? Be concrete.
     validations:
       required: true
 
   - type: textarea
     id: use-case
     attributes:
-      label: Use case
-      description: Why is this needed? What problem does it solve?
+      label: Problem / use case
+      description: Who hurts today? What workflow fails? Why existing levers are not enough (if any).
     validations:
       required: true
 
   - type: textarea
     id: done
     attributes:
-      label: Done when
-      description: How we know this is complete (acceptance checks).
+      label: Done when (acceptance)
+      description: Checklist a PR can satisfy. Prefer testable / observable outcomes.
       placeholder: |
+        - [ ]
         - [ ]
         - [ ]
     validations:
       required: true
 
   - type: textarea
-    id: proposed-solution
+    id: non-goals
     attributes:
-      label: Proposed solution (optional)
-      description: Ideas only — not a full implementation plan unless maintainers ask.
+      label: Non-goals / out of scope (optional)
+      description: Explicitly what this issue must not expand into (keeps PR small).
     validations:
       required: false
 
   - type: textarea
-    id: out
+    id: proposed
     attributes:
-      label: Out of scope (optional)
-      description: What this should not expand into.
+      label: Proposed approach (optional)
+      description: High-level idea or API shape. Not a full implementation plan unless maintainers ask.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
+      description: Workarounds or other designs you rejected and why.
+    validations:
+      required: false
+
+  - type: textarea
+    id: area
+    attributes:
+      label: Area (optional)
+      description: e.g. chat, timeline, federation, CI, frontend, API…
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context (optional)
+      description: Links, screenshots, prior art, related issues.
     validations:
       required: false

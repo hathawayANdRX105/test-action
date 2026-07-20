@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Agent / contributor guides
     url: https://github.com/hathawayANdRX105/Universe-Federation/blob/main/agent/README.md
-    about: Workflow, how to file Issues, how to open PRs.
+    about: Workflow, Issue/PR templates, contribution rules.
   - name: Security
     url: https://github.com/hathawayANdRX105/Universe-Federation/blob/main/SECURITY.md
-    about: Report security issues responsibly (not via public bug templates).
+    about: Report security issues responsibly (not via public templates).
