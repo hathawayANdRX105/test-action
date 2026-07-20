@@ -67,6 +67,11 @@ jobs:
           cp .config/cypress-devcontainer.yml .config/test.yml
           sed -i -e 's|url: http://misskey.local|url: http://localhost:61812|' -e 's|host: db|host: 127.0.0.1|' .config/default.yml .config/test.yml
           echo 'clusterLimit: 1' >> .config/test.yml
+          # Match cypress registerUser(admin,...,true) setupPassword
+          if ! grep -q '^setupPassword:' .config/test.yml; then
+            echo "setupPassword: 'example_password_please_change_this_or_you_will_get_hacked'" >> .config/default.yml
+            echo "setupPassword: 'example_password_please_change_this_or_you_will_get_hacked'" >> .config/test.yml
+          fi
       - name: Install and verify Cypress browser
         run: pnpm cypress install && xvfb-run --auto-servernum pnpm cypress verify
       - name: Build and migrate test instance

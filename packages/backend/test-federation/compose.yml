@@ -10,10 +10,8 @@ services:
     command: >
       bash -c "
         npm install -g pnpm
-        pnpm -F backend i
-        pnpm -F misskey-js i
-        pnpm -F megalodon i
-        pnpm -F misskey-reversi i
+        # Full install: filtered -F installs miss optional deps (e.g. node-domexception).
+        pnpm i --frozen-lockfile
       "
 
   tester:
