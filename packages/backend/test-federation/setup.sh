@@ -27,10 +27,6 @@ function generate {
     -out certificates/$1.crt \
     -days 500
   if [ ! -f .config/docker.env ]; then cp .config/example.docker.env .config/docker.env; fi
-  # Ensure instant local→remote follows for unlocked accounts (required by most suites)
-  if ! grep -q '^FORCE_FOLLOW_REMOTE_USER_FOR_TESTING=' .config/docker.env; then
-    echo 'FORCE_FOLLOW_REMOTE_USER_FOR_TESTING=true' >> .config/docker.env
-  fi
   if [ ! -f .config/$1.conf ]; then sed "s/\${HOST}/$1/g" .config/example.conf > .config/$1.conf; fi
   if [ ! -f .config/$1.default.yml ]; then sed "s/\${HOST}/$1/g" .config/example.default.yml > .config/$1.default.yml; fi
 }

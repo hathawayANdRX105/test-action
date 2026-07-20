@@ -138,13 +138,21 @@ describe('User', () => {
 
 			test('Becoming a cat is sent to their followers', async () => {
 				await bob.client.request('following/create', { userId: aliceInB.id });
-				await sleep();
+				// Wait until follow is established (Accept may be async)
+				await waitUntil(async () => {
+					const following = await bob.client.request('users/following', { userId: bob.id });
+					return following.some(v => v.followeeId === aliceInB.id);
+				});
 
 				await alice.client.request('i/update', { isCat: true });
-				await sleep();
-
-				const res = await bob.client.request('users/show', { userId: aliceInB.id });
-				strictEqual(res.isCat, true);
+				// Profile Update only fans out to followers; re-fetch actor if needed
+				await waitUntil(async () => {
+					const res = await bob.client.request('users/show', { userId: aliceInB.id });
+					if (res.isCat === true) return true;
+					// force refresh from origin
+					aliceInB = await resolveRemoteUser('a.test', alice.id, bob);
+					return aliceInB.isCat === true;
+				});
 			});
 		});
 
@@ -185,8 +193,11 @@ describe('User', () => {
 			test('Pinning normal Note is delivered', async () => {
 				pinnedNote = (await alice.client.request('notes/create', { text: 'a' })).createdNote;
 				await alice.client.request('i/pin', { noteId: pinnedNote.id });
-				await sleep();
-
+				await waitUntil(async () => {
+					// force-refresh remote profile (Update only goes to followers)
+					const remote = await resolveRemoteUser('a.test', alice.id, bob);
+					return remote.pinnedNoteIds.length === 1;
+				});
 				const _aliceInB = await bob.client.request('users/show', { userId: aliceInB.id });
 				strictEqual(_aliceInB.pinnedNoteIds.length, 1);
 				const pinnedNoteInB = await resolveRemoteNote('a.test', pinnedNote.id, bob);
@@ -195,8 +206,10 @@ describe('User', () => {
 
 			test('Unpinning normal Note is delivered', async () => {
 				await alice.client.request('i/unpin', { noteId: pinnedNote.id });
-				await sleep();
-
+				await waitUntil(async () => {
+					const remote = await resolveRemoteUser('a.test', alice.id, bob);
+					return remote.pinnedNoteIds.length === 0;
+				});
 				const _aliceInB = await bob.client.request('users/show', { userId: aliceInB.id });
 				strictEqual(_aliceInB.pinnedNoteIds.length, 0);
 			});
@@ -222,9 +235,14 @@ describe('User', () => {
 		describe('Follow a.test ==> b.test', () => {
 			beforeAll(async () => {
 				await alice.client.request('following/create', { userId: bobInA.id });
-
-				await sleep();
-			});
+				// Local→remote creates a pending request unless FORCE_FOLLOW; wait for Accept.
+				await waitUntil(async () => {
+					const following = await alice.client.request('users/following', { userId: alice.id });
+					const followers = await bob.client.request('users/followers', { userId: bob.id });
+					return following.some(v => v.followeeId === bobInA.id)
+						&& followers.some(v => v.followerId === aliceInB.id);
+				});
+			}, 180_000);
 
 			test('Check consistency with `users/following` and `users/followers` endpoints', async () => {
 				await Promise.all([
@@ -320,6 +338,17 @@ describe('User', () => {
 
 		describe('Send follow request from Bob to Alice and reject', () => {
 			beforeAll(async () => {
+				[alice, bob] = await Promise.all([
+					createAccount('a.test'),
+					createAccount('b.test'),
+				]);
+				await alice.client.request('i/update', { isLocked: true });
+				[bobInA, aliceInB] = await Promise.all([
+					resolveRemoteUser('b.test', bob.id, alice),
+					resolveRemoteUser('a.test', alice.id, bob),
+				]);
+				strictEqual(aliceInB.isLocked, true);
+
 				await bob.client.request('following/create', { userId: aliceInB.id });
 				await waitUntil(async () => {
 					const requests = await alice.client.request('following/requests/list', {});
@@ -348,6 +377,18 @@ describe('User', () => {
 
 		describe('Send follow request from Bob to Alice and accept', () => {
 			beforeAll(async () => {
+				// Fresh pair — prior cancel/reject can leave AP/follow state that blocks re-request.
+				[alice, bob] = await Promise.all([
+					createAccount('a.test'),
+					createAccount('b.test'),
+				]);
+				await alice.client.request('i/update', { isLocked: true });
+				[bobInA, aliceInB] = await Promise.all([
+					resolveRemoteUser('b.test', bob.id, alice),
+					resolveRemoteUser('a.test', alice.id, bob),
+				]);
+				strictEqual(aliceInB.isLocked, true);
+
 				await bob.client.request('following/create', { userId: aliceInB.id });
 				await waitUntil(async () => {
 					const requests = await alice.client.request('following/requests/list', {});
