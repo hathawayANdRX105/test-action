@@ -17,6 +17,7 @@ import { DI } from '@/di-symbols.js';
 import { TimeService } from '@/global/TimeService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { apiAccessErrors, getApiPublicPermissions, isAdminApiScope } from '@/server/api/api-access-utils.js';
+import { API_PERMISSION_MAX_ITEMS, API_PERMISSION_MAX_LENGTH, PUBLIC_APP_DESCRIPTION_MAX_LENGTH, PUBLIC_APP_ICON_URL_MAX_LENGTH, PUBLIC_APP_NAME_MAX_LENGTH, PUBLIC_TOKEN_MAX_LENGTH, PUBLIC_USER_IDS_MAX_ITEMS } from '@/server/api/input-limits.js';
 
 export const meta = {
 	tags: ['auth'],
