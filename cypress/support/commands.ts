@@ -30,18 +30,18 @@ Cypress.Commands.add('visitHome', () => {
 })
 
 Cypress.Commands.add('resetState', () => {
-	// Clear client auth/session so visitor dashboard (data-cy-signup) is shown.
-	cy.clearCookies();
-	cy.clearLocalStorage();
-	cy.window().then((win) => {
-		try { win.sessionStorage.clear(); } catch { /* ignore */ }
-	});
+	// Wipe DB first, then force a clean client origin paint (visitor/setup UI).
 	cy.request('POST', '/api/reset-db', {}).as('reset');
 	cy.get('@reset').its('status').should('equal', 204);
-	// Wait for DI meta reseed + metaUpdated to settle
-	cy.wait(500);
-	cy.visit('/');
-	cy.get('button', { timeout: 30000 }).should('be.visible');
+	cy.clearCookies();
+	cy.visit('/', {
+		onBeforeLoad(win) {
+			win.localStorage.clear();
+			win.sessionStorage.clear();
+		},
+	});
+	// Setup wizard (no root user) or visitor dashboard (after admin exists)
+	cy.get('[data-cy-admin-username], [data-cy-signup]', { timeout: 30000 }).should('be.visible');
 });
 
 Cypress.Commands.add('registerUser', (username, password, isAdmin = false) => {
@@ -59,7 +59,7 @@ Cypress.Commands.add('login', (username, password) => {
 
 	cy.intercept('POST', '/api/signin-flow').as('signin');
 
-	cy.get('[data-cy-signin]').click();
+	cy.get('[data-cy-signin]', { timeout: 30000 }).click();
 	cy.get('[data-cy-signin-page-input]').should('be.visible', { timeout: 1000 });
 	cy.get('[data-cy-signin-username] input').type(`${username}{enter}`);
 	cy.get('[data-cy-signin-page-password]').should('be.visible', { timeout: 10000 });

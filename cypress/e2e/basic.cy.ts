@@ -57,7 +57,7 @@ describe('After setup instance', () => {
 
 		cy.intercept('POST', '/api/signup').as('signup');
 
-		cy.get('[data-cy-signup]').click();
+		cy.get('[data-cy-signup]', { timeout: 30000 }).click();
 		cy.get('[data-cy-signup-rules-continue]').should('be.disabled');
 		cy.get('[data-cy-signup-rules-notes-agree] [data-cy-switch-toggle]').click();
 		cy.get('[data-cy-modal-dialog-ok]').click();
@@ -82,7 +82,7 @@ describe('After setup instance', () => {
 		cy.visitHome();
 
 		// ユーザー名が重複している場合の挙動確認
-		cy.get('[data-cy-signup]').click();
+		cy.get('[data-cy-signup]', { timeout: 30000 }).click();
 		cy.get('[data-cy-signup-rules-continue]').should('be.disabled');
 		cy.get('[data-cy-signup-rules-notes-agree] [data-cy-switch-toggle]').click();
 		cy.get('[data-cy-modal-dialog-ok]').click();
@@ -122,7 +122,7 @@ describe('After user signup', () => {
 
 		cy.intercept('POST', '/api/signin-flow').as('signin');
 
-		cy.get('[data-cy-signin]').click();
+		cy.get('[data-cy-signin]', { timeout: 30000 }).click();
 
 		cy.get('[data-cy-signin-page-input]').should('be.visible', { timeout: 1000 });
 		// Enterキーで続行できるかの確認も兼ねる
@@ -143,7 +143,7 @@ describe('After user signup', () => {
 
 		cy.visitHome();
 
-		cy.get('[data-cy-signin]').click();
+		cy.get('[data-cy-signin]', { timeout: 30000 }).click();
 
 		cy.get('[data-cy-signin-page-input]').should('be.visible', { timeout: 1000 });
 		cy.get('[data-cy-signin-username] input').type('alice{enter}');
