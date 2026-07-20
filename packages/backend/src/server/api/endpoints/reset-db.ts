@@ -19,8 +19,9 @@ import { ApiError } from '../error.js';
 export const meta = {
 	tags: ['non-productive'],
 
-	requireCredential: true,
-	requireAdmin: true,
+	// Cypress and e2e harness call this without a token under NODE_ENV=test.
+	requireCredential: false,
+	requireAdmin: false,
 	kind: 'write:admin:meta',
 
 	description: 'Only available when running with <code>NODE_ENV=testing</code>. Reset the database and flush Redis.',

@@ -151,6 +151,7 @@ jobs:
           url: http://127.0.0.1:3000
           port: 3000
           address: 0.0.0.0
+          id: 'aidx'
           db:
             host: db
             port: 5432

@@ -704,7 +704,7 @@ describe('Streaming', () => {
 				await api('i/update', {
 					mutedInstances: ['example.com'],
 				}, chitose);
-				await new Promise(r => setTimeout(r, 1500)); // stream profile mutedInstances
+				await new Promise(r => setTimeout(r, 2500)); // stream profile mutedInstances
 
 				// chitose が example.com をミュートしている状態で、リスインしている takumi が ノートした時の動きを見たい
 				const fired = await waitFire(
@@ -723,7 +723,7 @@ describe('Streaming', () => {
 				await api('i/update', {
 					mutedInstances: ['example.com'],
 				}, chitose);
-				await new Promise(r => setTimeout(r, 1500)); // stream profile mutedInstances
+				await new Promise(r => setTimeout(r, 2500)); // stream profile mutedInstances
 
 				// chitose が example.com をミュートしている状態で、リスインしている kyoko が takumi のノートにリプライした時の動きを見たい
 				const fired = await waitFire(
@@ -742,7 +742,7 @@ describe('Streaming', () => {
 				await api('i/update', {
 					mutedInstances: ['example.com'],
 				}, chitose);
-				await new Promise(r => setTimeout(r, 1500)); // stream profile mutedInstances
+				await new Promise(r => setTimeout(r, 2500)); // stream profile mutedInstances
 
 				// Pure renote of muted-instance note must not appear on list TL.
 				// Match renoteId so earlier kyoko notes from other tests do not false-positive.
