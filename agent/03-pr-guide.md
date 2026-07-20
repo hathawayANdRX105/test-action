@@ -11,10 +11,18 @@
 - 分支从 **`dev`** 拉出  
 - 只含这一件 Issue  
 - 工作区干净；能解释自己的改动  
+
+## 3.2 REQUIRED（每次）
+
+| 区块 | 写什么 |
+|------|--------|
+| **What** | 合入后变什么 |
+| **Why** | 动机 / 根因 |
+| **Issue** | `Fixes #N` |
 | **How to test** | 步骤 + 命令 |
 | **Checklist** | 一 Issue、无密钥垃圾、已测或说明 |
 
-## 3.2 RECOMMENDED EXTRAS（可选）
+## 3.3 RECOMMENDED EXTRAS（可选）
 
 模板底部 HTML 注释里有可复制块。规则：
 
@@ -31,6 +39,6 @@
 
 Demo PR 可以故意带上 extras；日常 PR 按需使用。
 
-## 3.3 CI / Review
+## 3.4 CI / Review
 
-红了同分支修。Reviewer 看是否对上 Issue、范围、测试是否可信。
+红了同分支修。Reviewer 看是否对上 Issue、范围、测试是否可信。合入目标是 **`dev`**。
