@@ -30,16 +30,18 @@ Cypress.Commands.add('visitHome', () => {
 })
 
 Cypress.Commands.add('resetState', () => {
-	// iframe.contentWindow.indexedDB.deleteDatabase() がchromeのバグで使用できないため、indexedDBを無効化している。
-	// see https://github.com/misskey-dev/misskey/issues/13605#issuecomment-2053652123
-	/*
-	cy.window().then(win => {
-		win.indexedDB.deleteDatabase('keyval-store');
+	// Clear client auth/session so visitor dashboard (data-cy-signup) is shown.
+	cy.clearCookies();
+	cy.clearLocalStorage();
+	cy.window().then((win) => {
+		try { win.sessionStorage.clear(); } catch { /* ignore */ }
 	});
-	 */
 	cy.request('POST', '/api/reset-db', {}).as('reset');
 	cy.get('@reset').its('status').should('equal', 204);
-	cy.reload(true);
+	// Wait for DI meta reseed + metaUpdated to settle
+	cy.wait(500);
+	cy.visit('/');
+	cy.get('button', { timeout: 30000 }).should('be.visible');
 });
 
 Cypress.Commands.add('registerUser', (username, password, isAdmin = false) => {

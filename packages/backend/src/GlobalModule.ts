@@ -38,8 +38,13 @@ async function fetchMeta(metasRepository: MetasRepository, logger: Logger): Prom
 	if (!meta) {
 		logger.info('Meta table is empty; populating with defaults.');
 
-		// No-op UPSERT to safely create the row
-		await metasRepository.upsert({ id: 'x' }, ['id']);
+		// No-op UPSERT to safely create the row.
+		// In test, open registration so Cypress visitor signup is visible.
+		const seed: { id: string; disableRegistration?: boolean } = { id: 'x' };
+		if (process.env.NODE_ENV === 'test') {
+			seed.disableRegistration = false;
+		}
+		await metasRepository.upsert(seed, ['id']);
 		meta = await metasRepository.findOneOrFail({ where: { id: Not(IsNull()) }, order: { id: 'DESC' } });
 	}
 

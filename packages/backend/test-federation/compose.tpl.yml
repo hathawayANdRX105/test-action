@@ -104,7 +104,9 @@ services:
     healthcheck:
       test: bash /misskey/healthcheck.sh
       interval: 5s
-      retries: 20
+      timeout: 5s
+      retries: 40
+      start_period: 30s
 
   db:
     image: postgres:15-alpine
