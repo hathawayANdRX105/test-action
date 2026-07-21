@@ -15,7 +15,6 @@ Universe Federation uses GitHub Issues and pull requests. The authoritative cont
 4. Open one pull request into `dev` with `Fixes #N` or `Closes #N` in its body.
 5. After review and CI, maintainers merge `dev` to `main` only when stabilizing a release.
 
-## Community and security
+## Security
 
-- Read the [Code of Conduct](CODE_OF_CONDUCT.md).
-- Report vulnerabilities according to [Security policy](SECURITY.md), not through a public Issue.
+- See [SECURITY.md](SECURITY.md). This is a personal fork without a dedicated security mailbox.

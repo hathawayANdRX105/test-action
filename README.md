@@ -49,5 +49,4 @@ Universe Federation Documentation can be found at [Universe Federation Documenta
 - [Important user notes](docs/user/important-notes.md)
 - [Upgrade notes](docs/ops/upgrade-notes.md)
 - [Security policy](SECURITY.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Compose files](deploy/compose/) — run from repo root, e.g. `docker compose -f deploy/compose/local-db.yml up -d`

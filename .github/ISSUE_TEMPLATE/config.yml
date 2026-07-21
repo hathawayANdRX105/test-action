@@ -3,6 +3,6 @@ contact_links:
   - name: Agent / contributor guides
     url: https://github.com/hathawayANdRX105/Universe-Federation/blob/dev/agent/README.md
     about: Workflow, Issue/PR templates, contribution rules (on dev until stabilized to main).
-  - name: Security
-    url: https://github.com/hathawayANdRX105/Universe-Federation/blob/main/SECURITY.md
-    about: Report security issues responsibly (not via public templates).
+  - name: Security notes
+    url: https://github.com/hathawayANdRX105/Universe-Federation/blob/dev/SECURITY.md
+    about: Personal-fork security reporting notes (no dedicated security mailbox).
