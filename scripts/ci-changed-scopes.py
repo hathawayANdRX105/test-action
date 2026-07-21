@@ -51,7 +51,7 @@ def is_container_path(p: str) -> bool:
 	if p.replace("\\", "/") == "scripts/healthcheck.sh" or p.endswith("/healthcheck.sh"):
 		return True
 	# deploy/compose/* and other deployment layout prefixes
-	return matches(p, (".devcontainer/", "chart/", "docker/", "deploy/compose/"))
+	return matches(p, ("chart/", "docker/", "deploy/compose/"))
 
 
 def is_federation_path(p: str) -> bool:

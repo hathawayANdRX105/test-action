@@ -83,11 +83,5 @@
 				'Dockerfile',
 			],
 		},
-		{
-			groupName: '[devcontainer] Update dependencies',
-			matchFileNames: [
-				'.devcontainer/**',
-			],
-		},
 	],
 }
