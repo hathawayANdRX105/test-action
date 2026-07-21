@@ -128,9 +128,9 @@ export function getConfig(): UserConfig {
 				'@@/': __dirname + '/../frontend-shared/',
 				'/client-assets/': __dirname + '/assets/',
 				'/static-assets/': __dirname + '/../backend/assets/',
-				'/fluent-emojis/': __dirname + '/../../fluent-emojis/dist/',
-				'/tossface/': __dirname + '/../../tossface-emojis/dist/',
-				'/fluent-emoji/': __dirname + '/../../fluent-emojis/dist/',
+				'/fluent-emojis/': __dirname + '/../../assets/emojis/fluent-emojis/dist/',
+				'/tossface/': __dirname + '/../../assets/emojis/tossface-emojis/dist/',
+				'/fluent-emoji/': __dirname + '/../../assets/emojis/fluent-emojis/dist/',
 			},
 		},
 

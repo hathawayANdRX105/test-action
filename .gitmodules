@@ -1,6 +1,6 @@
 [submodule "fluent-emojis"]
-	path = fluent-emojis
+	path = assets/emojis/fluent-emojis
 	url = https://github.com/misskey-dev/emojis.git
 [submodule "tossface-emojis"]
-	path = tossface-emojis
+	path = assets/emojis/tossface-emojis
 	url = https://activitypub.software/TransFem-org/tossface-emojis.git

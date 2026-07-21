@@ -12,7 +12,7 @@ node_modules/
 packages/*/node_modules
 redis/
 files/
-fluent-emojis/
+assets/emojis/fluent-emojis/
 .pnp.*
 
 # .yarn関連

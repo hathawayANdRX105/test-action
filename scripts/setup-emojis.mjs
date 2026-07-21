@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: Universe Federation contributors
  * SPDX-License-Identifier: AGPL-3.0-only
  *
- * Prepares fluent-emojis/dist for frontend builds when git submodules are missing.
+ * Prepares assets/emojis/fluent-emojis/dist for frontend builds when git submodules are missing.
  * Usage: node scripts/setup-emojis.mjs
  */
 
@@ -15,11 +15,11 @@ import { createGunzip } from 'node:zlib';
 import * as tar from 'tar';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const distDir = join(root, 'fluent-emojis', 'dist');
+const distDir = join(root, 'assets', 'emojis', 'fluent-emojis', 'dist');
 const probe = join(distDir, '1f3c6.png');
 
 if (existsSync(probe)) {
-	console.log('[setup-emojis] fluent-emojis/dist already present, skip.');
+	console.log('[setup-emojis] assets/emojis/fluent-emojis/dist already present, skip.');
 	process.exit(0);
 }
 
@@ -60,7 +60,7 @@ for (const f of files) {
 	await fsp.copyFile(join(src, f), join(distDir, f));
 	n++;
 }
-console.log(`[setup-emojis] copied ${n} png → fluent-emojis/dist`);
+console.log(`[setup-emojis] copied ${n} png → assets/emojis/fluent-emojis/dist`);
 
 if (!existsSync(probe)) {
 	console.error('[setup-emojis] failed to produce', probe);
