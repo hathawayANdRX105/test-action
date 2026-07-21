@@ -93,8 +93,12 @@ feature/fix/docs/*  ──PR──►  dev  ──稳定后──►  main
 
 1. 开 PR（**base = `dev`**）后等 **GitHub Actions**（及仓库配置的检查）。  
 2. 红了：在同一分支修 → push → 再跑。  
-3. Reviewer 看：是否对上 Issue、范围、明显 bug/安全。  
-4. 通过后由维护者合并进 **`dev`**；Issue 因 `Fixes #N` 自动关。
+3. **Code review 要留在 GitHub Reviews 上**（`gh pr review`），不要只写在聊天里。  
+   - 用 **CRG** 排优先级 → 看 diff / 目录 → 看 Checks → 再写 review body。  
+   - **PR 作者不能 Approve 自己的 PR**；作者号用 `--comment`，真要绿勾用另一账号。  
+   - 完整步骤见 **[04-code-review.md](./04-code-review.md)**。  
+4. Reviewer 看：是否对上 Issue、范围、明显 bug/安全、CI 是否解释得通。  
+5. 通过后由维护者合并进 **`dev`**；Issue 因 `Fixes #N` 自动关。
 
 **不要**在 CI 仍红、且无说明时反复 @ 人求合。
 

@@ -9,6 +9,7 @@
 | [01-dev-workflow.md](./01-dev-workflow.md) | 从 Issue 到合入的开发流程 |
 | [02-issue-guide.md](./02-issue-guide.md) | 如何提 Issue（模板字段） |
 | [03-pr-guide.md](./03-pr-guide.md) | 如何提 PR（模板字段） |
+| [04-code-review.md](./04-code-review.md) | Code review：GitHub 留记录、CRG、CI、diff |
 
 根目录入口：[`../AGENTS.md`](../AGENTS.md)。
 

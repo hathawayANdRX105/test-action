@@ -10,6 +10,7 @@ Instructions for **AI agents** and human contributors working in this repository
 | [`agent/01-dev-workflow.md`](agent/01-dev-workflow.md) | **Issue → branch → dev → PR → CI → review** |
 | [`agent/02-issue-guide.md`](agent/02-issue-guide.md) | How to open Issues (templates) — includes **demo issue** links |
 | [`agent/03-pr-guide.md`](agent/03-pr-guide.md) | How to open PRs (templates) |
+| [`agent/04-code-review.md`](agent/04-code-review.md) | **Code review** — GitHub Reviews, CRG, CI, diff |
 
 GitHub templates (forms members fill):
 
