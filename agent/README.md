@@ -1,19 +1,38 @@
 # Agent handbook
 
-给 **agent** 和第一次协作的成员看的最短文档集。人类成员也可以直接读。
+Operational guide for **agents working in this repository**. Humans can follow the same rules.
 
-## 文档
+## Read order
 
-| 文件 | 内容 |
-|------|------|
-| [01-dev-workflow.md](./01-dev-workflow.md) | 从 Issue 到合入的开发流程 |
-| [02-issue-guide.md](./02-issue-guide.md) | 如何提 Issue（模板字段） |
-| [03-pr-guide.md](./03-pr-guide.md) | 如何提 PR（模板字段） |
+1. This file (how to start).
+2. [01-dev-workflow.md](./01-dev-workflow.md) — the full work loop.
+3. [02-issue-guide.md](./02-issue-guide.md) — when you must open or draft an Issue.
+4. [03-pr-guide.md](./03-pr-guide.md) — when you open or update a PR.
 
-根目录入口：[`../AGENTS.md`](../AGENTS.md)。
+Hard rules also sit in [`../AGENTS.md`](../AGENTS.md).
 
-## 原则（三行）
+## How you work here
 
-1. **先 Issue，再写代码**；一个 PR 只关一个 Issue。  
-2. **改动范围尽量小**；大需求拆成多个 Issue。  
-3. **仓库保持干净**；不提交多余文件、密钥、本地工具目录。
+You are not free-form on `main`/`dev`. You:
+
+1. **Know the goal** (user ask or existing Issue). If scope is unclear, stop and ask — do not guess a product decision.
+2. **Have a GitHub Issue** before non-trivial code. Create one with the right template if missing.
+3. **Branch from `dev`**, change only what the Issue needs.
+4. **Open a PR to `dev`**, link the Issue, push early so Actions run.
+5. **Fix red CI on the same branch** until green (or document an acceptable skip).
+6. **Leave durable state** on the PR/Issue when you stop.
+
+## Defaults (ponytail)
+
+- Smallest change that works. No speculative files, frameworks, or “while we’re here”.
+- Reuse what exists in-tree. Do not reimplement a helper next door.
+- Fix root cause in the shared path, not a one-off guard at one callsite — unless the Issue is explicitly local.
+- Match surrounding style. Do not reformat unrelated code.
+- Every non-trivial claim needs a check: command, CI job, or explicit “not verified”.
+
+## Do not
+
+- Push to `main` or `dev`.
+- Commit secrets, real instance config under `config/`, or local agent DBs.
+- Close maintainer-owned epics/milestones unless they explicitly say so.
+- Pack unrelated Issues into one PR “to save round-trips”.
