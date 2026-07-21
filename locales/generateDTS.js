@@ -61,9 +61,9 @@ function createMembers(record) {
 
 export default function generateDTS() {
 	/** @type {ILocale} */
-	const sharkeyLocale = loadOptionalYaml('../sharkey-locales/en-US.yml');
+	const sharkeyLocale = loadOptionalYaml('./fork/en-US.yml');
 	/** @type {ILocale} */
-	const misskeyLocale = loadOptionalYaml('ja-JP.yml');
+	const misskeyLocale = loadOptionalYaml('./upstream/ja-JP.yml');
 	const locale = merge(misskeyLocale, sharkeyLocale);
 
 	const members = createMembers(locale);

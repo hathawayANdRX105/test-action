@@ -1,6 +1,14 @@
-# **DO NOT edit locale files** except `ja-JP.yml`.
+# Locales
 
-When you add text to the ja-JP file (of misskey-dev/misskey), it will automatically be applied to other language files.
-Translations added in ja-JP file should contain the original Japanese strings.
+Locale YAML is split into two layers (merged at build time; **fork wins** on key conflicts):
 
-Please see [Contribution guide](../CONTRIBUTING.md) for more information.
+| Path | Role |
+|------|------|
+| `locales/upstream/` | Misskey-base language packs (large). Prefer not to hand-edit except when syncing upstream. |
+| `locales/fork/` | Universe Federation / Sharkey-lineage overlay strings for this fork. |
+
+Loader: `locales/index.js` merges `upstream` then `fork`.
+
+For upstream Misskey contribution style, new base strings historically land in Japanese first; this fork’s own strings belong under `locales/fork/` (typically start from `fork/en-US.yml`).
+
+See [Contribution guide](../CONTRIBUTING.md).

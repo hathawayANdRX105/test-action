@@ -45,9 +45,9 @@ const primaries = {
 
 export function build() {
 	/** @type {Record<string, ILocale>} */
-	const sharkeyLocales = languages.reduce((a, c) => (a[c] = loadOptionalYaml(`../sharkey-locales/${c}.yml`), a), {});
+	const sharkeyLocales = languages.reduce((a, c) => (a[c] = loadOptionalYaml(`./fork/${c}.yml`), a), {});
 		/** @type {Record<string, ILocale>} */
-	const misskeyLocales = languages.reduce((a, c) => (a[c] = loadOptionalYaml(`${c}.yml`), a), {});
+	const misskeyLocales = languages.reduce((a, c) => (a[c] = loadOptionalYaml(`./upstream/${c}.yml`), a), {});
 
 	// merge sharkey and misskey's locales. the second argument (sharkey) overwrites the first argument (misskey).
   const locales = merge(misskeyLocales, sharkeyLocales);

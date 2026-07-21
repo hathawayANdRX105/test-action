@@ -51,8 +51,8 @@ await fs.readFile(
 	if (
 		micromatch(Array.from(modules), [
 			'../../assets/**',
-			'../../fluent-emojis/**',
-			'../../locales/en-US.yml',
+			'../../assets/emojis/fluent-emojis/**',
+			'../../locales/upstream/en-US.yml',
 			'assets/**',
 			'public/**',
 			'package.json',

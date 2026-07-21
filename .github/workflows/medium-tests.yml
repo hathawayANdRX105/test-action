@@ -106,8 +106,8 @@ jobs:
       - uses: ./.github/actions/setup-ci
       - name: Configure test instance
         run: |
-          cp .config/ci.yml .config/default.yml
-          cp .config/ci.yml .config/test.yml
+          cp config/ci.yml config/default.yml
+          cp config/ci.yml config/test.yml
       - run: pnpm --filter backend build:pre
       - run: pnpm --filter backend build
       - run: pnpm --filter backend migrate
@@ -208,9 +208,9 @@ jobs:
       - uses: ./.github/actions/setup-ci
       - name: Configure backend API test instance
         run: |
-          cp .config/test-example.yml .config/default.yml
-          cp .config/test-example.yml .config/test.yml
-          echo 'clusterLimit: 1' >> .config/test.yml
+          cp config/test-example.yml config/default.yml
+          cp config/test-example.yml config/test.yml
+          echo 'clusterLimit: 1' >> config/test.yml
       - name: Build backend API test prerequisites
         run: pnpm --filter backend build:pre
       - name: Run selective backend API e2e
@@ -251,18 +251,18 @@ jobs:
         run: bash ./setup.sh
       - name: Start federated instances
         working-directory: packages/backend/test-federation
-        run: docker compose --env-file .config/docker.env up --detach --wait --scale tester=0
+        run: docker compose --env-file config/docker.env up --detach --wait --scale tester=0
       - name: Run federation suite
         working-directory: packages/backend/test-federation
-        run: docker compose --env-file .config/docker.env run --no-deps --rm tester
+        run: docker compose --env-file config/docker.env run --no-deps --rm tester
       - name: Collect federation diagnostics
         if: ${{ failure() }}
         working-directory: packages/backend/test-federation
-        run: docker compose --env-file .config/docker.env logs --no-color
+        run: docker compose --env-file config/docker.env logs --no-color
       - name: Stop federated instances
         if: ${{ always() }}
         working-directory: packages/backend/test-federation
-        run: docker compose --env-file .config/docker.env down --volumes --remove-orphans
+        run: docker compose --env-file config/docker.env down --volumes --remove-orphans
 
   container-smoke:
     name: Container smoke
@@ -275,7 +275,16 @@ jobs:
         with:
           submodules: recursive
       - name: Build production image
-        run: DOCKER_BUILDKIT=1 docker build --tag universe-federation:${{ github.sha }} .
+        run: |
+          # Docker Hub flakes (syntax image pull) — short retries
+          for i in 1 2 3; do
+            if DOCKER_BUILDKIT=1 docker build --tag universe-federation:${{ github.sha }} .; then
+              exit 0
+            fi
+            echo "docker build failed (attempt $i); retry in 15s..."
+            sleep 15
+          done
+          exit 1
       - name: Start PostgreSQL and Redis
         run: |
           docker network create universe-federation-test
@@ -317,7 +326,7 @@ jobs:
           docker run --detach --name universe-federation-app \
             --network universe-federation-test \
             --publish 3000:3000 \
-            --volume "$RUNNER_TEMP/default.yml:/sharkey/.config/default.yml:ro" \
+            --volume "$RUNNER_TEMP/default.yml:/sharkey/config/default.yml:ro" \
             universe-federation:${{ github.sha }}
       - name: Verify health and public API
         run: |

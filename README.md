@@ -42,3 +42,29 @@ With Universe Federation, you can enable sign-ups, subject to manual moderator a
 ## Documentation
 
 Universe Federation Documentation can be found at [Universe Federation Documentation](https://dc.hhhl.cc/)
+
+## Repository documentation
+
+- [Contributing](CONTRIBUTING.md)
+- [Agent / contributor handbook](AGENTS.md)
+- [Important user notes](docs/user/important-notes.md)
+- [Upgrade notes](docs/ops/upgrade-notes.md)
+- [Security notes](SECURITY.md)
+- [Compose files](deploy/compose/) — run from repo root, e.g. `docker compose -f deploy/compose/local-db.yml up -d`
+
+## Repository layout
+
+| Path | Purpose |
+|------|---------|
+| `packages/` | Application packages (backend, frontend, …) |
+| `locales/` | i18n (`upstream/` + `fork/`, merged at build) |
+| `assets/` | Brand assets and runtime emoji submodules under `assets/emojis/` |
+| `deploy/compose/` | Docker Compose examples and local middleware stacks |
+| `docs/` | Human docs (user notes, upgrade notes, …) |
+| `agent/` | Issue/PR workflow handbook for humans and agents |
+| `scripts/` | Build/dev/ops scripts (includes `healthcheck.sh`) |
+| `tests/e2e/` | Cypress end-to-end tests |
+| `config/` | **Runtime** instance config templates (not general project config) |
+| `.github/` | GitHub Actions, issue/PR templates, Renovate config |
+
+Root `package.json` / `pnpm-*` / `Dockerfile` stay at the monorepo root on purpose.

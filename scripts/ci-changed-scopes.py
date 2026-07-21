@@ -43,19 +43,15 @@ def is_container_path(p: str) -> bool:
 	if "/" not in p.rstrip("/"):
 		if name in {
 			"Dockerfile",
-			"compose.yml",
-			"compose.yaml",
-			"compose.local-db.yml",
-			"compose.local-run.yml",
-			"compose.alpine-db.yml",
-			"compose_example.yml",
-			"healthcheck.sh",
 			".dockerignore",
 		}:
 			return True
 		if name.startswith("compose") and name.endswith((".yml", ".yaml")):
 			return True
-	return matches(p, (".devcontainer/", "chart/", "docker/"))
+	if p.replace("\\", "/") == "scripts/healthcheck.sh" or p.endswith("/healthcheck.sh"):
+		return True
+	# deploy/compose/* and other deployment layout prefixes
+	return matches(p, ("chart/", "docker/", "deploy/compose/"))
 
 
 def is_federation_path(p: str) -> bool:
@@ -208,14 +204,12 @@ def classify(files: list[str]) -> dict[str, str | bool]:
 		".node-version",
 		"tsconfig.json",
 	)
+	# Full-suite "shared" only for real monorepo glue (packages/shared, stub).
+	# Layout/docs trees (config examples, locales moves, scripts, workflows) must NOT
+	# force backend e2e + frontend unit by themselves — those use dedicated scopes.
 	shared_prefixes = (
 		"packages/shared/",
 		"packages/stub/",
-		"locales/",
-		"scripts/",
-		".github/",
-		".config/",
-		"config/",
 	)
 
 	backend_files: list[str] = []
@@ -236,6 +230,9 @@ def classify(files: list[str]) -> dict[str, str | bool]:
 		if is_federation_path(p):
 			federation = True
 		if matches(p, frontend_prefixes):
+			frontend = True
+		# Locale tree moves affect built FE strings, not full backend e2e suite
+		if p.startswith("locales/") and not _is_docs_only_path(p):
 			frontend = True
 
 		if not p.startswith("packages/backend/"):

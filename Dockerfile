@@ -56,8 +56,8 @@ COPY --chown=sharkey:sharkey --from=build /sharkey/package.json ./package.json
 COPY --chown=sharkey:sharkey --from=build /sharkey/node_modules ./node_modules
 COPY --chown=sharkey:sharkey --from=build /sharkey/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --chown=sharkey:sharkey --from=build /sharkey/built ./built
-COPY --chown=sharkey:sharkey --from=build /sharkey/fluent-emojis ./fluent-emojis
-COPY --chown=sharkey:sharkey --from=build /sharkey/tossface-emojis/dist ./tossface-emojis/dist
+COPY --chown=sharkey:sharkey --from=build /sharkey/assets/emojis/fluent-emojis ./assets/emojis/fluent-emojis
+COPY --chown=sharkey:sharkey --from=build /sharkey/assets/emojis/tossface-emojis/dist ./assets/emojis/tossface-emojis/dist
 COPY --chown=sharkey:sharkey --from=build /sharkey/sharkey-assets ./packages/frontend/assets
 COPY --chown=sharkey:sharkey --from=build /sharkey/sharkey-embed-assets ./packages/frontend-embed/assets
 

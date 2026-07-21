@@ -100,7 +100,7 @@ if (Test-Port 3005) {
 }
 
 # 4) Optional emoji assets (skip if present)
-$emojiProbe = Join-Path $Root "fluent-emojis\dist\1f3c6.png"
+$emojiProbe = Join-Path $Root "assets\emojis\fluent-emojis\dist\1f3c6.png"
 if (-not (Test-Path $emojiProbe)) {
 	Write-Host "[info] fluent-emojis missing — running scripts\setup-emojis.mjs"
 	node (Join-Path $PSScriptRoot "setup-emojis.mjs")

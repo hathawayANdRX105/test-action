@@ -16,7 +16,7 @@ import autoTranslateSwitchSource from '@/components/SkAutoTranslateSwitch.vue?ra
 import viewSwitchSource from '@/components/SkTimelineViewSwitch.vue?raw';
 import previewTranslationSource from '@/composables/use-timeline-preview-translation.ts?raw';
 import timelineSource from '@/pages/timeline.vue?raw';
-import zhCnLocaleSource from '../../../locales/zh-CN.yml?raw';
+import zhCnLocaleSource from '../../../locales/upstream/zh-CN.yml?raw';
 
 describe('timeline preview optimization', () => {
 	test('removes only the category home tab while preserving hashtag filtering', () => {

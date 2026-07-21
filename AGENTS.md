@@ -1,55 +1,36 @@
 # AGENTS.md — Universe Federation
 
-Instructions for **AI agents** and human contributors working in this repository.
+How **agents** (and humans) do work in this repo. Read `agent/` before coding.
 
-## Read first (agent handbook)
+| Doc | When |
+|-----|------|
+| [agent/README.md](agent/README.md) | Start here |
+| [agent/01-dev-workflow.md](agent/01-dev-workflow.md) | Issue → branch → PR → CI → merge |
+| [agent/02-issue-guide.md](agent/02-issue-guide.md) | Open / draft a GitHub Issue |
+| [agent/03-pr-guide.md](agent/03-pr-guide.md) | Open / update a PR |
 
-| Doc | Purpose |
-|-----|---------|
-| [`agent/README.md`](agent/README.md) | Index of agent docs |
-| [`agent/01-dev-workflow.md`](agent/01-dev-workflow.md) | **Issue → branch → dev → PR → CI → review** |
-| [`agent/02-issue-guide.md`](agent/02-issue-guide.md) | How to open Issues (templates) — includes **demo issue** links |
-| [`agent/03-pr-guide.md`](agent/03-pr-guide.md) | How to open PRs (templates) |
+Templates live under `.github/ISSUE_TEMPLATE/` and `.github/pull_request_template.md` — fill them; do not invent parallel formats.
 
-GitHub templates (forms members fill):
+## Non‑negotiables
 
-- `.github/ISSUE_TEMPLATE/bug.yml`
-- `.github/ISSUE_TEMPLATE/feature.yml`
-- `.github/ISSUE_TEMPLATE/task.yml`
-- `.github/ISSUE_TEMPLATE/config.yml`
-- `.github/pull_request_template.md`
+1. **No direct push to `main` or `dev`.** Branch → PR → review → merge into **`dev`**. `main` only when stabilizing.
+2. **Issue before code** (trivial typo only with maintainer OK).
+3. **One Issue ↔ one PR** for normal work. PR names the Issue (`Fixes #N` or `Related #N`).
+4. **Base PR on `dev`.** Never default-merge to `main`.
+5. **Small scope.** One purpose; split if review/CI/rollback cannot stand alone.
+6. **Clean tree.** No secrets, no real `config/*` (use examples only), no junk dirs, no drive-by rebrand of the Misskey/Sharkey-derived tree.
+7. **Prove it.** Green PR checks, or a written reason for any red/skip you still want merged.
 
-## Hard rules
+## Scope (stop lines)
 
-1. **No direct pushes to `main` or `dev`.** Branch → PR → review → merge into **`dev`**. `main` is stable; only merge from `dev` when explicitly stabilizing a release.
-2. **One Issue = one PR.** PR body must include `Fixes #N` / `Closes #N`. Never pack multiple Issues into one PR.
-3. **Issue first.** Discuss / file Issue before coding (except trivial typo with maintainer OK). Prefer the **demo issues** linked in `agent/02-issue-guide.md` as structure examples.
-4. **Single assignee** per Issue. Help via comments / `help-wanted`, not dual ownership.
-5. **Use templates.** Do not open blank free-form Issues when a template fits.
-6. **Keep the tree clean.** No random dirs/files, no secrets, no real instance config, no local tooling DB directories committed (see `.gitignore`).
-7. **Match existing style.** Misskey/Sharkey-derived tree; no drive-by renames or rebrands.
+- Do not fold architecture swaps, dependency thrash, repo-wide format, or unrequested features into a fix.
+- Do not change public API / destructive data behavior unless the Issue requires it and the PR says so.
+- Prefer the smallest diff that fixes the root cause (shared helper once > patch every caller).
 
 ## Branch names
 
-| Prefix | Use |
-|--------|-----|
-| `fix/<issue>-slug` | Bug |
-| `feat/<issue>-slug` | Feature |
-| `refactor/<issue>-slug` | Behavior-preserving structure change |
-| `chore/<issue>-slug` | CI / deps / tooling |
-| `docs/<issue>-slug` | Docs only |
+`fix|feat|refactor|chore|docs/<issue-or-short>-slug` — from latest **`dev`**.
 
-Open PRs against **`dev`**, not `main`.
+## Session end (agents)
 
-## Before asking for review
-
-- Diff matches **one** Issue scope.
-- Workspace clean (no stray files/dirs).
-- PR template checklist filled.
-- CI on the PR green, or failures explained with a fix plan.
-
-## Session close (agents)
-
-1. Push branch; open/update the PR **into `dev`** with `Fixes #N`.
-2. Update Issue / Project column if used.
-3. Do not leave unfinished work only in chat memory — leave a PR or Issue comment.
+Push the branch; open/update PR into **`dev`**; leave status on the Issue/PR — not only in chat.

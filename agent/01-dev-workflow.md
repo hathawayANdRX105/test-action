@@ -1,116 +1,127 @@
-# 1. 如何参与项目开发
+# Dev workflow
 
-参考 [Misskey CONTRIBUTING](https://github.com/misskey-dev/misskey/blob/develop/CONTRIBUTING.md) 与常见 GitHub 协作习惯，结合本仓库实践。
+What you do from “task accepted” to “safe to merge into `dev`”.
 
-## 1.1 标准流程
-
-```text
-Issue（讨论/认领）
-  → fork 或本仓分支（有写权限用本仓分支即可）
-  → 从最新 dev 拉分支
-  → 本地开发（只做这一件 Issue）
-  → 自测 / 清理工作区
-  → 开 PR 到 dev（Fixes #N）
-  → PR CI / Actions
-  → 失败则修，再推同一分支
-  → Review
-  → 修改后再次 CI / Review
-  → 合并进 dev → Issue 关闭
-```
-
-稳定后由维护者再把 **`dev` → `main`**（你不日常直推 `main`）。
-
-| 阶段 | 做什么 | 不要做什么 |
-|------|--------|------------|
-| Issue | 说清问题/目标，挂 Milestone，可认领 | 没 Issue 就大改代码 |
-| 分支 | 从 **`dev`** 拉 `fix/12-short-name` | 直推 `main` 或 `dev` |
-| 开发 | 只改本 Issue 范围 | 顺手重构半个 monorepo |
-| PR | 一 PR 一 Issue，`Fixes #N`，**base = `dev`** | 一个 PR 关多个无关 Issue；默认往 `main` 合 |
-| CI | 看红灯，修到绿或说明阻塞 | 无视 Actions 硬求合 |
-| Review | 按评论改；范围外新开 Issue | 在 PR 里塞新需求 |
-
-### 没有写权限时
-
-1. Fork 本仓库。  
-2. 在 fork 上从 upstream **`dev`** 开分支、推送。  
-3. 向本仓库 **`dev`** 开 PR。  
-4. 流程其余相同。
-
-### 有写权限时
-
-不必 fork；本仓从 **`dev`** 开分支 + PR 到 **`dev`** 即可。**禁止直推 `main` 与 `dev`。**
-
-## 1.2 先 Issue，再拆小
-
-**实现前先有 Issue**（Misskey 也要求先讨论设计/目标，否则 PR 易被拒）。
-
-| 好 | 坏 |
-|----|-----|
-| 一个可独立合并的改动 = 一个 Issue | 「重构后端 + 修 5 个 bug」一条 Issue |
-| 大需求拆成多条 Issue，多条 PR | 一个 PR 绑 `#1 #2 #3` 混装 |
-| PR 只写 `Fixes #12` | PR 无 Issue、或关一堆无关号 |
-
-**拆分标准：** 一个 PR 能否单独 review、单独回滚、单独通过 CI？不能就再拆。
-
-**认领：** Issue `Assignee` 写自己 = 已领；未 Assignee = 可领。一人一条。
-
-可选：用 Milestone 管批次，用 Project 看板看 Todo / 进行中 / 完成（见 `02-issue-guide.md`）。
-
-## 1.3 开发时保持仓库干净
-
-| 可以 | 不可以 |
-|------|--------|
-| 改 Issue 相关源码/测试/必要文档 | 随手新建无关目录、dump 文件 |
-| 更新 Issue 要求的配置 **示例** | 提交真实 `.config/*`、密钥、token、用户数据 |
-| 本地装依赖、跑测试 | 把 `node_modules/`、构建产物、本地工具缓存目录提交进库 |
-| 临时调试 | 把调试脚本/日志永久留在仓库根目录 |
-
-提交前自检：
+## Loop
 
 ```text
-git status          # 只有本 Issue 相关文件
-git diff            # 无无关格式化/大清理
+Issue (exists or create)
+  → branch from latest dev
+  → implement only that Issue
+  → commit; push; open/update PR → dev
+  → read Actions
+  → if red: fix root cause on same branch → push
+  → when green: leave GitHub Review record if you reviewed → ready for merge (maintainer merges)
 ```
 
-多余文件：`gio trash` 或移出仓库；不要 `git add .` 一把梭。
+`main` is stable. You do not land daily work there.
 
-## 1.4 分支：`dev` 与 `main`
+## 1. Issue
+
+- Non-trivial work **needs a GitHub Issue** first.
+- Use Bug / Feature / Task templates (see [02](./02-issue-guide.md)).
+- Assign yourself if you own it.
+- One clear outcome per Issue. If you cannot state Done when, split or ask.
+
+## 2. Branch
+
+From latest `dev`:
+
+| Prefix | Use |
+|--------|-----|
+| `fix/<n>-…` | Bug |
+| `feat/<n>-…` | Feature |
+| `chore/<n>-…` | Tooling / cleanup / CI |
+| `docs/<n>-…` | Docs only |
+| `refactor/<n>-…` | Structure only, behavior preserved |
+
+No force-push to shared `dev`/`main`. Your feature branch: force only if you know the cost.
+
+## 3. Implement
+
+- Touch only paths the Issue requires. Surgical diffs.
+- State assumptions; if two readings of the ask exist, surface them — do not pick silently.
+- Prefer existing patterns in this monorepo (Misskey/Sharkey-derived). No drive-by renames.
+- Runtime instance config lives under **`config/`** (examples only in git). Override with `MISSKEY_CONFIG_DIR` / `MISSKEY_CONFIG_YML` when needed — do not invent a second config system.
+- Delete only what the task made obsolete or what the Issue orders. Mention other dead code; do not sweep it unasked.
+
+## 4. PR
+
+- Base: **`dev`**.
+- Link Issue: **`Fixes #N`** (auto-close on merge) or **`Related #N`** (tracking / multi-knife preview, no auto-close).
+- Body: What / Why / Issue / How to test / Checklist — see [03](./03-pr-guide.md).
+- Push soon after first meaningful commit so Checks exist.
+
+### Integration / preview PR
+
+When many knives share one preview branch:
+
+- Still keep **one GitHub Issue per knife** (or one explicit umbrella Issue if the user said so).
+- PR lists them as `Related #…`. Use `Fixes` only when you intend close-on-merge for that Issue.
+- Do not merge until the maintainer says so if they called it preview.
+
+## 5. CI (Actions)
+
+Trust **GitHub Checks on the PR**, not only local runs.
+
+| Workflow (Checks title) | Role |
+|-------------------------|------|
+| **Quality** | Path-scoped lint / misskey-js / Megalodon when the diff needs them |
+| **Validate** | Path-scoped unit, typecheck, API e2e, container smoke, … |
+| **Integration** | Heavy; PR only with label `run-integration` (or main/manual/schedule) |
+
+Path scope: `scripts/ci-changed-scopes.py` against **`base...HEAD`** (whole PR vs `dev`), not last commit alone.
+
+| Diff touches | Typical fan-out |
+|--------------|-----------------|
+| Docs / `agent/**` / README / templates only | Quality package jobs + Validate test matrices **skip**; summary jobs stay green |
+| `packages/backend/**` etc. | Matching unit / typecheck / e2e scopes |
+| `Dockerfile`, `deploy/compose/*`, `scripts/healthcheck.sh` | **Container smoke** may run |
+| `config/*` | **Shared** (unit/typecheck-style fan-out) — **not** the same as container smoke |
+
+### Cadence
+
+1. Push.
+2. Do other local work; **do not busy-wait**.
+3. Later: `gh pr checks <n>` or the Checks tab.
+4. Red → same branch fix → push → new run.
+5. Green → ask for review/merge if that is the goal.
+
+### Read a failure
 
 ```text
-feature/fix/docs/*  ──PR──►  dev  ──稳定后──►  main
+gh pr checks <n>
+gh run list --branch <branch> --limit 10
+gh run view <run-id> --log-failed
 ```
 
-| 分支 | 角色 |
-|------|------|
-| **`dev`** | 日常集成线。从这里开分支，PR 也合回这里。 |
-| **`main`** | 稳定线。不要日常 PR 进 `main`；由维护者在 `dev` 稳定后合并。 |
-| 旁支如 `ci/actions-wip` | 试验/历史用，不是默认合入目标。 |
+Read the **failed job name** and the **last real error**, not only the gate summary.
 
-功能/修复：**从最新 `dev` 开分支**，定期 rebase/merge `dev` 减少冲突。  
-合入路径：**只通过 PR 进 `dev`**。
+### Fix CI
 
-## 1.5 CI 与 Review
+| Do | Don’t |
+|----|--------|
+| Fix the contract (path, mount, import, real bug) | Random unrelated refactors |
+| One focused commit: what check, what cause | Silent drive-by |
+| Open `fix(ci): …` Issue if tracking matters | Leave red with no note |
 
-1. 开 PR（**base = `dev`**）后等 **GitHub Actions**（及仓库配置的检查）。  
-2. 红了：在同一分支修 → push → 再跑。  
-3. Reviewer 看：是否对上 Issue、范围、明显 bug/安全。  
-4. 通过后由维护者合并进 **`dev`**；Issue 因 `Fixes #N` 自动关。
+Common failures after moves: stale imports, host vs container config paths (`config/` vs old `.config`), expected job fan-out when shared paths change.
 
-**不要**在 CI 仍红、且无说明时反复 @ 人求合。
+## 6. Review
 
-## 1.6 一句话给成员
+- Reviews must land on **GitHub Reviews** (`gh pr review`), not only chat.
+- PR **author cannot Approve** their own PR — use `--comment`, or another account for real Approve.
+- Use **CRG** (`code-review-graph update` / `detect-changes`), read the diff, check Actions, then write the body.
+- Full steps: [04-code-review.md](./04-code-review.md) if present on the branch; otherwise follow the same checklist.
 
-> 找/开 Issue → Assignee 自己 → 从 **dev** 开分支 → PR 到 **dev** 写 `Fixes #编号` → 等 CI 与 Review → 合入。  
-> 一个 PR 只干一件事；仓库不留垃圾文件；**不要动 main。**
+## 7. Done means
 
-## CI scopes (when jobs run)
+- Diff matches the Issue.
+- Tree clean of secrets/junk.
+- Checks green, or red/skip explained and accepted.
+- PR/Issue text updated — not only chat history.
+- Maintainer merges to `dev`. You do not merge `main` unless ordered.
 
-Checks are **path-scoped** against the PR base (`dev...HEAD`), not “always full suite”.
+## One-liner
 
-| Workflow (Checks title) | Runs when |
-|-------------------------|-----------|
-| **Quality** | Non-doc code/tooling changes need lint and/or package tests |
-| **Validate** | Diff touches backend/frontend/shared/container/etc. — each job only if its scope is true |
-| **Integration** | Manual/`main`/schedule, or PR labeled `run-integration` |
-
-Docs/agent/README-only PRs should skip Quality package jobs and Validate test matrices (summary jobs stay green).
+> Issue → branch from **dev** → PR to **dev** with `Fixes #N` or `Related #N` → push → fix red Checks on the same branch → GitHub Review record → merge to **dev**. One job per PR (or an explicit integration preview). No junk. **Don’t touch main.**

@@ -436,7 +436,7 @@ export class ClientServerService {
 
 			reply.header('Content-Security-Policy', 'default-src \'none\'; style-src \'unsafe-inline\'');
 
-			return await reply.sendFile(path, `${_dirname}/../../../../../fluent-emojis/dist/`, {
+			return await reply.sendFile(path, `${_dirname}/../../../../../assets/emojis/fluent-emojis/dist/`, {
 				maxAge: ms('30 days'),
 			});
 		});
@@ -466,7 +466,7 @@ export class ClientServerService {
 
 			reply.header('Content-Security-Policy', 'default-src \'none\'; style-src \'unsafe-inline\'');
 
-			return await reply.sendFile(path, `${_dirname}/../../../../../tossface-emojis/dist`, {
+			return await reply.sendFile(path, `${_dirname}/../../../../../assets/emojis/tossface-emojis/dist`, {
 				maxAge: ms('30 days'),
 			});
 		});

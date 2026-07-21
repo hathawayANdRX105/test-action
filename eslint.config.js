@@ -51,11 +51,11 @@ export default [
 		},
 	},
 	{
-		files: ['cypress/**/*'],
+		files: ['tests/e2e/**/*'],
 		languageOptions: {
 			parserOptions: {
 				parser: tsParser,
-				project: ['cypress/tsconfig.json'],
+				project: ['tests/e2e/tsconfig.json'],
 				sourceType: 'module',
 				tsconfigRootDir: import.meta.dirname,
 			},

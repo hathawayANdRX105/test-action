@@ -1,0 +1,11 @@
+# Web env override fragment. Run from repository root, e.g.:
+#   docker compose -f deploy/compose/example.yml -f deploy/compose/local-run.yml up -d
+services:
+  web:
+    environment:
+      NODE_OPTIONS: --max-old-space-size=8192
+      MK_CONFIG_URL: http://127.0.0.1:3000/
+      MK_CONFIG_PORT: "3000"
+      MK_CONFIG_ADDRESS: 0.0.0.0
+      MK_CONFIG_DB_HOST: db
+      MK_CONFIG_REDIS_HOST: redis

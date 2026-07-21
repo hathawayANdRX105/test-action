@@ -1,6 +1,5 @@
 # Visual Studio Code
 /.vscode
-!/.vscode/extensions.json
 
 # Intelij-IDEA
 /.idea
@@ -27,19 +26,19 @@ packages/sw/.yarn/cache
 **/.eslintcache
 
 # Cypress
-cypress/screenshots
-cypress/videos
+tests/e2e/screenshots
+tests/e2e/videos
 
 # Coverage
 coverage
 
 # config
-/.config/*
-!/.config/example.yml
-!/.config/test-example.yml
-!/.config/docker_example.yml
-!/.config/docker_example.env
-!/.config/cypress-devcontainer.yml
+/config/*
+!/config/example.yml
+!/config/test-example.yml
+!/config/docker_example.yml
+!/config/docker_example.env
+!/config/cypress-devcontainer.yml
 docker-compose.yml
 ./compose.yml
 .devcontainer/compose.yml
