@@ -6,7 +6,7 @@
 /// <reference types="vite/client" />
 
 import { assert, describe, test } from 'vitest';
-import defaultConfigSource from '../../../.config/default.yml?raw';
+import defaultConfigSource from '../../../config/default.yml?raw';
 import chatIndexSource from '@/pages/chat/index.vue?raw';
 import chatRoomSource from '@/pages/chat/room.vue?raw';
 import chatRoomSearchSource from '@/pages/chat/room.search.vue?raw';

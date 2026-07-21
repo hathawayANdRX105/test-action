@@ -22,12 +22,12 @@ services:
     networks:
       - shonk
     # env_file:
-    #   - ../../.config/docker.env
+    #   - ../../config/docker.env
     environment:
       - NODE_OPTIONS="--max-old-space-size=8192"
     volumes:
       - ../../files:/sharkey/files
-      - ../../.config:/sharkey/.config:ro
+      - ../../config:/sharkey/.config:ro
 
   redis:
     restart: always
@@ -47,7 +47,7 @@ services:
     networks:
       - shonk
     env_file:
-      - ../../.config/docker.env
+      - ../../config/docker.env
     volumes:
       - ../../db:/var/lib/postgresql/data
     healthcheck:
@@ -65,7 +65,7 @@ services:
 #    ports:
 #      - 7493:7493
 #    env_file:
-#      - ../../.config/docker.env
+#      - ../../config/docker.env
 #    environment:
 #      PORT: 7493
 #      MCAPTCHA_redis_URL: "redis://mcaptcha_redis/"

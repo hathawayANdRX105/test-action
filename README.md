@@ -64,7 +64,7 @@ Universe Federation Documentation can be found at [Universe Federation Documenta
 | `agent/` | Issue/PR workflow handbook for humans and agents |
 | `scripts/` | Build/dev/ops scripts (includes `healthcheck.sh`) |
 | `tests/e2e/` | Cypress end-to-end tests |
-| `.config/` | **Runtime** instance config templates (not general project config) |
+| `config/` | **Runtime** instance config templates (not general project config) |
 | `.github/` | GitHub Actions, issue/PR templates, Renovate config |
 
 Root `package.json` / `pnpm-*` / `Dockerfile` stay at the monorepo root on purpose.

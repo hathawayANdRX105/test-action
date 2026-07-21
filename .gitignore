@@ -33,12 +33,12 @@ tests/e2e/videos
 coverage
 
 # config
-/.config/*
-!/.config/example.yml
-!/.config/test-example.yml
-!/.config/docker_example.yml
-!/.config/docker_example.env
-!/.config/cypress-devcontainer.yml
+/config/*
+!/config/example.yml
+!/config/test-example.yml
+!/config/docker_example.yml
+!/config/docker_example.env
+!/config/cypress-devcontainer.yml
 docker-compose.yml
 ./compose.yml
 .devcontainer/compose.yml

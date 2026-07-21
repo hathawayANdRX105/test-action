@@ -14,7 +14,7 @@ services:
   misskey:
     image: node:${NODE_VERSION}
     env_file:
-      - ./.config/docker.env
+      - ./config/docker.env
     environment:
       - NODE_ENV=production
     volumes:
@@ -111,7 +111,7 @@ services:
   db:
     image: postgres:15-alpine
     env_file:
-      - ./.config/docker.env
+      - ./config/docker.env
     healthcheck:
       test: pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
       interval: 5s

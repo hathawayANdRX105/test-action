@@ -13,7 +13,7 @@ import { MiInstance } from '@/models/Instance.js';
 import { api, castAsError, ensureRoot, initTestDb, post, role, signup, uploadFile, uploadUrl } from '../utils.js';
 import type * as misskey from 'misskey-js';
 
-// Important: this must match the value of maxNoteLength in .config/ci.yml!
+// Important: this must match the value of maxNoteLength in config/ci.yml!
 const MAX_NOTE_TEXT_LENGTH = 3000;
 
 describe('Note', () => {

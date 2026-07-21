@@ -362,7 +362,7 @@ const _dirname = dirname(_filename);
 /**
  * Path of configuration directory
  */
-const dir = resolve(process.env.MISSKEY_CONFIG_DIR ?? `${_dirname}/../../../.config`);
+const dir = resolve(process.env.MISSKEY_CONFIG_DIR ?? `${_dirname}/../../../config`);
 
 /**
  * Path of configuration file
