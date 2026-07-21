@@ -67,7 +67,7 @@ services:
         target: /misskey/packages/misskey-reversi/package.json
         read_only: true
       - type: bind
-        source: ../../../healthcheck.sh
+        source: ../../../scripts/healthcheck.sh
         target: /misskey/healthcheck.sh
         read_only: true
       - type: bind

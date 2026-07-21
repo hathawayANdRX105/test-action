@@ -43,12 +43,13 @@ def is_container_path(p: str) -> bool:
 	if "/" not in p.rstrip("/"):
 		if name in {
 			"Dockerfile",
-			"healthcheck.sh",
 			".dockerignore",
 		}:
 			return True
 		if name.startswith("compose") and name.endswith((".yml", ".yaml")):
 			return True
+	if p.replace("\\", "/") == "scripts/healthcheck.sh" or p.endswith("/healthcheck.sh"):
+		return True
 	# deploy/compose/* and other deployment layout prefixes
 	return matches(p, (".devcontainer/", "chart/", "docker/", "deploy/compose/"))
 
